@@ -309,8 +309,9 @@ export class GatewayManager {
 
                 this.server.on('error', (e: any) => {
                     if (e.code === 'EADDRINUSE') {
-                        if (currentPort === config.preferredPort) {
-                             this.log(`⚠️ Preferred port ${currentPort} busy. Falling back.`);
+                        // Fix: Prevent infinite loop if preferredPort equals config.port
+                        if (config.preferredPort && currentPort === config.preferredPort && currentPort !== config.port) {
+                             this.log(`⚠️ Preferred port ${currentPort} busy. Falling back to default range.`);
                              tryListen(config.port, 0);
                         } else {
                              tryListen(currentPort + 1, attempt + 1);
