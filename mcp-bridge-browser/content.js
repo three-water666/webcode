@@ -239,7 +239,14 @@
               const msg = JSON.parse(event.data);
               if (msg.type === 'inject_context') {
                   Logger.log("📥 Received Context from VS Code", "action");
-                  injectContextToInput(msg.data.text);
+                  
+                  // 1. 请求唤醒窗口
+                  chrome.runtime.sendMessage({ type: "ACTIVATE_TAB" });
+
+                  // 2. 延迟执行，给浏览器一点时间恢复 DOM 渲染
+                  setTimeout(() => {
+                      injectContextToInput(msg.data.text);
+                  }, 300);
               }
           } catch (e) { console.error(e); }
       };

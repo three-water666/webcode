@@ -92,6 +92,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     executeTool(request, currentTabId).then(sendResponse);
     return true;
   }
+  // === 新增：自动唤醒功能 ===
+  if (request.type === "ACTIVATE_TAB") {
+      if (currentTabId) {
+          // 1. 激活标签页
+          chrome.tabs.update(currentTabId, { active: true });
+          // 2. 激活窗口 (置顶)
+          chrome.windows.update(sender.tab.windowId, { focused: true });
+          sendResponse({ success: true });
+      }
+      return true;
+  }
 });
 
 // === 数据层 ===
