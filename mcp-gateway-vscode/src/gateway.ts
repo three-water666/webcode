@@ -29,6 +29,7 @@ export class GatewayManager {
     private server: any = null;
     private toolRouter = new Map<string, { client: Client; definition: any }>();
     private connectedClients: { id: string; client: Client }[] = [];
+    private sseClients: any[] = []; // 浏览器监听客户端
     private outputChannel: vscode.OutputChannel;
     private authToken: string = '';
 
@@ -46,6 +47,15 @@ export class GatewayManager {
         const now = new Date();
         const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
         this.outputChannel.appendLine(`[${time}] ❌ ${message} ${err ? (err.message || JSON.stringify(err)) : ''}`);
+    }
+
+    // 广播消息给浏览器
+    public broadcast(type: string, data: any) {
+        if (this.sseClients.length === 0) return;
+        this.log(`📡 Broadcasting [${type}] to ${this.sseClients.length} clients.`);
+        this.sseClients.forEach(client => {
+            client.res.write(`data: ${JSON.stringify({ type, data })}\n\n`);
+        });
     }
 
     async connectToServers(servers: Record<string, ServerConfig>) {
@@ -159,6 +169,25 @@ export class GatewayManager {
                 });
             }
             next();
+        });
+
+        // 4.1 SSE 事件流通道
+        this.app.get('/events', (req, res) => {
+            if (req.query.token !== this.authToken) return res.status(403).end();
+            
+            res.setHeader('Content-Type', 'text/event-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
+            res.flushHeaders();
+
+            const clientId = Date.now();
+            const newClient = { id: clientId, res };
+            this.sseClients.push(newClient);
+            this.log(`🔌 Browser connected to Event Stream (${clientId})`);
+
+            req.on('close', () => {
+                this.sseClients = this.sseClients.filter(c => c.id !== clientId);
+            });
         });
 
         // 5. 桥接页面 (Bridge Page)

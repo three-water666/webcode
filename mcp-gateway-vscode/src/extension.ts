@@ -66,6 +66,52 @@ export async function activate(context: vscode.ExtensionContext) {
 
     await startService();
 
+    // === 新增：Ask AI 智能问询命令 ===
+    context.subscriptions.push(vscode.commands.registerCommand('mcp-gateway.askAI', async () => {
+        const editor = vscode.window.activeTextEditor;
+        let selectedText = '';
+        let contextHeader = '';
+
+        if (editor && !editor.selection.isEmpty) {
+            // 优先级 1: 编辑器内的选区
+            selectedText = editor.document.getText(editor.selection);
+            const filePath = vscode.workspace.asRelativePath(editor.document.uri);
+            const lang = editor.document.languageId;
+            // 构造 Markdown 格式的上下文
+            contextHeader = `\n\n__File: ${filePath}__\n\`\`\`${lang}\n${selectedText}\n\`\`\`\n`;
+        } else {
+            // 优先级 2: 剪贴板内容 (通常是终端报错)
+            selectedText = await vscode.env.clipboard.readText();
+            if (selectedText && selectedText.trim().length > 0) {
+                contextHeader = `\n\n__Context: Clipboard__\n\`\`\`text\n${selectedText.slice(0, 3000)}\n\`\`\`\n`;
+            }
+        }
+
+        if (!contextHeader) {
+            vscode.window.showWarningMessage("No text selected in editor, and clipboard is empty.");
+            return;
+        }
+
+        // 弹出输入框，让用户输入具体需求
+        const userQuery = await vscode.window.showInputBox({
+            placeHolder: "Type your question here (e.g., 'Fix this bug', 'Explain logic')...",
+            prompt: "🚀 WebMCP: Ask AI about the selected context",
+            value: "" // 默认为空，用户可以直接回车
+        });
+
+        if (userQuery === undefined) return; // 用户取消
+
+        // 组合最终 Prompt: 用户问题 + 代码上下文
+        const finalPrompt = `${userQuery || "Please analyze this context:"}\n${contextHeader}`;
+
+        if (manager) {
+            manager.broadcast('inject_context', { text: finalPrompt });
+            vscode.window.setStatusBarMessage("✨ Sent to AI Browser!", 3000);
+        } else {
+            vscode.window.showErrorMessage("WebMCP Gateway is not running.");
+        }
+    }));
+
     context.subscriptions.push(vscode.commands.registerCommand('mcp-gateway.connect', async () => {
         if (!currentPort || !currentToken) {
             vscode.window.showErrorMessage("MCP Gateway is not running.");
