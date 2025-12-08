@@ -1,63 +1,53 @@
 import * as vscode from 'vscode';
 import { GatewayManager } from './gateway';
-import { exec } from 'child_process';
-import * as os from 'os';
+import { BrowserManager } from './browserManager';
 
 // 定义配置文件的 AI 站点结构
 interface AISiteConfig {
     name: string;
     address: string;
-    showQuickLaunch?: boolean; // 可选，默认为 true
-    browser?: string; // 新增：站点专属浏览器配置 (default, chrome, edge)
+    showQuickLaunch?: boolean;
+    browser?: string;
 }
 
-// 定义统一的 QuickPickItem 接口，解决类型推断报错
-// target 用于快速启动，action 用于特殊操作 (showLogs, settings, custom)
 interface CustomActionItem extends vscode.QuickPickItem {
-    target?: string; // 目标 URL
-    action?: string; // 特殊动作
-    value?: string; // 用于浏览器选择
+    target?: string;
+    action?: string;
+    value?: string;
 }
 
 let manager: GatewayManager;
+let browserManager: BrowserManager;
 let outputChannel: vscode.OutputChannel;
 let statusBarItem: vscode.StatusBarItem;
-let currentPort: number | null = null;
-let currentToken: string | null = null;
 
 export async function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel("MCP Gateway");
-    // outputChannel.show(true); // 静默启动，不自动弹出面板
-    outputChannel.appendLine("🚀 MCP Gateway Extension Activating...");
+    outputChannel.appendLine("🚀 MCP Gateway Extension Activating (Native Mode)...");
 
     manager = new GatewayManager(outputChannel, context.extensionPath);
+    browserManager = new BrowserManager(manager, outputChannel);
 
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     statusBarItem.command = 'mcp-gateway.connect';
     context.subscriptions.push(statusBarItem);
 
     const startService = async () => {
+        // 🔄 立即显示 Loading 状态
+        statusBarItem.text = `$(sync~spin) WebMCP: Starting...`;
+        statusBarItem.tooltip = "Connecting to local MCP servers...";
+        statusBarItem.backgroundColor = undefined;
+        statusBarItem.show();
+
         const config = vscode.workspace.getConfiguration('mcpGateway');
-        const portConfig = config.get<number>('port') || 34567;
         const mcpServers = config.get<any>('servers') || {};
-        const lastUsedPort = context.workspaceState.get<number>('mcp.lastPort');
 
         try {
-            const result = await manager.start({
-                port: portConfig,
-                preferredPort: lastUsedPort,
+            // 启动 Gateway 连接本地 MCP Server (Native Mode)
+            await manager.start({
                 mcpServers
             });
-
-            currentPort = result.port;
-            currentToken = result.token;
-
-            if (currentPort !== lastUsedPort) {
-                await context.workspaceState.update('mcp.lastPort', currentPort);
-            }
-
-            updateStatusBar(true, currentPort);
-
+            updateStatusBar(true);
         } catch (e: any) {
             vscode.window.showErrorMessage(`Failed to start MCP Gateway: ${e.message}`);
             updateStatusBar(false);
@@ -67,18 +57,13 @@ export async function activate(context: vscode.ExtensionContext) {
     await startService();
 
     context.subscriptions.push(vscode.commands.registerCommand('mcp-gateway.connect', async () => {
-        if (!currentPort || !currentToken) {
-            vscode.window.showErrorMessage("MCP Gateway is not running.");
-            return;
-        }
-
         // 1. 从配置中读取 AI 站点列表
         const config = vscode.workspace.getConfiguration('mcpGateway');
         const aiSites = config.get<AISiteConfig[]>('aiSites') || [];
 
-        // 2. 动态生成快速启动项 (仅显示 showQuickLaunch 为 true 的项)
+        // 2. 动态生成快速启动项
         const quickLaunchItems: CustomActionItem[] = aiSites
-            .filter(site => site.showQuickLaunch === true)
+            .filter(site => site.showQuickLaunch !== false)
             .map(site => ({
                 label: `$(globe) Open ${site.name}`,
                 description: site.address.replace(/^https?:\/\//, ''),
@@ -90,155 +75,105 @@ export async function activate(context: vscode.ExtensionContext) {
             ...quickLaunchItems,
             { label: '$(run) Custom Launch...', description: 'Select AI and Browser manually', action: 'custom' },
             { label: '$(output) View Logs', description: 'Show MCP Gateway output panel', action: 'showLogs' },
-            { label: '$(settings-gear) Configure Gateway', description: 'Quick access to MCP Gateway settings', action: 'settings' },
-            { label: '$(refresh) Restart Server', description: 'Restart local gateway', action: 'restart' }
+            { label: '$(refresh) Restart Service', description: 'Reconnect to MCP servers', action: 'restart' }
         ];
 
         const selection = await vscode.window.showQuickPick<CustomActionItem>(items, {
-            placeHolder: 'Select AI Platform or Action',
-            title: `WebMCP (Port: ${currentPort})`
+            placeHolder: 'Select AI Platform to Launch (Native Control)',
+            title: `WebMCP: Native Mode`
         });
 
         if (!selection) { return; }
 
-        // 0. 查看日志
         if (selection.action === 'showLogs') {
             outputChannel.show();
             return;
         }
 
-        // 1. 设置
-        if (selection.action === 'settings') {
-            vscode.commands.executeCommand('workbench.action.openSettings', 'mcpGateway');
-            return;
-        }
-
-        // 2. 重启
         if (selection.action === 'restart') {
             outputChannel.appendLine("🔄 Manual restart triggered.");
             await manager.stop();
             await startService();
-            vscode.window.showInformationMessage("Server Restarted");
+            vscode.window.showInformationMessage("Service Restarted");
             return;
         }
 
-        // 3. 自定义启动
         if (selection.action === 'custom') {
-            // Custom Launch 现在使用所有配置的 AI 站点，无论 showQuickLaunch 是否为 true
-            const aiOptionsForCustomLaunch: CustomActionItem[] = aiSites.map(site => ({
+            const aiOptions: CustomActionItem[] = aiSites.map(site => ({
                 label: `$(globe) ${site.name}`,
                 description: site.address,
                 target: site.address,
             }));
+            const aiSel = await vscode.window.showQuickPick(aiOptions, { placeHolder: 'Select AI Platform' });
+            if (!aiSel) return;
 
-            const aiSelection = await vscode.window.showQuickPick<CustomActionItem>(aiOptionsForCustomLaunch, {
-                placeHolder: 'Step 1: Select AI Platform'
-            });
-            if (!aiSelection) { return; }
-
-            const browserOptions: CustomActionItem[] = [
+            const browserSel = await vscode.window.showQuickPick([
                 { label: '$(browser) Google Chrome', value: 'chrome' },
-                { label: '$(browser) Microsoft Edge', value: 'edge' },
-                { label: '$(terminal) System Default', value: 'default' }
-            ];
-            const browserSelection = await vscode.window.showQuickPick<CustomActionItem>(browserOptions, {
-                placeHolder: `Step 2: Open ${aiSelection.label.replace('$(globe) ', '')} in...`
-            });
-            if (!browserSelection) { return; }
+                { label: '$(browser) Microsoft Edge', value: 'edge' }
+            ], { placeHolder: 'Select Browser' });
+            if (!browserSel) return;
 
-            launchBridge(aiSelection.target!, browserSelection.value!);
+            await launchAI(aiSel.target!, browserSel.value!);
             return;
         }
 
-        // 4. 默认启动 (智能匹配配置)
         if (selection.target) {
-            launchBridge(selection.target, 'auto');
+            await launchAI(selection.target, 'auto');
         }
     }));
 
     context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(async (e) => {
-        if (e.affectsConfiguration('mcpGateway.port') || e.affectsConfiguration('mcpGateway.servers')) {
-            outputChannel.appendLine("⚙️ Server configuration changed, restarting...");
+        if (e.affectsConfiguration('mcpGateway.servers')) {
+            outputChannel.appendLine("⚙️ Configuration changed, reloading servers...");
             await startService();
         }
     }));
 }
 
-function launchBridge(targetUrl: string, browserMode: string) {
-    const bridgeUrl = `http://127.0.0.1:${currentPort}/bridge?token=${currentToken}&target=${encodeURIComponent(targetUrl)}`;
-
+async function launchAI(targetUrl: string, browserMode: string) {
     const config = vscode.workspace.getConfiguration('mcpGateway');
-    let finalBrowser = 'default';
+    let finalBrowser = 'chrome';
 
+    // 智能判定浏览器
     if (browserMode === 'auto') {
-        // 新逻辑：优先检查 aiSites 中是否有配置 browser
         const aiSites = config.get<AISiteConfig[]>('aiSites') || [];
         const matchedSite = aiSites.find(site => site.address === targetUrl);
-
         if (matchedSite && matchedSite.browser && matchedSite.browser !== 'default') {
             finalBrowser = matchedSite.browser;
         } else {
-            // 如果没有特定配置，使用全局默认设置
-            finalBrowser = config.get<string>('browser') || 'default';
+            const globalDefault = config.get<string>('browser');
+            if (globalDefault && globalDefault !== 'default') {
+                finalBrowser = globalDefault;
+            }
         }
     } else {
-        // 手动指定模式（Custom Launch）
         finalBrowser = browserMode;
     }
 
-    openBrowser(bridgeUrl, finalBrowser);
+    // 强制转换为受支持的类型
+    if (finalBrowser !== 'edge') finalBrowser = 'chrome';
+
+    vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: `Launching ${finalBrowser === 'chrome' ? 'Chrome' : 'Edge'}...`,
+        cancellable: false
+    }, async () => {
+        try {
+            await browserManager.launch(targetUrl, finalBrowser as 'chrome' | 'edge');
+        } catch (e: any) {
+            vscode.window.showErrorMessage(`Launch Failed: ${e.message}`);
+        }
+    });
 }
 
-function updateStatusBar(online: boolean, port?: number) {
-    if (online && port) {
-        statusBarItem.text = `$(rocket) WebMCP: ${port}`;
-        statusBarItem.tooltip = "Click to connect AI";
+function updateStatusBar(online: boolean) {
+    if (online) {
+        statusBarItem.text = `$(rocket) WebMCP: Active`;
+        statusBarItem.tooltip = "Native Mode Ready. Click to launch AI.";
         statusBarItem.backgroundColor = undefined;
     } else {
-        statusBarItem.text = `$(alert) WebMCP: Offline`;
-        statusBarItem.tooltip = "Server failed to start";
+        statusBarItem.text = `$(alert) WebMCP: Error`;
         statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
     }
     statusBarItem.show();
-}
-
-function openBrowser(url: string, browserType: string) {
-    const platform = os.platform();
-    let command = '';
-
-    if (browserType === 'default') {
-        vscode.env.openExternal(vscode.Uri.parse(url));
-        return;
-    }
-
-    if (platform === 'win32') {
-        if (browserType === 'chrome') {
-            command = `start chrome "${url}"`;
-        } else if (browserType === 'edge') {
-            command = `start msedge "${url}"`;
-        }
-    } else if (platform === 'darwin') {
-        if (browserType === 'chrome') {
-            command = `open -a "Google Chrome" "${url}"`;
-        }
-        else if (browserType === 'edge') {
-            command = `open -a "Microsoft Edge" "${url}"`;
-        }
-    } else {
-        if (browserType === 'chrome') {
-            command = `google-chrome "${url}"`;
-        } else {
-            command = `xdg-open "${url}"`;
-        }
-    }
-
-    if (command) {
-        exec(command, (err) => {
-            if (err) {
-                vscode.window.showErrorMessage(`Failed to open browser: ${err.message}`);
-            }
-        });
-    } else {
-        vscode.env.openExternal(vscode.Uri.parse(url));
-    }
 }

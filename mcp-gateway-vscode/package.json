@@ -123,9 +123,9 @@
     "test": "vscode-test"
   },
   "dependencies": {
+    "puppeteer-core": "^24.0.0",
+    "fs-extra": "^11.2.0",
     "@modelcontextprotocol/sdk": "^1.0.1",
-    "cors": "^2.8.5",
-    "express": "^4.18.2",
     "zod": "^3.22.4"
   },
   "devDependencies": {
