@@ -221,6 +221,98 @@
   const currentPlatform = location.host.includes("deepseek") ? "deepseek" : location.host.includes("gemini") ? "gemini" : "chatgpt";
   console.log(`[MCP Extension] Started on ${currentPlatform}`);
 
+  // === SSE 上下文注入系统 ===
+  let sseSource = null;
+  
+  function setupSSE(port, token) {
+      if (sseSource && sseSource.readyState !== 2) {
+          console.log("[WebMCP] SSE already active.");
+          return;
+      }
+      if (sseSource) sseSource.close();
+
+      const url = `http://127.0.0.1:${port}/events?token=${token}`;
+      sseSource = new EventSource(url);
+
+      sseSource.onmessage = (event) => {
+          try {
+              const msg = JSON.parse(event.data);
+              if (msg.type === 'inject_context') {
+                  Logger.log("📥 Received Context from VS Code", "action");
+                  injectContextToInput(msg.data.text);
+              }
+          } catch (e) { console.error(e); }
+      };
+
+      sseSource.onerror = (e) => {
+          sseSource.close();
+          sseSource = null;
+      };
+      Logger.log(`📡 Listening for VS Code events`, "info");
+  }
+
+  function injectContextToInput(text) {
+      const inputEl = document.querySelector(DOM.inputArea);
+      if (!inputEl) {
+          Logger.log(t("input_not_found"), "error");
+          return;
+      }
+
+      // 1. 填入文本
+      inputEl.focus();
+      let success = false;
+      try {
+          document.execCommand('selectAll', false, null);
+          success = document.execCommand('insertText', false, text);
+      } catch (e) {}
+      
+      if (!success) {
+          if (inputEl.tagName === "TEXTAREA" || inputEl.tagName === "INPUT") {
+              inputEl.value = text;
+          } else {
+              inputEl.innerText = text;
+          }
+          inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+
+      // 2. 自动发送 (如果配置允许)
+      if (CONFIG.autoSend) {
+          setTimeout(() => {
+              const btn = document.querySelector(DOM.sendButton);
+              if (btn && !btn.disabled) {
+                  btn.click();
+                  Logger.log("🚀 Auto-sent context request", "success");
+              }
+          }, 500);
+      }
+  }
+
+  // 监听 Session 变化以建立 SSE
+  chrome.storage.onChanged.addListener((changes, namespace) => {
+      if (namespace === 'local') {
+          for (const key in changes) {
+              // 简单的模糊匹配，因为没办法直接拿到当前 tabId
+              if (key.startsWith('session_')) {
+                  const newVal = changes[key].newValue;
+                  if (newVal && newVal.port && newVal.token) {
+                      // 尝试连接 (这里假设用户只连了一个 VS Code 实例)
+                      setupSSE(newVal.port, newVal.token);
+                  }
+              }
+          }
+      }
+  });
+
+  // 初始化时尝试连接一次
+  chrome.storage.local.get(null, (items) => {
+      for (const [key, val] of Object.entries(items)) {
+          if (key.startsWith('session_') && val.port && val.token) {
+              setupSSE(val.port, val.token);
+              break; // 只连第一个找到的 session
+          }
+      }
+  });
+
   function updateDOMConfig() {
       if (activeSelectors && activeSelectors[currentPlatform]) {
           DOM = activeSelectors[currentPlatform];
