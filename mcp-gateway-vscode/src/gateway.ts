@@ -154,9 +154,10 @@ export class GatewayManager {
             next();
         });
 
-        // 4. Token 校验中间件 (排除 /bridge 和 OPTIONS)
+        // 4. Token 校验中间件 (排除 /bridge, /events 和 OPTIONS)
         this.app.use((req, res, next) => {
-            if (req.path === '/bridge' || req.path === '/favicon.ico' || req.method === 'OPTIONS') {
+            // SSE (/events) 无法设置 Header，只能通过 Query 参数鉴权，所以这里先放行，由具体路由处理
+            if (req.path === '/bridge' || req.path === '/events' || req.path === '/favicon.ico' || req.method === 'OPTIONS') {
                 return next();
             }
 
