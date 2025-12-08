@@ -1,33 +1,34 @@
 # WebMCP Gateway (VS Code Extension)
 
-[中文文档](README_zh.md)
+**Connect Web-based AI (DeepSeek, ChatGPT, Gemini) to your Local VS Code Environment.**
 
-> ⚠️ **IMPORTANT**
-> This extension requires the companion browser extension **WebMCP Bridge** to function.
-> Please ensure you have installed the corresponding extension in Chrome or Edge.
+This extension acts as a bridge, allowing web AIs to securely access your local files and execute commands via the Model Context Protocol (MCP), **without requiring any browser extensions**.
 
-## 🚀 Introduction
-**WebMCP Gateway** turns your VS Code into a local MCP (Model Context Protocol) server. This allows Web-based AI models (like ChatGPT, Gemini, DeepSeek) to securely access your local files, execute terminal commands, and assist you in writing code.
+## ✨ Features
 
-## ✨ Core Features
-* **Zero-Config Connection**: Automatically finds available ports, no manual setup required.
-* **Secure Bridging**: Uses a one-time Token mechanism to ensure secure communication between the browser and the editor.
-* **Tool Exposure**: Standardizes local filesystem operations and terminal commands as MCP tools for the AI.
+* **Native Control**: Uses Puppeteer to launch and control a dedicated Chrome/Edge instance. No external browser plugins needed.
+* **Zero Config**: Works out of the box. Just click and connect.
+* **Smart Automation**: Auto-injects system prompts and handles multi-step tool calls in parallel.
+* **Persistent & Secure**: Isolates AI sessions in a dedicated user profile (`~/.webmcp`).
 
-## ⚙️ Installation & Usage
+## 🚀 Getting Started
 
-1. **Install**: Search for `WebMCP Gateway` in the VS Code Marketplace and install it.
-2. **Start Service**: After installation, click the `MCP Gateway: Off` button in the status bar (bottom right). When it changes to `On`, the service is running.
-3. **Browser Companion**: Ensure you have the **WebMCP Bridge** extension installed in your browser.
+1.  **Install**: Open this folder in VS Code and run `npm install`.
+2.  **Run**: Press `F5` to start debugging.
+3.  **Connect**: Run command `WebMCP: Connect` via Command Palette (`Cmd+Shift+P`).
+4.  **Chat**: Select your AI provider (e.g., DeepSeek) and start coding!
 
-## ❓ FAQ
+## 🛠️ Architecture
 
-**Q: Clicking the status bar does nothing?**
-A: Check if any other program is using ports in the 30000-40000 range, or try restarting VS Code.
+* **Core**: TypeScript extension running in VS Code Node.js environment.
+* **Bridge**: `puppeteer-core` connects to Chrome via CDP (Chrome DevTools Protocol).
+* **Protocol**: Implements standard MCP (Model Context Protocol) for tool execution.
 
-**Q: Browser extension shows "Disconnected"?**
-A: Ensure VS Code is running and the status bar shows `On`. If it's the first time connecting, try refreshing the AI page.
+## 📋 Requirements
+
+* VS Code 1.90+
+* Google Chrome or Microsoft Edge installed on your system.
 
 ---
-## 📄 License
-MIT License
+
+*WebMCP - Bridging the gap between Web AI and Local Dev.*

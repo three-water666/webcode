@@ -79,11 +79,7 @@
             }
           }
         },
-        "mcpGateway.port": {
-          "type": "number",
-          "default": 34567,
-          "description": "The port the local gateway server will listen on."
-        },
+        
         "mcpGateway.browser": {
           "type": "string",
           "default": "default",
@@ -129,8 +125,7 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
-    "@types/cors": "^2.8.17",
-    "@types/express": "^4.17.21",
+    
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
     "@types/vscode": "^1.106.1",
