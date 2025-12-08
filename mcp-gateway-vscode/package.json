@@ -9,7 +9,7 @@
   },
   "license": "MIT",
   "icon": "images/icon.png",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "engines": {
     "vscode": "^1.106.1"
   },
@@ -38,8 +38,22 @@
           "group": "navigation",
           "when": "editorHasSelection"
         }
+      ],
+      "terminal/context": [
+        {
+          "command": "mcp-gateway.askAI",
+          "group": "navigation"
+        }
       ]
     },
+    "keybindings": [
+      {
+        "command": "mcp-gateway.askAI",
+        "key": "alt+q",
+        "mac": "cmd+opt+q",
+        "when": "editorTextFocus || terminalFocus"
+      }
+    ],
     "configuration": {
       "title": "MCP Gateway",
       "properties": {
