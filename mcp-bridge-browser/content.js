@@ -476,10 +476,18 @@
            btn.focus();
            btn.click();
            Logger.log(`${t("auto_send_attempt")} (${retryCount + 1})`, "action");
-        } else if (!btn) {
-           Logger.log(t("send_btn_missing"), "warn");
         } else {
-           Logger.log(t("send_btn_disabled"), "warn");
+           // === 后台救援机制 ===
+           if (document.visibilityState === 'hidden' && retryCount > 1) {
+               Logger.log("⚠️ Background throttling detected! Requesting Focus...", "warn");
+               chrome.runtime.sendMessage({ type: "ACTIVATE_TAB" });
+               // 唤醒后，给浏览器一点时间重绘，重置重试计数器以便下次循环成功点击
+               retryCount = 0; 
+               return;
+           }
+
+           if (!btn) Logger.log(t("send_btn_missing"), "warn");
+           else Logger.log(t("send_btn_disabled"), "warn");
         }
 
         retryCount++;
