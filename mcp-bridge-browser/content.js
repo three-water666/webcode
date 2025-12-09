@@ -322,13 +322,20 @@
 
         // 计算当前 DOM Token
         let text = "";
-        // 尝试获取所有消息文本
-        const blocks = document.querySelectorAll(DOM.messageBlocks);
-        if (blocks.length > 0) {
-            blocks.forEach(b => text += b.innerText + "\n");
-        } else {
-            // Fallback: 如果选择器没对上，用 body 近似值 (会有误差)
-            text = document.body.innerText;
+        
+        // 1. AI 消息 & 通用消息块
+        const aiBlocks = document.querySelectorAll(DOM.messageBlocks);
+        aiBlocks.forEach(b => text += b.innerText + "\n");
+
+        // 2. 用户消息 (如果配置了独立选择器)
+        if (DOM.userMessageBlocks) {
+            const userBlocks = document.querySelectorAll(DOM.userMessageBlocks);
+            userBlocks.forEach(b => text += b.innerText + "\n");
+        }
+
+        // Fallback: 如果都没找到，用 body 近似值
+        if (text.length === 0) {
+             text = document.body.innerText;
         }
         const currentDOM = this.estimate(text);
 
@@ -366,7 +373,7 @@
         // UI 显示
         const limit = location.host.includes("google") ? 1000000 : 128000;
         const pct = ((newTotal / limit) * 100).toFixed(1);
-        Logger.updateStatus(`📊 Context: ${newTotal.toLocaleString()} / ${limit.toLocaleString()} (${pct}%)`);
+        Logger.updateStatus(`📊 Context: ${newTotal.toLocaleString()} / ${limit.toLocaleString()} (${pct}%) (Est.)`);
 
         // 这里的保存做了简单节流，每5秒存一次
         this.save();

@@ -14,12 +14,14 @@ const DEFAULT_SELECTORS = {
   },
   chatgpt: {
     messageBlocks: 'div[data-message-author-role="assistant"]',
+    userMessageBlocks: 'div[data-message-author-role="user"]', // [New] Add User Context
     codeBlocks: "pre code",
     inputArea: "#prompt-textarea",
     sendButton: 'button[data-testid="send-button"]',
   },
   gemini: {
     messageBlocks: ".markdown",
+    userMessageBlocks: ".user-query", // [New] Add User Context (May vary by layout)
     codeBlocks: "pre code",
     inputArea: 'div[contenteditable="true"]',
     sendButton: 'button[aria-label="发送"], button[aria-label="Send"], button[aria-label*="Send"]',
