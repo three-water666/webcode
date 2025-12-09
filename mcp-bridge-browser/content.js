@@ -124,7 +124,7 @@
 
       const header = document.createElement("div");
       Object.assign(header.style, {
-        padding: "6px 10px",
+        padding: "4px 10px", // 稍微改小一点给 status 让位
         backgroundColor: "#333",
         color: "#fff",
         cursor: "move",
@@ -142,6 +142,20 @@
       clearBtn.onclick = () => (this.contentEl.innerHTML = "");
       header.appendChild(clearBtn);
 
+      // [New] Status Bar for Token Count
+      this.statusEl = document.createElement("div");
+      Object.assign(this.statusEl.style, {
+          padding: "4px 10px",
+          backgroundColor: "#2d2d2d",
+          borderBottom: "1px solid #444",
+          fontSize: "11px",
+          color: "#4fc3f7",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis"
+      });
+      this.statusEl.innerText = "Initializing...";
+
       this.contentEl = document.createElement("div");
       Object.assign(this.contentEl.style, {
         flex: "1",
@@ -151,6 +165,7 @@
       });
 
       this.el.appendChild(header);
+      this.el.appendChild(this.statusEl);
       this.el.appendChild(this.contentEl);
       document.body.appendChild(this.el);
 
@@ -184,6 +199,10 @@
       if (this.el) {
           this.el.style.display = show ? "flex" : "none";
       }
+    },
+
+    updateStatus(text) {
+        if (this.statusEl) this.statusEl.innerText = text;
     },
 
     log(msg, type = "info") {
@@ -242,6 +261,129 @@
     }
   );
 
+  // === Token 统计管理器 ===
+  const TokenManager = {
+    CACHE_KEY: "mcp_token_stats",
+    CLEANUP_MS: 10 * 24 * 60 * 60 * 1000, // 10天过期
+    data: {},
+    currentChatId: null,
+    sessionBaseDOM: 0,
+    sessionBaseTotal: 0,
+    lastSave: 0,
+
+    async init() {
+        const stored = await chrome.storage.local.get(this.CACHE_KEY);
+        this.data = stored[this.CACHE_KEY] || {};
+        this.cleanup();
+        console.log("[WebMCP] TokenManager initialized");
+    },
+
+    cleanup() {
+        const now = Date.now();
+        let changed = false;
+        for (const [id, stat] of Object.entries(this.data)) {
+            if (now - stat.timestamp > this.CLEANUP_MS) {
+                delete this.data[id];
+                changed = true;
+            }
+        }
+        if (changed) this.save(true);
+    },
+
+    getChatId() {
+        const url = location.href;
+        // DeepSeek: /chat/s/UUID or /a/chat/s/UUID
+        const ds = url.match(/\/chat\/s\/([a-f0-9-]+)/);
+        if (ds) return ds[1];
+        // ChatGPT: /c/UUID
+        const gpt = url.match(/\/c\/([a-f0-9-]+)/);
+        if (gpt) return gpt[1];
+        // Gemini: /app/UUID
+        const gemini = url.match(/\/app\/([a-f0-9]+)/);
+        if (gemini) return gemini[1];
+        return null;
+    },
+
+    estimate(text) {
+        if (!text) return 0;
+        const chinese = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
+        const other = text.length - chinese;
+        // 估算: 中文 0.7, 其他 0.25
+        return Math.ceil(chinese * 0.7 + other * 0.25);
+    },
+
+    update() {
+        if (!DOM) return;
+        const chatId = this.getChatId();
+        if (!chatId) {
+            Logger.updateStatus("Token Tracker: No active chat detected");
+            return;
+        }
+
+        // 计算当前 DOM Token
+        let text = "";
+        // 尝试获取所有消息文本
+        const blocks = document.querySelectorAll(DOM.messageBlocks);
+        if (blocks.length > 0) {
+            blocks.forEach(b => text += b.innerText + "\n");
+        } else {
+            // Fallback: 如果选择器没对上，用 body 近似值 (会有误差)
+            text = document.body.innerText;
+        }
+        const currentDOM = this.estimate(text);
+
+        // 切换 ID 或初始化时的基准校准
+        if (chatId !== this.currentChatId) {
+            this.currentChatId = chatId;
+            const saved = this.data[chatId];
+            
+            if (saved) {
+                this.sessionBaseTotal = saved.count;
+            } else {
+                this.sessionBaseTotal = 0;
+            }
+            this.sessionBaseDOM = currentDOM;
+
+            // 修正: 如果是第一次加载老会话(DOM > Saved)，信任 DOM
+            if (this.sessionBaseDOM > this.sessionBaseTotal) {
+                this.sessionBaseTotal = this.sessionBaseDOM;
+            }
+        }
+
+        // 增量计算: Total = SavedBase + (CurrentDOM - BaseDOM)
+        // 注意: 即使 delta 为负(删除消息)，也不应该让 total 小于 currentDOM
+        let delta = currentDOM - this.sessionBaseDOM;
+        let newTotal = this.sessionBaseTotal + delta;
+        if (newTotal < currentDOM) newTotal = currentDOM;
+
+        // 更新缓存
+        this.data[chatId] = {
+            count: newTotal,
+            timestamp: Date.now(),
+            platform: currentPlatform
+        };
+
+        // UI 显示
+        const limit = location.host.includes("google") ? 1000000 : 128000;
+        const pct = ((newTotal / limit) * 100).toFixed(1);
+        Logger.updateStatus(`📊 Context: ${newTotal.toLocaleString()} / ${limit.toLocaleString()} (${pct}%)`);
+
+        // 这里的保存做了简单节流，每5秒存一次
+        this.save();
+    },
+
+    save(force = false) {
+        const now = Date.now();
+        if (force || now - this.lastSave > 5000) {
+            chrome.storage.local.set({ [this.CACHE_KEY]: this.data });
+            this.lastSave = now;
+        }
+    }
+  };
+  
+  // 启动 TokenManager
+  TokenManager.init();
+
   chrome.storage.onChanged.addListener((changes, namespace) => {
     if (namespace === "sync") {
       if (changes.autoSend) CONFIG.autoSend = changes.autoSend.newValue;
@@ -263,6 +405,9 @@
 
   setInterval(() => {
     if (!DOM) return;
+    
+    // 更新 Token 统计
+    TokenManager.update();
 
     const messages = document.querySelectorAll(DOM.messageBlocks);
     if (messages.length === 0) {
