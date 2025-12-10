@@ -28,23 +28,32 @@ chrome.runtime.onInstalled.addListener(async () => {
     }
   }
 
-  // 兼容旧逻辑
-  if (storageData.prompt_en) {
-    storageData.initialPrompt = storageData.prompt_en;
-  }
-
-  // 仅写入尚未存在的配置
-  const existing = await chrome.storage.local.get(Object.keys(storageData));
-  const toSet = {};
+  // 1. 初始化本地资源 (storage.local)
+  const existingLocal = await chrome.storage.local.get(Object.keys(storageData));
+  const localToSet = {};
   for (const [key, val] of Object.entries(storageData)) {
-    if (!existing[key]) {
-      toSet[key] = val;
+    if (!existingLocal[key]) {
+      localToSet[key] = val;
     }
   }
+  if (Object.keys(localToSet).length > 0) {
+    await chrome.storage.local.set(localToSet);
+    console.log("[WebMCP] Initialized local resources");
+  }
 
-  if (Object.keys(toSet).length > 0) {
-    await chrome.storage.local.set(toSet);
-    console.log("[WebMCP] Initialized defaults including Error Hints");
+  // 2. 初始化用户配置 (storage.sync) - 保护不被覆盖
+  const syncKeys = ["autoSend", "autoPromptEnabled", "customSelectors", "protected_tools"];
+  const existingSync = await chrome.storage.sync.get(syncKeys);
+  const syncToSet = {};
+  
+  // 只有当完全没有配置时(全新安装)，才写入默认值
+  // 注意：我们不设置 protected_tools 的默认值，让它保持 undefined (空) 或者是用户之前的值
+  if (existingSync.autoSend === undefined) syncToSet.autoSend = true;
+  if (existingSync.autoPromptEnabled === undefined) syncToSet.autoPromptEnabled = false;
+  
+  if (Object.keys(syncToSet).length > 0) {
+      await chrome.storage.sync.set(syncToSet);
+      console.log("[WebMCP] Initialized user settings (Preserved existing)");
   }
 });
 
