@@ -36,9 +36,12 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "prompt.md", "prompt_zh.md", 
-        "train.md", "train_zh.md",
-        "error_hint.md", "error_hint_zh.md"
+        "prompt.md",
+        "prompt_zh.md",
+        "train.md",
+        "train_zh.md",
+        "error_hint.md",
+        "error_hint_zh.md"
       ],
       "matches": ["<all_urls>"]
     }
@@ -76,7 +79,7 @@
         "https://gemini.google.com/*",
         "https://chat.deepseek.com/*"
       ],
-      "js": ["config.js", "content.js"]
+      "js": ["config.js", "modules/utils.js", "modules/ui.js", "content.js"]
     }
   ]
 }

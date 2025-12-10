@@ -22,6 +22,7 @@ const DEFAULT_SELECTORS = {
     messageBlocks: ".markdown",
     codeBlocks: "pre code",
     inputArea: 'div[contenteditable="true"]',
-    sendButton: 'button[aria-label="发送"], button[aria-label="Send"], button[aria-label*="Send"]',
+    sendButton:
+      'button[aria-label="发送"], button[aria-label="Send"], button[aria-label*="Send"]',
   },
 };

@@ -1,168 +1,193 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="UTF-8">
-  <title>WebMCP Bridge Settings</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      background-color: #f5f5f5;
-      color: #333;
-      padding: 20px;
-      max-width: 800px;
-      margin: 0 auto;
-    }
-    h1 {
-      border-bottom: 1px solid #ddd;
-      padding-bottom: 10px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .lang-badge {
-      font-size: 12px;
-      background: #eee;
-      padding: 4px 8px;
-      border-radius: 4px;
-      color: #666;
-    }
-    .container {
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      margin-bottom: 20px;
-    }
-    h2 {
-      font-size: 1.2em;
-      margin-top: 0;
-      border-bottom: 1px solid #eee;
-      padding-bottom: 8px;
-      margin-bottom: 16px;
-    }
-    .form-group {
-      margin-bottom: 20px;
-    }
-    label {
-      display: block;
-      font-weight: bold;
-      margin-bottom: 5px;
-    }
-    .description {
-      font-size: 0.9em;
-      color: #666;
-      margin-bottom: 10px;
-    }
-    textarea {
-      width: 100%;
-      font-family: "Consolas", "Monaco", monospace;
-      font-size: 13px;
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      box-sizing: border-box;
-      background-color: #fafafa;
-      resize: vertical;
-    }
-    .buttons {
-      display: flex;
-      gap: 10px;
-      margin-top: 20px;
-      padding-top: 10px;
-      border-top: 1px solid #eee;
-    }
-    button {
-      padding: 8px 16px;
-      border-radius: 4px;
-      border: none;
-      cursor: pointer;
-      font-size: 14px;
-      transition: background 0.2s;
-    }
-    button.primary {
-      background-color: #007bff;
-      color: white;
-    }
-    button.primary:hover {
-      background-color: #0056b3;
-    }
-    button.secondary {
-      background-color: #6c757d;
-      color: white;
-    }
-    button.secondary:hover {
-      background-color: #545b62;
-    }
-    #status {
-      margin-top: 10px;
-      font-weight: bold;
-      min-height: 20px;
-    }
-    .status-success { color: #28a745; }
-    .status-error { color: #dc3545; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1>
-      <span id="title">WebMCP Settings</span>
-      <span id="currentLang" class="lang-badge">EN</span>
-    </h1>
-    
-    
-    <div class="form-group">
-      <h2 id="sec_selectors">Site Selectors</h2>
-      <div class="description" id="desc_selectors">
-        Customize DOM selectors. Only modify if the extension stops working.
+  <head>
+    <meta charset="UTF-8" />
+    <title>WebMCP Bridge Settings</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        background-color: #f5f5f5;
+        color: #333;
+        padding: 20px;
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      h1 {
+        border-bottom: 1px solid #ddd;
+        padding-bottom: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .lang-badge {
+        font-size: 12px;
+        background: #eee;
+        padding: 4px 8px;
+        border-radius: 4px;
+        color: #666;
+      }
+      .container {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+      }
+      h2 {
+        font-size: 1.2em;
+        margin-top: 0;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 8px;
+        margin-bottom: 16px;
+      }
+      .form-group {
+        margin-bottom: 20px;
+      }
+      label {
+        display: block;
+        font-weight: bold;
+        margin-bottom: 5px;
+      }
+      .description {
+        font-size: 0.9em;
+        color: #666;
+        margin-bottom: 10px;
+      }
+      textarea {
+        width: 100%;
+        font-family: "Consolas", "Monaco", monospace;
+        font-size: 13px;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-sizing: border-box;
+        background-color: #fafafa;
+        resize: vertical;
+      }
+      .buttons {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+        padding-top: 10px;
+        border-top: 1px solid #eee;
+      }
+      button {
+        padding: 8px 16px;
+        border-radius: 4px;
+        border: none;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background 0.2s;
+      }
+      button.primary {
+        background-color: #007bff;
+        color: white;
+      }
+      button.primary:hover {
+        background-color: #0056b3;
+      }
+      button.secondary {
+        background-color: #6c757d;
+        color: white;
+      }
+      button.secondary:hover {
+        background-color: #545b62;
+      }
+      #status {
+        margin-top: 10px;
+        font-weight: bold;
+        min-height: 20px;
+      }
+      .status-success {
+        color: #28a745;
+      }
+      .status-error {
+        color: #dc3545;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>
+        <span id="title">WebMCP Settings</span>
+        <span id="currentLang" class="lang-badge">EN</span>
+      </h1>
+
+      <div class="form-group">
+        <h2 id="sec_selectors">Site Selectors</h2>
+        <div class="description" id="desc_selectors">
+          Customize DOM selectors. Only modify if the extension stops working.
+        </div>
+        <textarea id="selectorsJson" style="height: 150px"></textarea>
       </div>
-      <textarea id="selectorsJson" style="height: 150px;"></textarea>
+
+      <div class="form-group">
+        <h2 id="sec_hitl">Human-in-the-Loop (Approval)</h2>
+        <div class="description" id="desc_hitl">
+          Select tools that require manual approval before execution. (Connect
+          to Gateway first to populate list)
+        </div>
+        <div
+          id="toolList"
+          style="
+            background: #fafafa;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+          "
+        >
+          <div
+            style="
+              color: #999;
+              font-style: italic;
+              padding: 10px;
+              text-align: center;
+            "
+            id="toolListPlaceholder"
+          >
+            No tools detected yet. Please use the extension once.
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <h2 id="sec_prompts">System Prompts</h2>
+
+        <label id="lbl_init_prompt">Initial System Prompt</label>
+        <div class="description" id="desc_init_prompt">
+          Sent to AI when you start a new conversation. (Supports Markdown)
+        </div>
+        <textarea id="initPrompt" style="height: 180px"></textarea>
+
+        <br /><br />
+
+        <label id="lbl_train_prompt">Training Hint (Periodic)</label>
+        <div class="description" id="desc_train_prompt">
+          Inserted periodically (every 5 tool calls) to remind AI of the
+          protocol.
+        </div>
+        <textarea id="trainPrompt" style="height: 60px"></textarea>
+
+        <br /><br />
+
+        <label id="lbl_error_prompt">Format Error Hint</label>
+        <div class="description" id="desc_error_prompt">
+          Sent to AI when it generates invalid JSON or fails to follow protocol.
+        </div>
+        <textarea id="errorPrompt" style="height: 100px"></textarea>
+      </div>
+
+      <div class="buttons">
+        <button id="save" class="primary">Save Settings</button>
+        <button id="reset" class="secondary">Reset to Defaults</button>
+      </div>
+      <div id="status"></div>
     </div>
 
-    
-    <div class="form-group">
-      <h2 id="sec_hitl">Human-in-the-Loop (Approval)</h2>
-      <div class="description" id="desc_hitl">
-        Select tools that require manual approval before execution. (Connect to Gateway first to populate list)
-      </div>
-      <div id="toolList" style="background:#fafafa; padding:10px; border:1px solid #ccc; border-radius:4px; max-height:200px; overflow-y:auto;">
-        <div style="color:#999; font-style:italic; padding:10px; text-align:center" id="toolListPlaceholder">No tools detected yet. Please use the extension once.</div>
-      </div>
-    </div>
-
-    <div class="form-group">
-      <h2 id="sec_prompts">System Prompts</h2>
-      
-      <label id="lbl_init_prompt">Initial System Prompt</label>
-      <div class="description" id="desc_init_prompt">
-        Sent to AI when you start a new conversation. (Supports Markdown)
-      </div>
-      <textarea id="initPrompt" style="height: 180px;"></textarea>
-      
-      <br><br>
-
-      <label id="lbl_train_prompt">Training Hint (Periodic)</label>
-      <div class="description" id="desc_train_prompt">
-        Inserted periodically (every 5 tool calls) to remind AI of the protocol.
-      </div>
-      <textarea id="trainPrompt" style="height: 60px;"></textarea>
-      
-      <br><br>
-
-      <label id="lbl_error_prompt">Format Error Hint</label>
-      <div class="description" id="desc_error_prompt">
-        Sent to AI when it generates invalid JSON or fails to follow protocol.
-      </div>
-      <textarea id="errorPrompt" style="height: 100px;"></textarea>
-    </div>
-
-    <div class="buttons">
-      <button id="save" class="primary">Save Settings</button>
-      <button id="reset" class="secondary">Reset to Defaults</button>
-    </div>
-    <div id="status"></div>
-  </div>
-
-  <script src="config.js"></script>
-  <script src="options.js"></script>
-</body>
+    <script src="config.js"></script>
+    <script src="options.js"></script>
+  </body>
 </html>
