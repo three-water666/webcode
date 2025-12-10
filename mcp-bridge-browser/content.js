@@ -60,7 +60,7 @@
       console.log(`[MCP] Loaded i18n resources (${i18n.lang})`);
   });
 
-  // === Logger (略微精简以节省空间) ===
+  // === Logger ===
   const Logger = {
     el: null, contentEl: null,
     init() {
@@ -171,15 +171,12 @@
             activeExecutions.add(payload.request_id);
             markVisualSuccess(codeEl);
             Logger.log(`${t("captured")}: ${payload.name}`, "info");
-            
-            // 🚀 入口：执行工具（包含 HITL 检查）
             executeTool(payload);
           } else {
              if (codeEl.dataset.mcpVisual !== "true") markVisualSuccess(codeEl);
           }
         }
       } catch (e) {
-        // JSON Stabilization / Error Logic
         const now = Date.now();
         let state = blockStates.get(codeEl);
         if (!state || state.text !== textContent) {
@@ -228,15 +225,13 @@
     }
   }, CONFIG.pollInterval);
 
-  // === 核心：执行工具 (支持 HITL 拦截) ===
+  // === 核心：执行工具 ===
   function executeTool(payload) {
-      // 1. Virtual Tool Bypass
       if (payload.name === "task_completion_notification") {
           finishVirtualTool(payload);
           return;
       }
 
-      // 2. HITL Check
       if (protectedTools.has(payload.name)) {
           Logger.log(`${t("hitl_intercept")}: ${payload.name}`, "warn");
           confirmationQueue.push(payload);
@@ -244,7 +239,6 @@
           return;
       }
 
-      // 3. Direct Execution
       performExecution(payload);
   }
 
@@ -255,7 +249,6 @@
           if (response && response.success) {
               Logger.log(`${t("exec_success")}: ${payload.name}`, "success");
               let finalData = response.data;
-              // Cache tools logic
               if (payload.name === "list_tools") {
                   try {
                       const realTools = JSON.parse(finalData);
@@ -315,24 +308,30 @@
   function processConfirmationQueue() {
       if (isPopupOpen || confirmationQueue.length === 0) return;
       
-      const payload = confirmationQueue[0]; // Peek
+      const payload = confirmationQueue[0];
       isPopupOpen = true;
-
       chrome.runtime.sendMessage({ type: "SHOW_NOTIFICATION", title: "Approval Required", message: `Tool: ${payload.name}` });
 
       showConfirmationModal(payload, 
           () => {
-              // Confirm
               confirmationQueue.shift();
               isPopupOpen = false;
+              
+              // [Robust Fix] Force focus back to ensure auto-send works
+              const inputEl = document.querySelector(DOM.inputArea);
+              if (inputEl) inputEl.focus();
+
               performExecution(payload);
               processConfirmationQueue();
           },
           (reason) => {
-              // Reject
               confirmationQueue.shift();
               isPopupOpen = false;
               activeExecutions.delete(payload.request_id);
+              
+              const inputEl = document.querySelector(DOM.inputArea);
+              if (inputEl) inputEl.focus();
+
               Logger.log(`${t("hitl_rejected")}: ${payload.name}`, "error");
               saveToBuffer(payload.request_id, `User rejected execution. Reason: ${reason || "No reason provided."}`, true);
               processConfirmationQueue();
@@ -363,10 +362,10 @@
         .btn-reject:hover { background: #dc3545; color: white; }
         .btn-confirm { background: #2e7d32; color: white; box-shadow: 0 2px 5px rgba(46, 125, 50, 0.3); }
         .btn-confirm:hover { background: #1b5e20; box-shadow: 0 4px 8px rgba(46, 125, 50, 0.4); }
+        .btn-back { background: #6c757d; color: white; display: none; margin-right: auto; }
+        .btn-back:hover { background: #5a6268; }
         input.reason { width: 100%; box-sizing: border-box; padding: 10px; margin-top: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; display: none; }
         input.reason:focus { outline: none; border-color: #dc3545; }
-        .reject-mode .btn-confirm { display: none; }
-        .reject-mode .btn-reject { background: #dc3545; color: white; width: 100%; justify-content: center; }
       `;
       shadow.appendChild(style);
 
@@ -388,15 +387,16 @@
         </div>
         <input type="text" class="reason" placeholder="Reason for rejection (Optional)...">
         <div class="buttons">
+            <button class="btn-back">Back</button>
             <button class="btn-reject">Reject</button>
             <button class="btn-confirm">Approve & Execute</button>
         </div>
       `;
 
+      const btnBack = card.querySelector('.btn-back');
       const btnReject = card.querySelector('.btn-reject');
       const btnConfirm = card.querySelector('.btn-confirm');
       const inputReason = card.querySelector('.reason');
-      const buttonsDiv = card.querySelector('.buttons');
 
       btnConfirm.onclick = () => {
           document.body.removeChild(host);
@@ -406,21 +406,28 @@
       let rejectStep = 0;
       btnReject.onclick = () => {
           if (rejectStep === 0) {
-              // Show input
               rejectStep = 1;
               inputReason.style.display = 'block';
               inputReason.focus();
               btnReject.textContent = "Confirm Rejection";
               btnConfirm.style.display = 'none';
+              btnBack.style.display = 'inline-block';
           } else {
-              // Submit rejection
               const reason = inputReason.value.trim();
               document.body.removeChild(host);
               onReject(reason);
           }
       };
       
-      // Allow Enter key to submit rejection
+      btnBack.onclick = () => {
+          rejectStep = 0;
+          inputReason.style.display = 'none';
+          inputReason.value = '';
+          btnReject.textContent = "Reject";
+          btnConfirm.style.display = 'inline-block';
+          btnBack.style.display = 'none';
+      };
+
       inputReason.onkeydown = (e) => {
           if (e.key === 'Enter') btnReject.click();
       };
@@ -429,33 +436,77 @@
       shadow.appendChild(overlay);
   }
 
-  // Helpers
   function markVisualSuccess(element) { element.dataset.mcpVisual = "true"; element.style.border = "2px solid #00E676"; element.style.borderRadius = "4px"; }
+  
   function writeToInputBox(text) {
      const inputEl = document.querySelector(DOM.inputArea);
-     if (!inputEl) return;
+     if (!inputEl) { Logger.log(t("input_not_found"), "error"); return; }
+
      let cur = inputEl.innerText || inputEl.value || "";
      cur = cur.replace(/\r\n/g, "\n").replace(/\n+/g, "\n").trim();
      const sep = cur ? "\n\n" : "";
      const final = cur + sep + text;
+
      inputEl.focus();
-     if(!document.execCommand('insertText', false, final)) {
+     let success = false;
+     try {
+         document.execCommand('selectAll', false, null);
+         success = document.execCommand('insertText', false, final);
+     } catch (e) {}
+
+     if (!success) {
          if(inputEl.tagName==="TEXTAREA"||inputEl.tagName==="INPUT") inputEl.value=final; else inputEl.innerText=final;
          inputEl.dispatchEvent(new Event("input", { bubbles: true }));
      }
      Logger.log(t("result_written"), "action");
   }
+
+  // [ROBUST FIX] 恢复完整的自动发送逻辑
   function triggerAutoSend() {
       if (!CONFIG.autoSend) return;
-      if (autoSendTimer) clearTimeout(autoSendTimer);
-      let retries=0; 
-      const run = () => {
-          const btn = document.querySelector(DOM.sendButton);
-          const inputEl = document.querySelector(DOM.inputArea);
-          if ((inputEl.value||inputEl.innerText||"").trim().length===0) return;
-          if (btn && !btn.disabled) { btn.click(); Logger.log(`${t("auto_send_attempt")}`, "action"); }
-          else if (retries++ < 5) autoSendTimer = setTimeout(run, 2000);
+      
+      if (autoSendTimer) {
+          clearTimeout(autoSendTimer);
+          autoSendTimer = null;
+      }
+
+      let retryCount = 0;
+      const maxRetries = 5;
+
+      const trySend = () => {
+        const btn = document.querySelector(DOM.sendButton);
+        const inputEl = document.querySelector(DOM.inputArea);
+        const currentVal = inputEl ? (inputEl.value || inputEl.innerText || "") : "";
+        
+        // [HitL Fix] 强制聚焦，确保点击有效
+        if (inputEl) inputEl.focus();
+        
+        if (currentVal.trim().length === 0) { Logger.log(t("send_success_cleared"), "success"); return; }
+
+        // 触发 UI 事件
+        if (inputEl) {
+            inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+            inputEl.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+
+        if (btn && !btn.disabled) {
+           btn.focus();
+           btn.click();
+           Logger.log(`${t("auto_send_attempt")} (${retryCount + 1})`, "action");
+        } else if (!btn) {
+           Logger.log(t("send_btn_missing"), "warn");
+        } else {
+           Logger.log(t("send_btn_disabled"), "warn");
+        }
+
+        retryCount++;
+        if (retryCount < maxRetries) {
+            autoSendTimer = setTimeout(trySend, 2000);
+        } else {
+            Logger.log(t("auto_send_timeout"), "error");
+            chrome.runtime.sendMessage({ type: "SHOW_NOTIFICATION", title: "Auto-Send Failed", message: "Could not click send button." });
+        }
       };
-      autoSendTimer = setTimeout(run, 1000);
+      autoSendTimer = setTimeout(trySend, 1000);
   }
 })();
