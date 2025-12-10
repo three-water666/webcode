@@ -1,84 +1,46 @@
 (function () {
   "use strict";
 
-  // 注意：DEFAULT_SELECTORS 现已由 config.js 提供，在此作用域中可以直接访问
-
+  // === 配置与状态 ===
   let CONFIG = {
     pollInterval: 1000,
     autoSend: true,
     autoPromptEnabled: false,
   };
+
+  // HITL: 受保护的工具集合
+  let protectedTools = new Set();
+  // HITL: 待审批队列
+  const confirmationQueue = [];
+  let isPopupOpen = false;
   
   // === 国际化资源缓存 ===
   const i18n = {
     lang: navigator.language.startsWith('zh') ? 'zh' : 'en',
     prompt: null,
     train: null,
-    error: null // New: Error Hint
+    error: null
   };
 
-  // === 日志国际化字典 ===
+  // === 日志系统 ===
   const LOG_MSGS = {
-    auto_filled: {
-      en: "Auto-filled initial Prompt",
-      zh: "已自动填充初始 Prompt"
-    },
-    captured: {
-      en: "Captured Call",
-      zh: "捕获调用"
-    },
-    args: {
-      en: "Args",
-      zh: "参数"
-    },
-    exec_success: {
-      en: "Execution Success",
-      zh: "执行成功"
-    },
-    exec_fail: {
-      en: "Execution Failed",
-      zh: "执行失败"
-    },
-    training_hint: {
-      en: "Added periodic training note",
-      zh: "已附加定期复训提示"
-    },
-    input_not_found: {
-      en: "Input box not found!",
-      zh: "找不到输入框!"
-    },
-    result_written: {
-      en: "Result written back to input",
-      zh: "结果已回填至输入框"
-    },
-    send_success_cleared: {
-      en: "Send success (Input cleared)",
-      zh: "发送成功 (输入框已清空)"
-    },
-    send_btn_missing: {
-      en: "Send button not found...",
-      zh: "未找到发送按钮..."
-    },
-    send_btn_disabled: {
-      en: "Send button disabled (UI not updated)...",
-      zh: "发送按钮仍被禁用 (UI未更新)..."
-    },
-    auto_send_attempt: {
-      en: "Attempting auto-send",
-      zh: "尝试自动发送"
-    },
-    auto_send_timeout: {
-      en: "Auto-send timed out, please click manually",
-      zh: "自动发送超时，请手动点击发送"
-    },
-    config_updated: {
-      en: "Selectors config updated",
-      zh: "选择器配置已更新"
-    },
-    waiting_tools: {
-      en: "Waiting for tools...",
-      zh: "等待工具执行..."
-    }
+    auto_filled: { en: "Auto-filled initial Prompt", zh: "已自动填充初始 Prompt" },
+    captured: { en: "Captured Call", zh: "捕获调用" },
+    args: { en: "Args", zh: "参数" },
+    exec_success: { en: "Execution Success", zh: "执行成功" },
+    exec_fail: { en: "Execution Failed", zh: "执行失败" },
+    training_hint: { en: "Added periodic training note", zh: "已附加定期复训提示" },
+    input_not_found: { en: "Input box not found!", zh: "找不到输入框!" },
+    result_written: { en: "Result written back to input", zh: "结果已回填至输入框" },
+    send_success_cleared: { en: "Send success (Input cleared)", zh: "发送成功 (输入框已清空)" },
+    send_btn_missing: { en: "Send button not found...", zh: "未找到发送按钮..." },
+    send_btn_disabled: { en: "Send button disabled (UI not updated)...", zh: "发送按钮仍被禁用 (UI未更新)..." },
+    auto_send_attempt: { en: "Attempting auto-send", zh: "尝试自动发送" },
+    auto_send_timeout: { en: "Auto-send timed out, please click manually", zh: "自动发送超时，请手动点击发送" },
+    config_updated: { en: "Selectors config updated", zh: "选择器配置已更新" },
+    waiting_tools: { en: "Waiting for tools...", zh: "等待工具执行..." },
+    hitl_intercept: { en: "Intercepted for approval", zh: "拦截等待审批" },
+    hitl_rejected: { en: "User rejected execution", zh: "用户拒绝执行" }
   };
 
   function t(key) {
@@ -98,202 +60,99 @@
       console.log(`[MCP] Loaded i18n resources (${i18n.lang})`);
   });
 
-  // === 悬浮日志系统 ===
+  // === Logger (略微精简以节省空间) ===
   const Logger = {
-    el: null,
-    contentEl: null,
-
+    el: null, contentEl: null,
     init() {
       if (this.el) return;
       this.el = document.createElement("div");
-      Object.assign(this.el.style, {
-        position: "fixed",
-        top: "20px",
-        right: "20px",
-        width: "320px",
-        height: "200px",
-        backgroundColor: "rgba(0, 0, 0, 0.85)",
-        color: "#00ff00",
-        fontFamily: "Consolas, Monaco, monospace",
-        fontSize: "12px",
-        zIndex: "99999",
-        borderRadius: "8px",
-        boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
-        display: "none",
-        flexDirection: "column",
-        overflow: "hidden",
-        border: "1px solid #333",
-        backdropFilter: "blur(4px)",
-      });
-
+      Object.assign(this.el.style, { position: "fixed", top: "20px", right: "20px", width: "320px", height: "200px", backgroundColor: "rgba(0,0,0,0.85)", color: "#00ff00", fontFamily: "Consolas, monospace", fontSize: "12px", zIndex: "99999", borderRadius: "8px", display: "none", flexDirection: "column", border: "1px solid #333" });
       const header = document.createElement("div");
-      Object.assign(header.style, {
-        padding: "6px 10px",
-        backgroundColor: "#333",
-        color: "#fff",
-        cursor: "move",
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        fontWeight: "bold",
-        userSelect: "none",
-      });
       header.innerText = "WebMCP Bridge Process Log";
-
+      Object.assign(header.style, { padding: "6px", backgroundColor: "#333", color: "#fff", cursor: "move", display: "flex", justifyContent: "space-between" });
       const clearBtn = document.createElement("span");
-      clearBtn.innerText = "🗑️";
-      clearBtn.style.cursor = "pointer";
+      clearBtn.innerText = "🗑️"; clearBtn.style.cursor = "pointer";
       clearBtn.onclick = () => (this.contentEl.innerHTML = "");
       header.appendChild(clearBtn);
-
       this.contentEl = document.createElement("div");
-      Object.assign(this.contentEl.style, {
-        flex: "1",
-        overflowY: "auto",
-        padding: "8px",
-        wordBreak: "break-all",
-      });
-
-      this.el.appendChild(header);
-      this.el.appendChild(this.contentEl);
-      document.body.appendChild(this.el);
-
+      Object.assign(this.contentEl.style, { flex: "1", overflowY: "auto", padding: "8px" });
+      this.el.appendChild(header); this.el.appendChild(this.contentEl); document.body.appendChild(this.el);
       this.makeDraggable(header);
     },
-
     makeDraggable(headerEl) {
-      let isDragging = false;
-      let startX, startY, initialLeft, initialTop;
-      headerEl.addEventListener("mousedown", (e) => {
-        isDragging = true;
-        startX = e.clientX;
-        startY = e.clientY;
-        const rect = this.el.getBoundingClientRect();
-        initialLeft = rect.left;
-        initialTop = rect.top;
-      });
-      window.addEventListener("mousemove", (e) => {
-        if (!isDragging) return;
-        const dx = e.clientX - startX;
-        const dy = e.clientY - startY;
-        this.el.style.left = `${initialLeft + dx}px`;
-        this.el.style.top = `${initialTop + dy}px`;
-        this.el.style.right = "auto";
-      });
-      window.addEventListener("mouseup", () => { isDragging = false; });
+      let isDragging = false, startX, startY, iLeft, iTop;
+      headerEl.onmousedown = (e) => { isDragging = true; startX = e.clientX; startY = e.clientY; const r = this.el.getBoundingClientRect(); iLeft = r.left; iTop = r.top; };
+      window.onmousemove = (e) => { if (isDragging) { this.el.style.left = (iLeft + e.clientX - startX) + "px"; this.el.style.top = (iTop + e.clientY - startY) + "px"; this.el.style.right = "auto"; }};
+      window.onmouseup = () => isDragging = false;
     },
-
-    toggle(show) {
-      if (!this.el && show) this.init();
-      if (this.el) {
-          this.el.style.display = show ? "flex" : "none";
-      }
-    },
-
+    toggle(show) { if (!this.el && show) this.init(); if (this.el) this.el.style.display = show ? "flex" : "none"; },
     log(msg, type = "info") {
       if (!this.el || this.el.style.display === "none") return;
-
       const line = document.createElement("div");
       const time = new Date().toLocaleTimeString("en-US", { hour12: false });
-      line.style.marginBottom = "4px";
-      line.style.borderBottom = "1px solid rgba(255,255,255,0.1)";
-      line.style.paddingBottom = "2px";
-
-      let icon = "🔹";
-      let color = "#ddd";
-      if (type === "success") { icon = "✅"; color = "#4caf50"; }
-      if (type === "error") { icon = "❌"; color = "#f44336"; }
-      if (type === "warn") { icon = "⚠️"; color = "#ff9800"; }
-      if (type === "action") { icon = "⚡"; color = "#00bcd4"; }
-
+      let icon = "🔹", color = "#ddd";
+      if (type === "success") { icon = "✅"; color = "#4caf50"; } else if (type === "error") { icon = "❌"; color = "#f44336"; } else if (type === "warn") { icon = "⚠️"; color = "#ff9800"; } else if (type === "action") { icon = "⚡"; color = "#00bcd4"; }
       line.innerHTML = `<span style="color:#888; font-size:10px">[${time}]</span> ${icon} <span style="color:${color}">${msg}</span>`;
-      this.contentEl.appendChild(line);
-      this.contentEl.scrollTop = this.contentEl.scrollHeight;
-    },
+      this.contentEl.appendChild(line); this.contentEl.scrollTop = this.contentEl.scrollHeight;
+    }
   };
 
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-      if (request.type === 'TOGGLE_LOG') {
-          Logger.toggle(request.show);
-          Logger.log("Logger Visible: " + request.show, "info");
-      }
+  chrome.runtime.onMessage.addListener((request) => {
+      if (request.type === 'TOGGLE_LOG') { Logger.toggle(request.show); Logger.log("Logger Visible: " + request.show, "info"); }
   });
 
-  // === 选择器管理 ===
-  let activeSelectors = DEFAULT_SELECTORS; // 使用全局变量
+  // === DOM 选择器与配置 ===
+  let activeSelectors = DEFAULT_SELECTORS;
   let DOM = null;
   const currentPlatform = location.host.includes("deepseek") ? "deepseek" : location.host.includes("gemini") ? "gemini" : "chatgpt";
-  console.log(`[MCP Extension] Started on ${currentPlatform}`);
-
-  function updateDOMConfig() {
-      if (activeSelectors && activeSelectors[currentPlatform]) {
-          DOM = activeSelectors[currentPlatform];
-          console.log(`[MCP] DOM Selectors updated for ${currentPlatform}`);
-      }
+  
+  function updateDOMConfig() { 
+    if (activeSelectors && activeSelectors[currentPlatform]) DOM = activeSelectors[currentPlatform]; 
   }
 
-  // === 初始化配置 ===
-  chrome.storage.sync.get(
-    ["autoSend", "autoPromptEnabled", "customSelectors"],
-    (items) => {
+  chrome.storage.sync.get(["autoSend", "autoPromptEnabled", "customSelectors", "protected_tools"], (items) => {
       CONFIG.autoSend = items.autoSend ?? true;
       CONFIG.autoPromptEnabled = items.autoPromptEnabled ?? false;
-      if (items.customSelectors) {
-          activeSelectors = items.customSelectors;
-      }
+      if (items.customSelectors) activeSelectors = items.customSelectors;
+      if (items.protected_tools) protectedTools = new Set(items.protected_tools);
       updateDOMConfig();
-      console.log("[MCP] Config Loaded:", CONFIG);
-    }
-  );
+  });
 
   chrome.storage.onChanged.addListener((changes, namespace) => {
     if (namespace === "sync") {
       if (changes.autoSend) CONFIG.autoSend = changes.autoSend.newValue;
       if (changes.autoPromptEnabled) CONFIG.autoPromptEnabled = changes.autoPromptEnabled.newValue;
-      if (changes.customSelectors) {
-          activeSelectors = changes.customSelectors.newValue;
-          updateDOMConfig();
-          Logger.log(t("config_updated"), "action");
-      }
+      if (changes.customSelectors) { activeSelectors = changes.customSelectors.newValue; updateDOMConfig(); Logger.log(t("config_updated"), "action"); }
+      if (changes.protected_tools) { protectedTools = new Set(changes.protected_tools.newValue); Logger.log("Protected tools updated", "action"); }
     }
   });
 
-  // === 主逻辑：批处理与队列管理 ===
+  // === 主循环逻辑 ===
   const processedRequests = new Set();
-  // 新增：已回填的请求ID集合，防止重复计算进度
   const flushedRequests = new Set();
-  
   const blockStates = new WeakMap(); 
   const resultBuffer = new Map();
   const activeExecutions = new Set();
-
   const STABILIZATION_TIMEOUT = 3000;
   let toolCallCount = 0;
   let autoSendTimer = null;
-  
   let lastProgressLogTime = 0;
   let lastProgressStatus = "";
 
   setInterval(() => {
     if (!DOM) return;
-
     const messages = document.querySelectorAll(DOM.messageBlocks);
     if (messages.length === 0) {
+      // Auto Prompt Logic
       const inputEl = document.querySelector(DOM.inputArea);
       if (inputEl && CONFIG.autoPromptEnabled && inputEl.textContent.trim() === "") {
-          if (i18n.prompt) {
-            inputEl.innerText = i18n.prompt;
-            inputEl.dispatchEvent(new Event("input", { bubbles: true }));
-            Logger.log(t("auto_filled"), "action");
-          }
+          if (i18n.prompt) { inputEl.innerText = i18n.prompt; inputEl.dispatchEvent(new Event("input", { bubbles: true })); Logger.log(t("auto_filled"), "action"); }
       }
       return;
     }
 
     const lastMessage = messages[messages.length - 1];
     const codeElements = lastMessage.querySelectorAll(DOM.codeBlocks);
-
-    // 扫描当前轮次的所有 Request ID
     const currentTurnIds = [];
 
     codeElements.forEach((codeEl) => {
@@ -307,29 +166,25 @@
 
         if (payload.mcp_action === "call" && payload.request_id) {
           currentTurnIds.push(payload.request_id);
-
           if (!processedRequests.has(payload.request_id)) {
             processedRequests.add(payload.request_id);
             activeExecutions.add(payload.request_id);
             markVisualSuccess(codeEl);
-
             Logger.log(`${t("captured")}: ${payload.name}`, "info");
-            Logger.log(`${t("args")}: ${JSON.stringify(payload.arguments).substring(0, 50)}...`, "info");
-
+            
+            // 🚀 入口：执行工具（包含 HITL 检查）
             executeTool(payload);
           } else {
              if (codeEl.dataset.mcpVisual !== "true") markVisualSuccess(codeEl);
           }
         }
       } catch (e) {
+        // JSON Stabilization / Error Logic
         const now = Date.now();
         let state = blockStates.get(codeEl);
-
         if (!state || state.text !== textContent) {
             blockStates.set(codeEl, { text: textContent, time: now, errorNotified: false });
-            if (codeEl.style.borderColor === "rgb(244, 67, 54)") {
-                codeEl.style.border = "none";
-            }
+            if (codeEl.style.borderColor === "rgb(244, 67, 54)") codeEl.style.border = "none";
         } else {
             if (now - state.time > STABILIZATION_TIMEOUT && !state.errorNotified) {
                 Logger.log("JSON Parse Error (Stable): " + e.message, "error");
@@ -342,52 +197,24 @@
       }
     });
 
-    // === 批处理逻辑修复 ===
-    
-    // 1. 过滤掉已经回填过的 ID (避免 DOM 残留导致重复计算/等待)
+    // 批处理队列检查
     const actionableIds = currentTurnIds.filter(id => !flushedRequests.has(id));
-
     if (actionableIds.length > 0) {
-        // 2. 仅计算未回填 ID 的进度
         const completedCount = actionableIds.filter(id => !activeExecutions.has(id) && resultBuffer.has(id)).length;
         const totalCount = actionableIds.length;
-        const allFinished = (completedCount === totalCount);
         
-        if (allFinished) {
-             // 按 DOM 顺序收集结果
+        if (completedCount === totalCount) {
              const orderedResults = [];
              let hasUnflushedContent = false;
-
-             actionableIds.forEach(id => {
-                 const res = resultBuffer.get(id);
-                 if (res) {
-                    orderedResults.push(res);
-                    hasUnflushedContent = true;
-                 }
-             });
-
+             actionableIds.forEach(id => { const res = resultBuffer.get(id); if (res) { orderedResults.push(res); hasUnflushedContent = true; }});
              if (hasUnflushedContent) {
                  Logger.log(`Batch finished: ${orderedResults.length} tools. Writing...`, "success");
-                 
-                 const finalOutput = orderedResults.join("\n\n");
-                 writeToInputBox(finalOutput);
-                 
-                 // 3. 标记为已回填，并从 Buffer 中清理
-                 actionableIds.forEach(id => {
-                     resultBuffer.delete(id);
-                     flushedRequests.add(id);
-                 });
-                 
+                 writeToInputBox(orderedResults.join("\n\n"));
+                 actionableIds.forEach(id => { resultBuffer.delete(id); flushedRequests.add(id); });
                  triggerAutoSend();
              } else {
-                 // 纯虚拟工具，也要标记为已回填
                  const anyVirtual = actionableIds.some(id => resultBuffer.has(id));
-                 if (anyVirtual) {
-                      actionableIds.forEach(id => {
-                          resultBuffer.delete(id);
-                          flushedRequests.add(id);
-                      });
-                 }
+                 if (anyVirtual) actionableIds.forEach(id => { resultBuffer.delete(id); flushedRequests.add(id); });
              }
              lastProgressStatus = "";
         } else {
@@ -395,159 +222,240 @@
             const now = Date.now();
             if (statusStr !== lastProgressStatus || now - lastProgressLogTime > 3000) {
                 Logger.log(`${t("waiting_tools")} (${statusStr} completed)`, "warn");
-                lastProgressStatus = statusStr;
-                lastProgressLogTime = now;
+                lastProgressStatus = statusStr; lastProgressLogTime = now;
             }
         }
     }
   }, CONFIG.pollInterval);
 
-  // === 执行工具 ===
+  // === 核心：执行工具 (支持 HITL 拦截) ===
   function executeTool(payload) {
+      // 1. Virtual Tool Bypass
       if (payload.name === "task_completion_notification") {
-          const msg = payload.arguments?.message || "Task Completed";
-          Logger.log(`🔔 Notification: ${msg}`, "action");
-          chrome.runtime.sendMessage({ type: "SHOW_NOTIFICATION", title: "WebMCP Task Finished", message: msg });
-          
-          activeExecutions.delete(payload.request_id);
-          resultBuffer.set(payload.request_id, "");
+          finishVirtualTool(payload);
           return;
       }
 
+      // 2. HITL Check
+      if (protectedTools.has(payload.name)) {
+          Logger.log(`${t("hitl_intercept")}: ${payload.name}`, "warn");
+          confirmationQueue.push(payload);
+          processConfirmationQueue();
+          return;
+      }
+
+      // 3. Direct Execution
+      performExecution(payload);
+  }
+
+  function performExecution(payload) {
       chrome.runtime.sendMessage({ type: "EXECUTE_TOOL", payload: payload }, (response) => {
           activeExecutions.delete(payload.request_id);
-
           let outputContent = "";
           if (response && response.success) {
               Logger.log(`${t("exec_success")}: ${payload.name}`, "success");
               let finalData = response.data;
-              
+              // Cache tools logic
               if (payload.name === "list_tools") {
+                  try {
+                      const realTools = JSON.parse(finalData);
+                      const toolNames = realTools.map(t => t.name);
+                      chrome.storage.local.set({ 'cached_tool_list': toolNames });
+                  } catch(e) {}
                   try {
                       const tools = JSON.parse(finalData);
                       tools.push({
                           name: "task_completion_notification",
-                          description: "Notify the user that a long-running task or a series of complex operations is complete. Use this when you need the user's attention to review your work or provide new instructions. Calling this will trigger a system notification on the user's device.",
-                          inputSchema: {
-                              type: "object",
-                              properties: {
-                                  message: {
-                                      type: "string",
-                                      description: "Short summary of what was completed (e.g. 'Analysis of 50 files finished')."
-                                  }
-                              },
-                              required: ["message"]
-                          }
+                          description: "Notify the user that a long-running task is complete.",
+                          inputSchema: { type: "object", properties: { message: { type: "string" } }, required: ["message"] }
                       });
                       finalData = JSON.stringify(tools, null, 2);
-                  } catch (e) {
-                      console.error("Failed to inject virtual tool", e);
-                  }
+                  } catch (e) {}
               }
               outputContent = finalData;
           } else {
               Logger.log(`${t("exec_fail")}: ${response.error}`, "error");
               outputContent = `❌ Error: ${response.error}`;
           }
-
-          const responseJson = {
-              mcp_action: "result",
-              request_id: payload.request_id,
-              status: "success",
-              output: outputContent,
-          };
-
-          toolCallCount++;
-          if (toolCallCount > 0 && toolCallCount % 5 === 0) {
-             if (i18n.train) {
-                  responseJson.system_note = i18n.train;
-                  Logger.log(t("training_hint") + " (Train/i18n)", "info");
-             } else {
-                  responseJson.system_note = `[System] Reminder: Tool calls MUST use this JSON format: {"mcp_action":"call", "name": "tool_name", "arguments": {...}}.`;
-             }
-          }
-
-          const jsonString = `\`\`\`json\n${JSON.stringify(responseJson, null, 2)}\n\`\`\``;
-          resultBuffer.set(payload.request_id, jsonString);
+          saveToBuffer(payload.request_id, outputContent);
       });
   }
 
-  function markVisualSuccess(element) {
-    element.dataset.mcpVisual = "true";
-    element.style.border = "2px solid #00E676";
-    element.style.borderRadius = "4px";
+  function finishVirtualTool(payload) {
+      const msg = payload.arguments?.message || "Task Completed";
+      Logger.log(`🔔 Notification: ${msg}`, "action");
+      chrome.runtime.sendMessage({ type: "SHOW_NOTIFICATION", title: "WebMCP Task Finished", message: msg });
+      activeExecutions.delete(payload.request_id);
+      resultBuffer.set(payload.request_id, "");
   }
 
-  function writeToInputBox(textToAdd) {
-    if (!textToAdd.trim()) return;
+  function saveToBuffer(requestId, content, isError = false) {
+      const responseJson = {
+          mcp_action: "result",
+          request_id: requestId,
+          status: isError ? "error" : "success",
+      };
+      if (isError) {
+          responseJson.error = content;
+      } else {
+          responseJson.output = content;
+      }
 
-    const inputEl = document.querySelector(DOM.inputArea);
-    if (!inputEl) { Logger.log(t("input_not_found"), "error"); return; }
+      toolCallCount++;
+      if (toolCallCount > 0 && toolCallCount % 5 === 0) {
+         if (i18n.train) responseJson.system_note = i18n.train;
+         else responseJson.system_note = `[System] Reminder: Tool calls MUST use this JSON format: {"mcp_action":"call", "name": "tool_name", "arguments": {...}}.`;
+      }
 
-    let currentText = inputEl.innerText || inputEl.value || "";
-    currentText = currentText.replace(/\r\n/g, "\n").replace(/\n+/g, "\n").trim();
-    const separator = currentText ? "\n\n" : "";
-    const finalText = currentText + separator + textToAdd;
-
-    inputEl.focus();
-    let success = false;
-    try {
-        document.execCommand('selectAll', false, null);
-        success = document.execCommand('insertText', false, finalText);
-    } catch (e) {}
-
-    if (!success) {
-        if (inputEl.tagName === "TEXTAREA" || inputEl.tagName === "INPUT") {
-            inputEl.value = finalText;
-        } else {
-            inputEl.innerText = finalText;
-        }
-        inputEl.dispatchEvent(new Event("input", { bubbles: true }));
-    }
-    Logger.log(t("result_written"), "action");
+      const jsonString = `\`\`\`json\n${JSON.stringify(responseJson, null, 2)}\n\`\`\``;
+      resultBuffer.set(requestId, jsonString);
   }
 
-  function triggerAutoSend() {
-    if (!CONFIG.autoSend) return;
-
-    if (autoSendTimer) {
-        clearTimeout(autoSendTimer);
-        autoSendTimer = null;
-    }
-
-    let retryCount = 0;
-    const maxRetries = 5;
-    const trySend = () => {
-      const btn = document.querySelector(DOM.sendButton);
-      const inputEl = document.querySelector(DOM.inputArea);
-      const currentVal = inputEl ? (inputEl.value || inputEl.innerText || "") : "";
+  // === HITL UI Logic (Shadow DOM) ===
+  function processConfirmationQueue() {
+      if (isPopupOpen || confirmationQueue.length === 0) return;
       
-      if (currentVal.trim().length === 0) { Logger.log(t("send_success_cleared"), "success"); return; }
+      const payload = confirmationQueue[0]; // Peek
+      isPopupOpen = true;
 
-      if (inputEl) {
-          inputEl.focus();
-          inputEl.dispatchEvent(new Event("input", { bubbles: true }));
-          inputEl.dispatchEvent(new Event("change", { bubbles: true }));
-      }
+      chrome.runtime.sendMessage({ type: "SHOW_NOTIFICATION", title: "Approval Required", message: `Tool: ${payload.name}` });
 
-      if (btn && !btn.disabled) {
-         btn.focus();
-         btn.click();
-         Logger.log(`${t("auto_send_attempt")} (${retryCount + 1})`, "action");
-      } else if (!btn) {
-         Logger.log(t("send_btn_missing"), "warn");
-      } else {
-         Logger.log(t("send_btn_disabled"), "warn");
-      }
+      showConfirmationModal(payload, 
+          () => {
+              // Confirm
+              confirmationQueue.shift();
+              isPopupOpen = false;
+              performExecution(payload);
+              processConfirmationQueue();
+          },
+          (reason) => {
+              // Reject
+              confirmationQueue.shift();
+              isPopupOpen = false;
+              activeExecutions.delete(payload.request_id);
+              Logger.log(`${t("hitl_rejected")}: ${payload.name}`, "error");
+              saveToBuffer(payload.request_id, `User rejected execution. Reason: ${reason || "No reason provided."}`, true);
+              processConfirmationQueue();
+          }
+      );
+  }
 
-      retryCount++;
-      if (retryCount < maxRetries) {
-          autoSendTimer = setTimeout(trySend, 2000);
-      } else {
-          Logger.log(t("auto_send_timeout"), "error");
-          chrome.runtime.sendMessage({ type: "SHOW_NOTIFICATION", title: "Auto-Send Failed", message: "Could not click send button." });
-      }
-    };
-    autoSendTimer = setTimeout(trySend, 1000);
+  function showConfirmationModal(payload, onConfirm, onReject) {
+      const host = document.createElement('div');
+      Object.assign(host.style, { position: 'fixed', zIndex: 999999, top: 0, left: 0, width: '0', height: '0' });
+      document.body.appendChild(host);
+      const shadow = host.attachShadow({mode: 'open'});
+      
+      const style = document.createElement('style');
+      style.textContent = `
+        .overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        .card { background: #fff; padding: 24px; border-radius: 12px; width: 450px; max-width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.4); border: 1px solid #e0e0e0; color: #333; animation: fadeIn 0.2s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        h2 { margin: 0 0 16px 0; color: #d32f2f; display: flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 600; }
+        .warn-icon { font-size: 24px; }
+        .field { margin-bottom: 16px; }
+        .label { font-weight: 600; font-size: 12px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; display: block; }
+        .value { background: #f8f9fa; padding: 10px; border-radius: 6px; font-family: "Menlo", "Consolas", monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; max-height: 250px; overflow-y: auto; border: 1px solid #e9ecef; color: #212529; }
+        .buttons { display: flex; gap: 12px; margin-top: 24px; justify-content: flex-end; align-items: center; }
+        button { padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.2s; }
+        button:hover { transform: translateY(-1px); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .btn-reject { background: #fff; color: #dc3545; border: 1px solid #dc3545; }
+        .btn-reject:hover { background: #dc3545; color: white; }
+        .btn-confirm { background: #2e7d32; color: white; box-shadow: 0 2px 5px rgba(46, 125, 50, 0.3); }
+        .btn-confirm:hover { background: #1b5e20; box-shadow: 0 4px 8px rgba(46, 125, 50, 0.4); }
+        input.reason { width: 100%; box-sizing: border-box; padding: 10px; margin-top: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; display: none; }
+        input.reason:focus { outline: none; border-color: #dc3545; }
+        .reject-mode .btn-confirm { display: none; }
+        .reject-mode .btn-reject { background: #dc3545; color: white; width: 100%; justify-content: center; }
+      `;
+      shadow.appendChild(style);
+
+      const overlay = document.createElement('div');
+      overlay.className = 'overlay';
+      
+      const card = document.createElement('div');
+      card.className = 'card';
+      
+      card.innerHTML = `
+        <h2><span class="warn-icon">✋</span> Approval Required</h2>
+        <div class="field">
+            <span class="label">Tool Name</span>
+            <div class="value" style="font-weight:bold; color:#d32f2f">${payload.name}</div>
+        </div>
+        <div class="field">
+            <span class="label">Arguments</span>
+            <div class="value">${JSON.stringify(payload.arguments || {}, null, 2)}</div>
+        </div>
+        <input type="text" class="reason" placeholder="Reason for rejection (Optional)...">
+        <div class="buttons">
+            <button class="btn-reject">Reject</button>
+            <button class="btn-confirm">Approve & Execute</button>
+        </div>
+      `;
+
+      const btnReject = card.querySelector('.btn-reject');
+      const btnConfirm = card.querySelector('.btn-confirm');
+      const inputReason = card.querySelector('.reason');
+      const buttonsDiv = card.querySelector('.buttons');
+
+      btnConfirm.onclick = () => {
+          document.body.removeChild(host);
+          onConfirm();
+      };
+
+      let rejectStep = 0;
+      btnReject.onclick = () => {
+          if (rejectStep === 0) {
+              // Show input
+              rejectStep = 1;
+              inputReason.style.display = 'block';
+              inputReason.focus();
+              btnReject.textContent = "Confirm Rejection";
+              btnConfirm.style.display = 'none';
+          } else {
+              // Submit rejection
+              const reason = inputReason.value.trim();
+              document.body.removeChild(host);
+              onReject(reason);
+          }
+      };
+      
+      // Allow Enter key to submit rejection
+      inputReason.onkeydown = (e) => {
+          if (e.key === 'Enter') btnReject.click();
+      };
+
+      overlay.appendChild(card);
+      shadow.appendChild(overlay);
+  }
+
+  // Helpers
+  function markVisualSuccess(element) { element.dataset.mcpVisual = "true"; element.style.border = "2px solid #00E676"; element.style.borderRadius = "4px"; }
+  function writeToInputBox(text) {
+     const inputEl = document.querySelector(DOM.inputArea);
+     if (!inputEl) return;
+     let cur = inputEl.innerText || inputEl.value || "";
+     cur = cur.replace(/\r\n/g, "\n").replace(/\n+/g, "\n").trim();
+     const sep = cur ? "\n\n" : "";
+     const final = cur + sep + text;
+     inputEl.focus();
+     if(!document.execCommand('insertText', false, final)) {
+         if(inputEl.tagName==="TEXTAREA"||inputEl.tagName==="INPUT") inputEl.value=final; else inputEl.innerText=final;
+         inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+     }
+     Logger.log(t("result_written"), "action");
+  }
+  function triggerAutoSend() {
+      if (!CONFIG.autoSend) return;
+      if (autoSendTimer) clearTimeout(autoSendTimer);
+      let retries=0; 
+      const run = () => {
+          const btn = document.querySelector(DOM.sendButton);
+          const inputEl = document.querySelector(DOM.inputArea);
+          if ((inputEl.value||inputEl.innerText||"").trim().length===0) return;
+          if (btn && !btn.disabled) { btn.click(); Logger.log(`${t("auto_send_attempt")}`, "action"); }
+          else if (retries++ < 5) autoSendTimer = setTimeout(run, 2000);
+      };
+      autoSendTimer = setTimeout(run, 1000);
   }
 })();

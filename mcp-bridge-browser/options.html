@@ -120,6 +120,16 @@
 
     
     <div class="form-group">
+      <h2 id="sec_hitl">Human-in-the-Loop (Approval)</h2>
+      <div class="description" id="desc_hitl">
+        Select tools that require manual approval before execution. (Connect to Gateway first to populate list)
+      </div>
+      <div id="toolList" style="background:#fafafa; padding:10px; border:1px solid #ccc; border-radius:4px; max-height:200px; overflow-y:auto;">
+        <div style="color:#999; font-style:italic; padding:10px; text-align:center" id="toolListPlaceholder">No tools detected yet. Please use the extension once.</div>
+      </div>
+    </div>
+
+    <div class="form-group">
       <h2 id="sec_prompts">System Prompts</h2>
       
       <label id="lbl_init_prompt">Initial System Prompt</label>

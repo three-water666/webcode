@@ -16,8 +16,12 @@ const els = {
   desc_init_prompt: document.getElementById('desc_init_prompt'),
   lbl_train_prompt: document.getElementById('lbl_train_prompt'),
   desc_train_prompt: document.getElementById('desc_train_prompt'),
-  lbl_error_prompt: document.getElementById('lbl_error_prompt'), // New
-  desc_error_prompt: document.getElementById('desc_error_prompt'), // New
+  lbl_error_prompt: document.getElementById('lbl_error_prompt'),
+  desc_error_prompt: document.getElementById('desc_error_prompt'),
+  // HITL
+  sec_hitl: document.getElementById('sec_hitl'),
+  desc_hitl: document.getElementById('desc_hitl'),
+  toolList: document.getElementById('toolList'),
   save: document.getElementById('save'),
   reset: document.getElementById('reset')
 };
@@ -38,6 +42,8 @@ const UI = {
     desc_train_prompt: "Inserted periodically (every 5 tool calls) to remind AI of the protocol.",
     lbl_error_prompt: "Format Error Hint",
     desc_error_prompt: "Sent to AI when it generates invalid JSON or fails to follow protocol.",
+    sec_hitl: "Human-in-the-Loop (Approval)",
+    desc_hitl: "Select tools that require manual approval before execution. (Connect to Gateway first to populate list)",
     save: "Save Settings",
     reset: "Reset to Defaults",
     saved: "Settings saved successfully!",
@@ -56,6 +62,8 @@ const UI = {
     desc_train_prompt: "每隔 5 次工具调用插入一次，用于强化 AI 对协议的记忆。",
     lbl_error_prompt: "格式错误警告",
     desc_error_prompt: "当 AI 生成的 JSON 无效或违反协议时，自动发送此警告。",
+    sec_hitl: "人工确认设置 (HITL)",
+    desc_hitl: "选择需要人工批准才能执行的工具。（请先连接一次网关以获取工具列表）",
     save: "保存设置",
     reset: "恢复默认设置",
     saved: "设置已成功保存！",
@@ -82,6 +90,8 @@ function initUI() {
   els.desc_train_prompt.textContent = t('desc_train_prompt');
   els.lbl_error_prompt.textContent = t('lbl_error_prompt');
   els.desc_error_prompt.textContent = t('desc_error_prompt');
+  els.sec_hitl.textContent = t('sec_hitl');
+  els.desc_hitl.textContent = t('desc_hitl');
   els.save.textContent = t('save');
   els.reset.textContent = t('reset');
 }
@@ -113,9 +123,40 @@ async function fetchDefault(filename) {
 }
 
 async function restoreOptions() {
-  chrome.storage.sync.get(['customSelectors'], (items) => {
+  chrome.storage.sync.get(['customSelectors', 'protected_tools'], (items) => {
     const config = items.customSelectors || DEFAULT_SELECTORS;
     els.selectors.value = JSON.stringify(config, null, 2);
+
+    // HITL: Render Tool List
+    const protectedTools = new Set(items.protected_tools || []);
+    chrome.storage.local.get(['cached_tool_list'], (localItems) => {
+        const tools = localItems.cached_tool_list || [];
+        const container = els.toolList;
+        
+        if (tools.length > 0) {
+            container.innerHTML = '';
+            tools.forEach(toolName => {
+                const div = document.createElement('div');
+                div.style.marginBottom = '5px';
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = 'tool_' + toolName;
+                checkbox.value = toolName;
+                checkbox.checked = protectedTools.has(toolName);
+                
+                const label = document.createElement('label');
+                label.htmlFor = 'tool_' + toolName;
+                label.style.display = 'inline';
+                label.style.marginLeft = '8px';
+                label.style.fontWeight = 'normal';
+                label.textContent = toolName;
+                
+                div.appendChild(checkbox);
+                div.appendChild(label);
+                container.appendChild(div);
+            });
+        }
+    });
   });
 
   chrome.storage.local.get([KEY_PROMPT, KEY_TRAIN, KEY_ERROR], async (items) => {
@@ -146,7 +187,14 @@ function saveOptions() {
     return;
   }
 
-  chrome.storage.sync.set({ customSelectors: config });
+  // HITL Save
+  const checkboxes = els.toolList.querySelectorAll('input[type="checkbox"]');
+  const protectedTools = [];
+  checkboxes.forEach(cb => {
+      if (cb.checked) protectedTools.push(cb.value);
+  });
+
+  chrome.storage.sync.set({ customSelectors: config, protected_tools: protectedTools });
 
   const data = {};
   data[KEY_PROMPT] = els.initPrompt.value;
