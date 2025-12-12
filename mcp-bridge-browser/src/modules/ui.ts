@@ -4,6 +4,14 @@ import { SiteSelectors } from './config';
 
 let autoSendTimer: NodeJS.Timeout | null = null;
 
+export function cancelAutoSend() {
+  if (autoSendTimer) {
+    clearTimeout(autoSendTimer);
+    autoSendTimer = null;
+    Logger.log("🚫 Auto-send cancelled (New activity detected)", "warn");
+  }
+}
+
 // === 视觉标记 ===
 
 // 状态 1: 处理中 (蓝色)

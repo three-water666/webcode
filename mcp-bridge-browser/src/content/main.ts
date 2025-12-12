@@ -1,7 +1,7 @@
-import { Logger, i18n, t } from '../modules/utils';
-import * as UI from '../modules/ui';
-import { DEFAULT_SELECTORS, SiteSelectors } from '../modules/config';
-import { ToolExecutionPayload } from '../types';
+import { Logger, i18n, t } from "../modules/utils";
+import * as UI from "../modules/ui";
+import { DEFAULT_SELECTORS, SiteSelectors } from "../modules/config";
+import { ToolExecutionPayload } from "../types";
 
 // === 配置与状态 ===
 interface ConfigState {
@@ -63,8 +63,7 @@ chrome.storage.sync.get(
     CONFIG.autoSend = items.autoSend ?? true;
     CONFIG.autoPromptEnabled = items.autoPromptEnabled ?? false;
     if (items.customSelectors) activeSelectors = items.customSelectors;
-    if (items.protected_tools)
-      protectedTools = new Set(items.protected_tools);
+    if (items.protected_tools) protectedTools = new Set(items.protected_tools);
     updateDOMConfig();
   }
 );
@@ -89,7 +88,10 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 // === 主循环逻辑 ===
 const processedRequests = new Set<string>();
 const flushedRequests = new Set<string>();
-const blockStates = new WeakMap<Element, { text: string; time: number; errorNotified: boolean }>();
+const blockStates = new WeakMap<
+  Element,
+  { text: string; time: number; errorNotified: boolean }
+>();
 const resultBuffer = new Map<string, string>();
 const activeExecutions = new Set<string>();
 const STABILIZATION_TIMEOUT = 3000;
@@ -146,6 +148,9 @@ setInterval(() => {
           processedRequests.add(payload.request_id);
           activeExecutions.add(payload.request_id);
 
+          // [Fix 2] 发现新任务，立即中断任何正在进行的自动发送尝试
+          UI.cancelAutoSend();
+
           // 立即标记为处理中 (Blue)
           UI.markVisualProcessing(codeEl as HTMLElement);
 
@@ -163,7 +168,7 @@ setInterval(() => {
         }
       }
     } catch (e: any) {
-      // JSON Stabilization
+      // JSON Stabilization Logic
       const now = Date.now();
       let state = blockStates.get(codeEl);
       if (!state || state.text !== textContent) {
@@ -172,22 +177,15 @@ setInterval(() => {
           time: now,
           errorNotified: false,
         });
-        // 如果之前标记为 error，但内容变了，先重置样式等待再次稳定
         if ((codeEl as HTMLElement).dataset.mcpState === "error") {
           (codeEl as HTMLElement).style.border = "none";
           delete (codeEl as HTMLElement).dataset.mcpState;
           delete (codeEl as HTMLElement).dataset.mcpVisual;
         }
       } else {
-        if (
-          now - state.time > STABILIZATION_TIMEOUT &&
-          !state.errorNotified
-        ) {
+        if (now - state.time > STABILIZATION_TIMEOUT && !state.errorNotified) {
           Logger.log("JSON Parse Error (Stable): " + e.message, "error");
-
-          // 使用 UI 模块统一标记红色
           UI.markVisualError(codeEl as HTMLElement);
-
           chrome.runtime.sendMessage({
             type: "SHOW_NOTIFICATION",
             title: "WebMCP Error",
@@ -201,16 +199,24 @@ setInterval(() => {
   });
 
   // 批处理队列
-  const actionableIds = currentTurnIds.filter(
-    (id) => !flushedRequests.has(id)
-  );
+  const actionableIds = currentTurnIds.filter((id) => !flushedRequests.has(id));
   if (actionableIds.length > 0) {
     const completedCount = actionableIds.filter(
       (id) => !activeExecutions.has(id) && resultBuffer.has(id)
     ).length;
     const totalCount = actionableIds.length;
 
+    // [Fix 3] 只要所有已知工具完成（且通过下方的 Stop 按钮检查），即可尝试发送
     if (completedCount === totalCount) {
+      // [Fix 4] Double Check: 页面上是否有 Stop 按钮？
+      const stopBtn = DOM.stopButton
+        ? document.querySelector(DOM.stopButton)
+        : null;
+      if (stopBtn) {
+        // AI 还在忙，推迟发送
+        return;
+      }
+
       const orderedResults: string[] = [];
       let hasUnflushedContent = false;
       actionableIds.forEach((id) => {
@@ -233,6 +239,7 @@ setInterval(() => {
         });
         UI.triggerAutoSend(CONFIG, DOM);
       } else {
+        // 纯虚拟工具（无输出）
         const anyVirtual = actionableIds.some((id) => resultBuffer.has(id));
         if (anyVirtual)
           actionableIds.forEach((id) => {
@@ -242,13 +249,14 @@ setInterval(() => {
       }
       lastProgressStatus = "";
     } else {
+      // 等待中...
       const statusStr = `${completedCount}/${totalCount}`;
       const now = Date.now();
       if (
         statusStr !== lastProgressStatus ||
         now - lastProgressLogTime > 3000
       ) {
-        Logger.log(`${t("waiting_tools")} (${statusStr} completed)`, "warn");
+        Logger.log(`${t("waiting_tools")} (${statusStr})`, "warn");
         lastProgressStatus = statusStr;
         lastProgressLogTime = now;
       }
@@ -266,8 +274,7 @@ function executeTool(payload: ToolExecutionPayload) {
 
   if (protectedTools.has(payload.name)) {
     Logger.log(`${t("hitl_intercept")}: ${payload.name}`, "warn");
-    // 记录 request_id 以便后续回调使用
-    (payload as any).request_id = (payload as any).request_id || "unknown_id"; 
+    (payload as any).request_id = (payload as any).request_id || "unknown_id";
     confirmationQueue.push(payload);
     processConfirmationQueue();
     return;
@@ -295,7 +302,6 @@ function performExecution(payload: any) {
               const knownTools = new Set(localData.cached_tool_list || []);
               let protectedDirty = false;
               toolNames.forEach((tName: string) => {
-                // 如果是新面孔，且还没被保护
                 if (!knownTools.has(tName)) {
                   if (!protectedTools.has(tName)) {
                     protectedTools.add(tName);
@@ -309,7 +315,6 @@ function performExecution(payload: any) {
                 });
                 Logger.log("🛡️ New tools detected & protected", "warn");
               }
-              // 更新已知的工具缓存
               chrome.storage.local.set({ cached_tool_list: toolNames });
             });
           } catch (e) {
@@ -366,8 +371,7 @@ function saveToBuffer(requestId: string, content: string, isError = false) {
 
   toolCallCount++;
   if (toolCallCount > 0 && toolCallCount % 5 === 0) {
-    if (i18n.resources.train)
-      responseJson.system_note = i18n.resources.train;
+    if (i18n.resources.train) responseJson.system_note = i18n.resources.train;
     else
       responseJson.system_note = `[System] Reminder: Tool calls MUST use this JSON format: {"mcp_action":"call", "name": "tool_name", "arguments": {...}}.`;
   }
@@ -397,11 +401,10 @@ function processConfirmationQueue() {
       confirmationQueue.shift();
       isPopupOpen = false;
       if (DOM) {
-          const inputEl = document.querySelector(DOM.inputArea) as HTMLElement;
-          if (inputEl) inputEl.focus();
+        const inputEl = document.querySelector(DOM.inputArea) as HTMLElement;
+        if (inputEl) inputEl.focus();
       }
 
-      // [HITL] Handle Always Allow
       if (isAlways) {
         protectedTools.delete(payload.name);
         chrome.storage.sync.set({
@@ -418,8 +421,8 @@ function processConfirmationQueue() {
       isPopupOpen = false;
       activeExecutions.delete(payload.request_id);
       if (DOM) {
-          const inputEl = document.querySelector(DOM.inputArea) as HTMLElement;
-          if (inputEl) inputEl.focus();
+        const inputEl = document.querySelector(DOM.inputArea) as HTMLElement;
+        if (inputEl) inputEl.focus();
       }
       Logger.log(`${t("hitl_rejected")}: ${payload.name}`, "error");
       saveToBuffer(
