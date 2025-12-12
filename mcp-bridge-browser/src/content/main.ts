@@ -101,7 +101,11 @@ let toolCallCount = 0;
 let lastProgressLogTime = 0;
 let lastProgressStatus = "";
 
-setInterval(() => {
+// === 性能优化: MutationObserver 取代 setInterval ===
+let isCheckScheduled = false;
+
+function runMainLoop() {
+  isCheckScheduled = false;
   if (!DOM) return;
   const messages = document.querySelectorAll(DOM.messageBlocks);
   if (messages.length === 0) {
@@ -266,7 +270,27 @@ setInterval(() => {
       }
     }
   }
-}, CONFIG.pollInterval);
+}
+
+// 初始化观察者
+const observer = new MutationObserver((mutations) => {
+  // 简单节流：如果已经计划了下一次检查，就不重复计划
+  // 这样保证在高频刷新（AI打字）时，最多每 CONFIG.pollInterval 执行一次
+  if (!isCheckScheduled) {
+    isCheckScheduled = true;
+    setTimeout(runMainLoop, CONFIG.pollInterval);
+  }
+});
+
+// 启动监听 (监听子节点变化和文本内容变化)
+observer.observe(document.body, {
+  childList: true,
+  subtree: true,
+  characterData: true
+});
+
+// 启动时先执行一次，确保初始状态正确
+runMainLoop();
 
 // === 执行工具 ===
 function executeTool(payload: ToolExecutionPayload) {
