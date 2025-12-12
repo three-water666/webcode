@@ -1,13 +1,15 @@
+import { Session } from '../types';
+
 document.addEventListener("DOMContentLoaded", async () => {
-  const connectedView = document.getElementById("connectedView");
-  const disconnectedView = document.getElementById("disconnectedView");
-  const statusDot = document.getElementById("statusDot");
-  const portDisplay = document.getElementById("portDisplay");
-  const copyPromptBtn = document.getElementById("copyPromptBtn");
-  const autoSendInput = document.getElementById("autoSend");
-  const showLogInput = document.getElementById("showLog");
-  const availableView = document.getElementById("availableView");
-  const gatewayList = document.getElementById("gatewayList");
+  const connectedView = document.getElementById("connectedView") as HTMLElement;
+  const disconnectedView = document.getElementById("disconnectedView") as HTMLElement;
+  const statusDot = document.getElementById("statusDot") as HTMLElement;
+  const portDisplay = document.getElementById("portDisplay") as HTMLElement;
+  const copyPromptBtn = document.getElementById("copyPromptBtn") as HTMLButtonElement;
+  const autoSendInput = document.getElementById("autoSend") as HTMLInputElement;
+  const showLogInput = document.getElementById("showLog") as HTMLInputElement;
+  const availableView = document.getElementById("availableView") as HTMLElement;
+  const gatewayList = document.getElementById("gatewayList") as HTMLElement;
 
   // 1. 语言检测与资源加载
   const isZh = navigator.language.startsWith("zh");
@@ -47,10 +49,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const isAllowed = patterns.some((pattern) => {
           // 1. 去掉末尾的通配符 *
           const base = pattern.replace(/\*$/, "");
-          // 2. 宽松匹配：URL 以 base 开头，或者 URL 等于 base (去掉末尾斜杠的情况)
-          // 例如 pattern: https://a.com/* -> base: https://a.com/
-          // 匹配: https://a.com/foo (startsWith ✔️)
-          // 匹配: https://a.com (base.slice(0,-1) === url ✔️)
+          // 2. 宽松匹配
           return (
             currentUrl.startsWith(base) ||
             currentUrl === base.replace(/\/$/, "")
@@ -65,10 +64,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         // Scan for existing gateways
         chrome.storage.local.get(null, (items) => {
-          const uniqueGateways = new Map();
+          const uniqueGateways = new Map<number, string>();
           for (const [key, val] of Object.entries(items)) {
-            if (key.startsWith("session_") && val.port && val.token) {
-              uniqueGateways.set(val.port, val.token);
+            if (key.startsWith("session_") && (val as Session).port && (val as Session).token) {
+              uniqueGateways.set((val as Session).port, (val as Session).token);
             }
           }
 

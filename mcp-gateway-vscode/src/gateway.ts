@@ -8,6 +8,7 @@ import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { ToolExecutionPayload } from '@webmcp/shared';
 
 const RUN_IN_TERMINAL_TOOL = {
     name: "run_in_terminal",
@@ -352,7 +353,8 @@ export class GatewayManager {
         });
 
         this.app.post('/v1/tools/call', async (req, res) => {
-            let { name, arguments: args } = req.body;
+            const payload = req.body as ToolExecutionPayload;
+            let { name, arguments: args } = payload;
             const toolStart = Date.now();
 
             // Auto-resolve relative paths for local filesystem tools

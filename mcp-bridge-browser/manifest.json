@@ -19,7 +19,7 @@
     "https://chat.deepseek.com/*"
   ],
   "action": {
-    "default_popup": "popup.html",
+    "default_popup": "index.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",
@@ -32,7 +32,8 @@
     "open_in_tab": true
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "src/background/index.ts",
+    "type": "module"
   },
   "web_accessible_resources": [
     {
@@ -71,7 +72,7 @@
         "http://localhost:34575/*",
         "http://localhost:34576/*"
       ],
-      "js": ["bridge_loader.js"],
+      "js": ["src/content/bridge_loader.ts"],
       "run_at": "document_start"
     },
     {
@@ -81,7 +82,7 @@
         "https://aistudio.google.com/*",
         "https://chat.deepseek.com/*"
       ],
-      "js": ["config.js", "modules/utils.js", "modules/ui.js", "content.js"]
+      "js": ["src/content/main.ts"]
     }
   ]
 }

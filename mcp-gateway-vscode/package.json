@@ -186,6 +186,7 @@
     "test": "vscode-test"
   },
   "dependencies": {
+    "@webmcp/shared": "workspace:*", 
     "@modelcontextprotocol/sdk": "^1.0.1",
     "cors": "^2.8.5",
     "express": "^4.18.2",

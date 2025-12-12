@@ -1,15 +1,16 @@
-// === WebMCP Global Configuration ===
-// This file is loaded before content.js and options.js
-// Source of Truth for default selectors
+export interface SiteSelectors {
+  messageBlocks: string;
+  codeBlocks: string;
+  inputArea: string;
+  sendButton: string;
+}
 
-const DEFAULT_SELECTORS = {
+export const DEFAULT_SELECTORS: Record<string, SiteSelectors> = {
   deepseek: {
     messageBlocks: ".ds-message",
     codeBlocks: "pre",
     inputArea: "textarea.ds-scroll-area",
     // Fixed: Use SVG Path signature to locate the button.
-    // This ignores unstable class names (like _020ab5b) and generic classes.
-    // Matches: A div button that CONTAINS a path starting with the specific 'Send' icon coordinates.
     sendButton: "div[role='button']:has(path[d^='M8.3125'])",
   },
   chatgpt: {

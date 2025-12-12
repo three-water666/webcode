@@ -1,5 +1,7 @@
 node_modules
 dist
+.pnpm-debug.log
+dist
 *.vsix
 mcp-bridge-browser.zip
 .DS_Store

@@ -1,8 +1,10 @@
+import { Session, MessageRequest, HandshakeResponse, ToolExecutionPayload } from '../types';
+
 // === WebMCP Background Service (MV3 Persistent Edition) ===
 
 // 初始化：加载多语言资源文件
 chrome.runtime.onInstalled.addListener(async () => {
-  const files = {
+  const files: Record<string, string> = {
     prompt_en: "prompt.md",
     prompt_zh: "prompt_zh.md",
     train_en: "train.md",
@@ -11,7 +13,7 @@ chrome.runtime.onInstalled.addListener(async () => {
     error_zh: "error_hint_zh.md",
   };
 
-  const storageData = {};
+  const storageData: Record<string, string> = {};
 
   // 使用 fetch 读取扩展内的 .md 文件
   for (const [key, file] of Object.entries(files)) {
@@ -30,7 +32,7 @@ chrome.runtime.onInstalled.addListener(async () => {
 
   // 1. 初始化本地资源 (storage.local)
   const existingLocal = await chrome.storage.local.get(Object.keys(storageData));
-  const localToSet = {};
+  const localToSet: Record<string, string> = {};
   for (const [key, val] of Object.entries(storageData)) {
     if (!existingLocal[key]) {
       localToSet[key] = val;
@@ -41,13 +43,11 @@ chrome.runtime.onInstalled.addListener(async () => {
     console.log("[WebMCP] Initialized local resources");
   }
 
-  // 2. 初始化用户配置 (storage.sync) - 保护不被覆盖
+  // 2. 初始化用户配置 (storage.sync)
   const syncKeys = ["autoSend", "autoPromptEnabled", "customSelectors", "protected_tools"];
   const existingSync = await chrome.storage.sync.get(syncKeys);
-  const syncToSet = {};
+  const syncToSet: Record<string, any> = {};
   
-  // 只有当完全没有配置时(全新安装)，才写入默认值
-  // 注意：我们不设置 protected_tools 的默认值，让它保持 undefined (空) 或者是用户之前的值
   if (existingSync.autoSend === undefined) syncToSet.autoSend = true;
   if (existingSync.autoPromptEnabled === undefined) syncToSet.autoPromptEnabled = false;
   
@@ -58,12 +58,10 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 // === 工具函数：检查 URL 是否在白名单 ===
-function isUrlAllowed(url) {
+function isUrlAllowed(url: string | undefined): boolean {
   if (!url) return false;
   const manifest = chrome.runtime.getManifest();
 
-  // [Fix] 合并 host_permissions 和 content_scripts.matches
-  // Bridge 页面通常运行在 content_scripts 定义的特定端口上
   const hostPatterns = manifest.host_permissions || [];
   const scriptPatterns = (manifest.content_scripts || []).flatMap(
     (cs) => cs.matches || []
@@ -71,23 +69,18 @@ function isUrlAllowed(url) {
   const allPatterns = [...new Set([...hostPatterns, ...scriptPatterns])];
 
   return allPatterns.some((pattern) => {
-    // 1. 去掉末尾的通配符 *
     const base = pattern.replace(/\*$/, "");
-    // 2. 宽松匹配
     return url.startsWith(base) || url === base.replace(/\/$/, "");
   });
 }
 
 // === 保持连接逻辑 & 安全熔断 ===
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  // 1. 安全熔断：如果 URL 变化且不在白名单中，立即销毁 Session
   if (changeInfo.url) {
     if (!isUrlAllowed(changeInfo.url)) {
       const session = await getSession(tabId);
       if (session) {
-        console.log(
-          `[WebMCP] Security Fuse: Url changed to ${changeInfo.url}, revoking session.`
-        );
+        console.log(`[WebMCP] Security Fuse: Url changed to ${changeInfo.url}, revoking session.`);
         await removeSession(tabId);
         updateBadge(tabId, false);
         return;
@@ -95,19 +88,14 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     }
   }
 
-  // 2. 状态恢复
   if (changeInfo.status === "complete") {
     const session = await getSession(tabId);
-    // 双重检查：即使 Session 存在，URL 也必须合法（防止边界情况）
     if (session && isUrlAllowed(tab.url)) {
       updateBadge(tabId, true);
       if (session.showLog) {
-        chrome.tabs
-          .sendMessage(tabId, { type: "TOGGLE_LOG", show: true })
-          .catch(() => {});
+        chrome.tabs.sendMessage(tabId, { type: "TOGGLE_LOG", show: true }).catch(() => {});
       }
     } else if (session && !isUrlAllowed(tab.url)) {
-      // 如果加载完成时发现是不合法 URL，也清理掉
       await removeSession(tabId);
       updateBadge(tabId, false);
     }
@@ -115,7 +103,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 });
 
 // === 消息处理中心 ===
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request: MessageRequest, sender, sendResponse) => {
   const currentTabId = sender.tab ? sender.tab.id : null;
 
   if (request.type === "HANDSHAKE") {
@@ -124,24 +112,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   if (request.type === "GET_STATUS") {
     const targetTabId = request.tabId;
-    getSession(targetTabId).then((session) => {
-      sendResponse({
-        connected: !!session,
-        port: session?.port,
-        showLog: session?.showLog || false,
-      });
-    });
+    if (targetTabId) {
+        getSession(targetTabId).then((session) => {
+          sendResponse({
+            connected: !!session,
+            port: session?.port,
+            showLog: session?.showLog || false,
+          });
+        });
+    }
     return true;
   }
   if (request.type === "SET_LOG_VISIBLE") {
     const targetTabId = request.tabId;
-    const show = request.show;
-    updateSessionLog(targetTabId, show).then(() => {
-      chrome.tabs
-        .sendMessage(targetTabId, { type: "TOGGLE_LOG", show: show })
-        .catch(() => {});
-      sendResponse({ success: true });
-    });
+    const show = request.show ?? false;
+    if (targetTabId) {
+        updateSessionLog(targetTabId, show).then(() => {
+        chrome.tabs.sendMessage(targetTabId, { type: "TOGGLE_LOG", show: show }).catch(() => {});
+        sendResponse({ success: true });
+        });
+    }
     return true;
   }
   if (request.type === "EXECUTE_TOOL") {
@@ -160,55 +150,62 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
   if (request.type === "CONNECT_EXISTING") {
-    // 优先使用请求中显式传递的 tabId (来自 Popup)，否则回退到 sender (来自 ContentScript)
     const targetTabId = request.tabId || currentTabId;
     if (!targetTabId) {
       sendResponse({ success: false, error: "Missing Tab ID" });
       return true;
     }
 
-    // 顺便清理之前可能产生的错误数据
     chrome.storage.local.remove("session_null");
 
-    bindSession(targetTabId, request.port, request.token)
-      .then(() => sendResponse({ success: true }))
-      .catch((err) => sendResponse({ success: false, error: err.message }));
+    if (request.port && request.token) {
+        bindSession(targetTabId, request.port, request.token)
+        .then(() => sendResponse({ success: true }))
+        .catch((err) => sendResponse({ success: false, error: err.message }));
+    }
     return true;
   }
+  return false;
 });
 
 // === 数据层 ===
-async function getSession(tabId) {
+async function getSession(tabId: number): Promise<Session | undefined> {
   const key = `session_${tabId}`;
   const result = await chrome.storage.local.get([key]);
   return result[key];
 }
-async function saveSession(tabId, data) {
+
+async function saveSession(tabId: number, data: Session) {
   const key = `session_${tabId}`;
   await chrome.storage.local.set({ [key]: data });
 }
-async function updateSessionLog(tabId, showLog) {
+
+async function updateSessionLog(tabId: number, showLog: boolean) {
   const session = await getSession(tabId);
   if (session) {
     session.showLog = showLog;
     await saveSession(tabId, session);
   }
 }
-async function removeSession(tabId) {
+
+async function removeSession(tabId: number) {
   const key = `session_${tabId}`;
   await chrome.storage.local.remove(key);
 }
 
 // === 逻辑实现 ===
-async function handleHandshake(request, tabId) {
+async function handleHandshake(request: any, tabId: number | null | undefined): Promise<HandshakeResponse> {
   const { port, token, force } = request;
+  
+  if (!tabId) return { success: false, error: "No Tab ID" };
+
   if (!force) {
     const all = await chrome.storage.local.get(null);
-    let conflictTabId = null;
+    let conflictTabId: string | null = null;
     for (const [key, val] of Object.entries(all)) {
       if (
         key.startsWith("session_") &&
-        val.port === port &&
+        (val as Session).port === port &&
         key !== `session_${tabId}`
       ) {
         conflictTabId = key.replace("session_", "");
@@ -222,7 +219,7 @@ async function handleHandshake(request, tabId) {
           return { success: false, error: "BUSY", conflictTabId };
         }
       } catch (e) {
-        await removeSession(conflictTabId);
+        await removeSession(parseInt(conflictTabId));
       }
     }
   }
@@ -230,13 +227,13 @@ async function handleHandshake(request, tabId) {
   return { success: true };
 }
 
-async function bindSession(tabId, port, token) {
+async function bindSession(tabId: number, port: number, token: string) {
   await saveSession(tabId, { port, token, showLog: false });
   console.log(`[WebMCP] Tab ${tabId} bound to Port ${port}`);
   updateBadge(tabId, true);
 }
 
-function updateBadge(tabId, active) {
+function updateBadge(tabId: number, active: boolean) {
   if (active) {
     chrome.action.setBadgeText({ tabId, text: "ON" });
     chrome.action.setBadgeBackgroundColor({ tabId, color: "#4CAF50" });
@@ -245,7 +242,8 @@ function updateBadge(tabId, active) {
   }
 }
 
-async function executeTool(request, tabId) {
+async function executeTool(request: any, tabId: number | null | undefined) {
+  if (!tabId) return { success: false, error: "No Session Tab" };
   const session = await getSession(tabId);
   if (!session) {
     return {
@@ -270,7 +268,7 @@ async function executeTool(request, tabId) {
     if (response.ok) {
       const resJson = await response.json();
       const textContent = resJson.content
-        ? resJson.content.map((c) => c.text).join("\n")
+        ? resJson.content.map((c: any) => c.text).join("\n")
         : JSON.stringify(resJson);
       return { success: true, data: textContent };
     } else {
@@ -283,7 +281,7 @@ async function executeTool(request, tabId) {
         };
       }
     }
-  } catch (err) {
+  } catch (err: any) {
     return { success: false, error: `Connection Failed: ${err.message}` };
   }
 }

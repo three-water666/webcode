@@ -1,3 +1,5 @@
+import { HandshakeResponse } from '../types';
+
 (function () {
   // === 核心修复：等待 DOM 加载完成 ===
   // 标记插件已安装，供页面检测
@@ -12,9 +14,9 @@
     const target = params.get("target");
     const portStr = window.location.port;
 
-    const loader = document.getElementById("loader");
-    const statusText = document.querySelector("p");
-    const card = document.getElementById("main-card");
+    const loader = document.getElementById("loader") as HTMLElement | null;
+    const statusText = document.querySelector("p") as HTMLElement | null;
+    const card = document.getElementById("main-card") as HTMLElement | null;
 
     if (!token || !target || !portStr) {
       if (statusText) {
@@ -35,21 +37,25 @@
           token: token,
           force: force,
         },
-        (response) => {
+        (response: HandshakeResponse) => {
           if (chrome.runtime.lastError) {
-            statusText.innerHTML = `
-                        <span style="color:#ff6b6b">❌ Extension Not Detected</span><br>
-                        <span style="font-size:0.8em; opacity:0.8">Please ensure 'WebMCP Bridge' extension is installed and enabled.</span>
-                    `;
-            loader.style.display = "none";
+            if (statusText && loader) {
+                statusText.innerHTML = `
+                            <span style="color:#ff6b6b">❌ Extension Not Detected</span><br>
+                            <span style="font-size:0.8em; opacity:0.8">Please ensure 'WebMCP Bridge' extension is installed and enabled.</span>
+                        `;
+                loader.style.display = "none";
+            }
             return;
           }
+
+          if (!statusText || !loader || !card) return;
 
           if (response && response.success) {
             statusText.innerText = "✅ Connected! Redirecting...";
             statusText.style.color = "#4CAF50";
             setTimeout(() => {
-              window.location.href = target;
+              window.location.href = target as string;
             }, 500);
           } else if (response && response.error === "BUSY") {
             // === 冲突处理 UI ===

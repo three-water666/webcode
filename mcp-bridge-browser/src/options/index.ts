@@ -1,40 +1,41 @@
-// options.js
+import { DEFAULT_SELECTORS } from '../modules/config';
+import { Session } from '../types';
 
 const els = {
-  selectors: document.getElementById("selectorsJson"),
-  initPrompt: document.getElementById("initPrompt"),
-  trainPrompt: document.getElementById("trainPrompt"),
-  errorPrompt: document.getElementById("errorPrompt"), // New
-  status: document.getElementById("status"),
-  currentLang: document.getElementById("currentLang"),
+  selectors: document.getElementById("selectorsJson") as HTMLTextAreaElement,
+  initPrompt: document.getElementById("initPrompt") as HTMLTextAreaElement,
+  trainPrompt: document.getElementById("trainPrompt") as HTMLTextAreaElement,
+  errorPrompt: document.getElementById("errorPrompt") as HTMLTextAreaElement,
+  status: document.getElementById("status") as HTMLElement,
+  currentLang: document.getElementById("currentLang") as HTMLElement,
   // UI Text Elements for i18n
-  title: document.getElementById("title"),
-  sec_selectors: document.getElementById("sec_selectors"),
-  desc_selectors: document.getElementById("desc_selectors"),
-  sec_prompts: document.getElementById("sec_prompts"),
-  lbl_init_prompt: document.getElementById("lbl_init_prompt"),
-  desc_init_prompt: document.getElementById("desc_init_prompt"),
-  lbl_train_prompt: document.getElementById("lbl_train_prompt"),
-  desc_train_prompt: document.getElementById("desc_train_prompt"),
-  lbl_error_prompt: document.getElementById("lbl_error_prompt"),
-  desc_error_prompt: document.getElementById("desc_error_prompt"),
+  title: document.getElementById("title") as HTMLElement,
+  sec_selectors: document.getElementById("sec_selectors") as HTMLElement,
+  desc_selectors: document.getElementById("desc_selectors") as HTMLElement,
+  sec_prompts: document.getElementById("sec_prompts") as HTMLElement,
+  lbl_init_prompt: document.getElementById("lbl_init_prompt") as HTMLElement,
+  desc_init_prompt: document.getElementById("desc_init_prompt") as HTMLElement,
+  lbl_train_prompt: document.getElementById("lbl_train_prompt") as HTMLElement,
+  desc_train_prompt: document.getElementById("desc_train_prompt") as HTMLElement,
+  lbl_error_prompt: document.getElementById("lbl_error_prompt") as HTMLElement,
+  desc_error_prompt: document.getElementById("desc_error_prompt") as HTMLElement,
   // HITL
-  sec_hitl: document.getElementById("sec_hitl"),
-  desc_hitl: document.getElementById("desc_hitl"),
-  refreshTools: document.getElementById("refreshTools"),
-  toolList: document.getElementById("toolList"),
-  save: document.getElementById("save"),
-  reset: document.getElementById("reset"),
-  btnImport: document.getElementById("btnImport"),
-  btnExport: document.getElementById("btnExport"),
-  importFile: document.getElementById("importFile"),
+  sec_hitl: document.getElementById("sec_hitl") as HTMLElement,
+  desc_hitl: document.getElementById("desc_hitl") as HTMLElement,
+  refreshTools: document.getElementById("refreshTools") as HTMLButtonElement,
+  toolList: document.getElementById("toolList") as HTMLElement,
+  save: document.getElementById("save") as HTMLButtonElement,
+  reset: document.getElementById("reset") as HTMLButtonElement,
+  btnImport: document.getElementById("btnImport") as HTMLButtonElement,
+  btnExport: document.getElementById("btnExport") as HTMLButtonElement,
+  importFile: document.getElementById("importFile") as HTMLInputElement,
 };
 
 // Determine language context
 const lang = navigator.language.startsWith("zh") ? "zh" : "en";
 
 // UI Strings
-const UI = {
+const UI: Record<string, Record<string, string>> = {
   en: {
     title: "WebMCP Settings",
     sec_selectors: "Site Selectors",
@@ -64,6 +65,8 @@ const UI = {
     btn_export: "Export Config",
     import_success: "Configuration imported successfully!",
     import_error: "Import failed: Invalid JSON or structure.",
+    refresh_ok: "Tool list updated!",
+    refresh_fail: "Failed to connect to Gateway. Ensure VS Code is running."
   },
   zh: {
     title: "WebMCP 设置",
@@ -94,7 +97,7 @@ const UI = {
   },
 };
 
-function t(key) {
+function t(key: string): string {
   return UI[lang][key] || UI.en[key];
 }
 
@@ -119,7 +122,7 @@ function initUI() {
   els.btnExport.textContent = t("btn_export");
 }
 
-function showStatus(msg, type = "success") {
+function showStatus(msg: string, type = "success") {
   els.status.textContent = msg;
   els.status.className = type === "success" ? "status-success" : "status-error";
   setTimeout(() => {
@@ -134,7 +137,7 @@ const KEY_TRAIN = lang === "zh" ? "train_zh" : "train_en";
 const KEY_ERROR = lang === "zh" ? "error_zh" : "error_en";
 
 // Helper to fetch text from extension files
-async function fetchDefault(filename) {
+async function fetchDefault(filename: string): Promise<string> {
   try {
     const url = chrome.runtime.getURL(filename);
     const resp = await fetch(url);
@@ -158,7 +161,7 @@ async function restoreOptions() {
 
       if (tools.length > 0) {
         container.innerHTML = "";
-        tools.forEach((toolName) => {
+        tools.forEach((toolName: string) => {
           const div = document.createElement("div");
           div.style.marginBottom = "5px";
           const checkbox = document.createElement("input");
@@ -222,16 +225,16 @@ function saveOptions() {
     ) {
       throw new Error("Missing required platform keys");
     }
-  } catch (e) {
+  } catch (e: any) {
     showStatus(t("error_json") + " " + e.message, "error");
     return;
   }
 
   // HITL Save
   const checkboxes = els.toolList.querySelectorAll('input[type="checkbox"]');
-  const protectedTools = [];
+  const protectedTools: string[] = [];
   checkboxes.forEach((cb) => {
-    if (cb.checked) protectedTools.push(cb.value);
+    if ((cb as HTMLInputElement).checked) protectedTools.push((cb as HTMLInputElement).value);
   });
 
   chrome.storage.sync.set({
@@ -239,7 +242,7 @@ function saveOptions() {
     protected_tools: protectedTools,
   });
 
-  const data = {};
+  const data: Record<string, string> = {};
   data[KEY_PROMPT] = els.initPrompt.value;
   data[KEY_TRAIN] = els.trainPrompt.value;
   data[KEY_ERROR] = els.errorPrompt.value;
@@ -257,9 +260,9 @@ async function fetchTools() {
 
     // Find first active session
     for (const [key, val] of Object.entries(all)) {
-      if (key.startsWith("session_") && val.port && val.token) {
-        port = val.port;
-        token = val.token;
+      if (key.startsWith("session_") && (val as Session).port && (val as Session).token) {
+        port = (val as Session).port;
+        token = (val as Session).token;
         break;
       }
     }
@@ -272,7 +275,7 @@ async function fetchTools() {
 
     if (!resp.ok) throw new Error("Gateway rejected request");
     const data = await resp.json();
-    const newToolNames = data.tools.map((t) => t.name);
+    const newToolNames = data.tools.map((t: any) => t.name);
 
     // [HITL] Security: Auto-protect new tools logic (Sync with content.js)
     const localData = await chrome.storage.local.get(["cached_tool_list"]);
@@ -282,7 +285,7 @@ async function fetchTools() {
     const protectedTools = new Set(syncData.protected_tools || []);
     let protectedDirty = false;
 
-    newToolNames.forEach((tName) => {
+    newToolNames.forEach((tName: string) => {
       // If it's a NEW tool (not in cache), protect it by default
       if (!knownTools.has(tName)) {
         if (!protectedTools.has(tName)) {
@@ -372,13 +375,16 @@ els.btnExport.addEventListener("click", () => {
 // Import Config
 els.btnImport.addEventListener("click", () => els.importFile.click());
 els.importFile.addEventListener("change", (event) => {
-  const file = event.target.files[0];
+  const target = event.target as HTMLInputElement;
+  if (!target.files) return;
+  const file = target.files[0];
   if (!file) return;
 
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
-      const config = JSON.parse(e.target.result);
+      const result = e.target?.result as string;
+      const config = JSON.parse(result);
       if (!config.sync || !config.local) throw new Error("Invalid structure");
 
       chrome.storage.sync.set(config.sync, () => {
@@ -393,5 +399,5 @@ els.importFile.addEventListener("change", (event) => {
     }
   };
   reader.readAsText(file);
-  event.target.value = "";
+  target.value = "";
 });
