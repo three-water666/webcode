@@ -1,7 +1,7 @@
 {
   "name": "mcp-bridge-browser",
   "displayName": "WebMCP Bridge",
-  "version": "0.4.6",
+  "version": "0.5.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
