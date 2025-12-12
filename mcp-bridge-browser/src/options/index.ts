@@ -57,6 +57,8 @@ const UI: Record<string, Record<string, string>> = {
     save: "Save Settings",
     reset: "Reset to Defaults",
     saved: "Settings saved successfully!",
+    saved_sync: "Settings saved & synced to VS Code!",
+    saved_local: "Saved locally (VS Code disconnected).",
     reset_confirm:
       "Are you sure you want to reset ALL settings (Selectors & Prompts) to defaults?",
     error_json: "Error: Invalid JSON format in Selectors.",
@@ -85,6 +87,8 @@ const UI: Record<string, Record<string, string>> = {
     save: "保存设置",
     reset: "恢复默认设置",
     saved: "设置已成功保存！",
+    saved_sync: "设置已同步至 VS Code！",
+    saved_local: "已保存至本地 (VS Code 未连接)。",
     reset_confirm: "确定要重置所有设置（选择器和提示词）为默认值吗？",
     error_json: "错误：选择器配置 JSON 格式无效。",
     restored: "已从文件恢复默认设置。",
@@ -248,7 +252,15 @@ function saveOptions() {
   data[KEY_ERROR] = els.errorPrompt.value;
 
   chrome.storage.local.set(data, () => {
-    showStatus(t("saved"));
+    // [Host Sync] Check sync status
+    chrome.runtime.sendMessage({ type: "SYNC_CONFIG" }, (response) => {
+        if (response && response.success) {
+            showStatus(t("saved_sync"), "success");
+        } else {
+            // Warn user that config is local-only
+            showStatus(t("saved_local"), "error");
+        }
+    });
   });
 }
 

@@ -32,7 +32,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // outputChannel.show(true); // 静默启动，不自动弹出面板
     outputChannel.appendLine("🚀 MCP Gateway Extension Activating...");
 
-    manager = new GatewayManager(outputChannel, context.extensionPath, () => {
+    manager = new GatewayManager(outputChannel, context.extensionPath, context, () => {
         // Auto-stop callback
         isRunning = false;
         updateStatusBar(false);

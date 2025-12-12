@@ -77,14 +77,16 @@ export class GatewayManager {
     private connectedClients: { id: string; client: Client }[] = [];
     private outputChannel: vscode.OutputChannel;
     private extensionPath: string;
+    private context: vscode.ExtensionContext;
     private authToken: string = '';
     private watchdogTimer: NodeJS.Timeout | null = null;
     private readonly WATCHDOG_TIMEOUT = 30 * 60 * 1000; // 30 minutes
     private onAutoStop: (() => void) | null = null;
 
-    constructor(outputChannel: vscode.OutputChannel, extensionPath: string, onAutoStop?: () => void) {
+    constructor(outputChannel: vscode.OutputChannel, extensionPath: string, context: vscode.ExtensionContext, onAutoStop?: () => void) {
         this.outputChannel = outputChannel;
         this.extensionPath = extensionPath;
+        this.context = context;
         this.onAutoStop = onAutoStop || null;
         // [Persistence] Generate token once per VS Code session
         this.authToken = crypto.randomUUID();
@@ -273,6 +275,24 @@ export class GatewayManager {
                 });
             }
             next();
+        });
+
+        // 4.1 配置同步接口 (Config Sync)
+        this.app.get('/v1/config', (req, res) => {
+            this.log('📥 Config Sync: Pull requested');
+            const savedConfig = this.context.globalState.get('mcp.browserConfig') || null;
+            res.json({ config: savedConfig });
+        });
+
+        this.app.post('/v1/config', (req, res) => {
+            const newConfig = req.body.config;
+            if (newConfig) {
+                this.context.globalState.update('mcp.browserConfig', newConfig);
+                this.log('📤 Config Sync: Push received & saved');
+                res.json({ success: true });
+            } else {
+                res.status(400).json({ error: "Missing config data" });
+            }
         });
 
         // 5. 桥接页面 (Bridge Page)

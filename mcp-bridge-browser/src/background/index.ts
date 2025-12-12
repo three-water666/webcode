@@ -149,6 +149,10 @@ chrome.runtime.onMessage.addListener((request: MessageRequest, sender, sendRespo
     });
     return true;
   }
+  if (request.type === "SYNC_CONFIG") {
+    pushConfigToGateway().then(success => sendResponse({ success }));
+    return true;
+  }
   if (request.type === "CONNECT_EXISTING") {
     const targetTabId = request.tabId || currentTabId;
     if (!targetTabId) {
@@ -231,6 +235,86 @@ async function bindSession(tabId: number, port: number, token: string) {
   await saveSession(tabId, { port, token, showLog: false });
   console.log(`[WebMCP] Tab ${tabId} bound to Port ${port}`);
   updateBadge(tabId, true);
+  syncConfigFromGateway(port, token);
+}
+
+// === 配置同步 (Host Sync) ===
+async function pushConfigToGateway() {
+  try {
+    // 1. Find active session
+    const all = await chrome.storage.local.get(null);
+    let port = null, token = null;
+    for (const [key, val] of Object.entries(all)) {
+      if (key.startsWith("session_") && (val as any).port && (val as any).token) {
+        port = (val as any).port;
+        token = (val as any).token;
+        break;
+      }
+    }
+    if (!port || !token) return false;
+
+    // 2. Gather config
+    const syncData = await chrome.storage.sync.get(["customSelectors", "protected_tools", "autoSend", "autoPromptEnabled"]);
+    const localKeys = ["prompt_en", "prompt_zh", "train_en", "train_zh", "error_en", "error_zh"];
+    const localData = await chrome.storage.local.get(localKeys);
+    
+    const fullConfig = {
+      version: 1,
+      timestamp: new Date().toISOString(),
+      sync: syncData,
+      local: localData
+    };
+
+    // 3. Push
+    await fetch(`http://127.0.0.1:${port}/v1/config`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-WebMCP-Token': token
+      },
+      body: JSON.stringify({ config: fullConfig })
+    });
+    console.log("[WebMCP] Config pushed to Gateway (Auto-Save)");
+    return true;
+  } catch (e) {
+    console.error("[WebMCP] Failed to push config:", e);
+    return false;
+  }
+}
+
+async function syncConfigFromGateway(port: number, token: string) {
+  try {
+    console.log("[WebMCP] Syncing config from Gateway...");
+    const resp = await fetch(`http://127.0.0.1:${port}/v1/config`, {
+      headers: { "X-WebMCP-Token": token },
+    });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    
+    if (data.config) {
+      console.log("[WebMCP] Remote config found. Overwriting local settings.");
+      const { sync, local } = data.config;
+      
+      if (sync) {
+        await chrome.storage.sync.set(sync);
+      }
+      if (local) {
+        // 仅恢复提示词等关键数据，不覆盖 Session
+        const safeLocal: Record<string, string> = {};
+        const keys = ["prompt_en", "prompt_zh", "train_en", "train_zh", "error_en", "error_zh"];
+        keys.forEach(k => {
+          if (local[k]) safeLocal[k] = local[k];
+        });
+        if (Object.keys(safeLocal).length > 0) {
+          await chrome.storage.local.set(safeLocal);
+        }
+      }
+    } else {
+      console.log("[WebMCP] No remote config. Keeping local defaults.");
+    }
+  } catch (e) {
+    console.error("[WebMCP] Config sync failed:", e);
+  }
 }
 
 function updateBadge(tabId: number, active: boolean) {

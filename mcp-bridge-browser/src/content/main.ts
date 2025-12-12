@@ -409,6 +409,9 @@ function processConfirmationQueue() {
         protectedTools.delete(payload.name);
         chrome.storage.sync.set({
           protected_tools: Array.from(protectedTools),
+        }, () => {
+          // [Host Sync] Notify background to push new config to Gateway
+          chrome.runtime.sendMessage({ type: "SYNC_CONFIG" });
         });
         Logger.log(`⚡ Tool '${payload.name}' set to Always Allow`, "action");
       }
