@@ -16,6 +16,7 @@ let CONFIG: ConfigState = {
   autoPromptEnabled: false,
 };
 
+let userRules = ""; // [User Rules]
 let protectedTools = new Set<string>();
 const confirmationQueue: ToolExecutionPayload[] = [];
 let isPopupOpen = false;
@@ -26,11 +27,12 @@ const promptKey = lang === "zh" ? "prompt_zh" : "prompt_en";
 const trainKey = lang === "zh" ? "train_zh" : "train_en";
 const errorKey = lang === "zh" ? "error_zh" : "error_en";
 
-chrome.storage.local.get([promptKey, trainKey, errorKey], (items) => {
+chrome.storage.local.get([promptKey, trainKey, errorKey, "user_rules"], (items) => {
   i18n.resources.prompt = items[promptKey];
   i18n.resources.train = items[trainKey];
   i18n.resources.error = items[errorKey];
-  console.log(`[MCP] Loaded i18n resources (${lang})`);
+  userRules = items.user_rules || "";
+  console.log(`[MCP] Loaded i18n resources (${lang}) & User Rules`);
 });
 
 // 监听日志开关消息
@@ -111,7 +113,9 @@ setInterval(() => {
       (inputEl.textContent || "").trim() === ""
     ) {
       if (i18n.resources.prompt) {
-        inputEl.innerText = i18n.resources.prompt;
+        let finalPrompt = i18n.resources.prompt;
+        if (userRules) finalPrompt += `\n\n=== User Rules ===\n${userRules}`;
+        inputEl.innerText = finalPrompt;
         inputEl.dispatchEvent(new Event("input", { bubbles: true }));
         Logger.log(t("auto_filled"), "action");
       }
@@ -371,9 +375,9 @@ function saveToBuffer(requestId: string, content: string, isError = false) {
 
   toolCallCount++;
   if (toolCallCount > 0 && toolCallCount % 5 === 0) {
-    if (i18n.resources.train) responseJson.system_note = i18n.resources.train;
-    else
-      responseJson.system_note = `[System] Reminder: Tool calls MUST use this JSON format: {"mcp_action":"call", "name": "tool_name", "arguments": {...}}.`;
+    let note = i18n.resources.train || `[System] Reminder: Tool calls MUST use this JSON format: {"mcp_action":"call", "name": "tool_name", "arguments": {...}}.`;
+    if (userRules) note += `\n(User Rules: ${userRules})`;
+    responseJson.system_note = note;
   }
 
   const jsonString = `\`\`\`json\n${JSON.stringify(

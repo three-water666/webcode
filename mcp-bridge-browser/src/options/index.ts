@@ -6,6 +6,7 @@ const els = {
   initPrompt: document.getElementById("initPrompt") as HTMLTextAreaElement,
   trainPrompt: document.getElementById("trainPrompt") as HTMLTextAreaElement,
   errorPrompt: document.getElementById("errorPrompt") as HTMLTextAreaElement,
+  userRules: document.getElementById("userRules") as HTMLTextAreaElement,
   status: document.getElementById("status") as HTMLElement,
   currentLang: document.getElementById("currentLang") as HTMLElement,
   // UI Text Elements for i18n
@@ -15,6 +16,8 @@ const els = {
   sec_prompts: document.getElementById("sec_prompts") as HTMLElement,
   lbl_init_prompt: document.getElementById("lbl_init_prompt") as HTMLElement,
   desc_init_prompt: document.getElementById("desc_init_prompt") as HTMLElement,
+  lbl_user_rules: document.getElementById("lbl_user_rules") as HTMLElement,
+  desc_user_rules: document.getElementById("desc_user_rules") as HTMLElement,
   lbl_train_prompt: document.getElementById("lbl_train_prompt") as HTMLElement,
   desc_train_prompt: document.getElementById("desc_train_prompt") as HTMLElement,
   lbl_error_prompt: document.getElementById("lbl_error_prompt") as HTMLElement,
@@ -45,6 +48,9 @@ const UI: Record<string, Record<string, string>> = {
     lbl_init_prompt: "Initial System Prompt",
     desc_init_prompt:
       "Sent to AI when you start a new conversation. (Supports Markdown)",
+    lbl_user_rules: "User Rules (Custom Preferences)",
+    desc_user_rules:
+      "Your personal requirements (e.g., 'Always ask before coding'). Appended to System & Training prompts.",
     lbl_train_prompt: "Training Hint (Periodic)",
     desc_train_prompt:
       "Inserted periodically (every 5 tool calls) to remind AI of the protocol.",
@@ -77,6 +83,8 @@ const UI: Record<string, Record<string, string>> = {
     sec_prompts: "系统提示词 (Prompt)",
     lbl_init_prompt: "初始系统提示词",
     desc_init_prompt: "开启新会话时自动发送给 AI 的指令 (支持 Markdown)。",
+    lbl_user_rules: "用户自定义规则 (User Rules)",
+    desc_user_rules: "你的个性化要求（如“写代码前先确认方案”）。会自动追加到系统提示词和训练提示后。",
     lbl_train_prompt: "周期性训练提示",
     desc_train_prompt: "每隔 5 次工具调用插入一次，用于强化 AI 对协议的记忆。",
     lbl_error_prompt: "格式错误警告",
@@ -114,6 +122,8 @@ function initUI() {
   els.sec_prompts.textContent = t("sec_prompts");
   els.lbl_init_prompt.textContent = t("lbl_init_prompt");
   els.desc_init_prompt.textContent = t("desc_init_prompt");
+  els.lbl_user_rules.textContent = t("lbl_user_rules");
+  els.desc_user_rules.textContent = t("desc_user_rules");
   els.lbl_train_prompt.textContent = t("lbl_train_prompt");
   els.desc_train_prompt.textContent = t("desc_train_prompt");
   els.lbl_error_prompt.textContent = t("lbl_error_prompt");
@@ -190,8 +200,10 @@ async function restoreOptions() {
   });
 
   chrome.storage.local.get(
-    [KEY_PROMPT, KEY_TRAIN, KEY_ERROR],
+    [KEY_PROMPT, KEY_TRAIN, KEY_ERROR, "user_rules"],
     async (items) => {
+      // User Rules
+      els.userRules.value = items.user_rules || "";
       // Prompt
       if (items[KEY_PROMPT]) els.initPrompt.value = items[KEY_PROMPT];
       else
@@ -250,6 +262,7 @@ function saveOptions() {
   data[KEY_PROMPT] = els.initPrompt.value;
   data[KEY_TRAIN] = els.trainPrompt.value;
   data[KEY_ERROR] = els.errorPrompt.value;
+  data["user_rules"] = els.userRules.value;
 
   chrome.storage.local.set(data, () => {
     // [Host Sync] Check sync status

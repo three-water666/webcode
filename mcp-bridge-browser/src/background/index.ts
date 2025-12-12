@@ -255,7 +255,7 @@ async function pushConfigToGateway() {
 
     // 2. Gather config
     const syncData = await chrome.storage.sync.get(["customSelectors", "protected_tools", "autoSend", "autoPromptEnabled"]);
-    const localKeys = ["prompt_en", "prompt_zh", "train_en", "train_zh", "error_en", "error_zh"];
+    const localKeys = ["prompt_en", "prompt_zh", "train_en", "train_zh", "error_en", "error_zh", "user_rules"];
     const localData = await chrome.storage.local.get(localKeys);
     
     const fullConfig = {
@@ -301,7 +301,7 @@ async function syncConfigFromGateway(port: number, token: string) {
       if (local) {
         // 仅恢复提示词等关键数据，不覆盖 Session
         const safeLocal: Record<string, string> = {};
-        const keys = ["prompt_en", "prompt_zh", "train_en", "train_zh", "error_en", "error_zh"];
+        const keys = ["prompt_en", "prompt_zh", "train_en", "train_zh", "error_en", "error_zh", "user_rules"];
         keys.forEach(k => {
           if (local[k]) safeLocal[k] = local[k];
         });
