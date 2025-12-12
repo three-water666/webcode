@@ -101,6 +101,29 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.window.showInformationMessage("WebMCP Server Stopped");
     };
 
+    // Command: Copy Context (File Path + Selection)
+    context.subscriptions.push(vscode.commands.registerCommand('mcp-gateway.copyContext', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            return;
+        }
+
+        const selection = editor.selection;
+        const text = editor.document.getText(selection);
+        if (!text) {
+            return;
+        }
+
+        // Get relative path (e.g., "src/extension.ts")
+        const filePath = vscode.workspace.asRelativePath(editor.document.uri);
+        
+        // Format the clipboard content
+        const contentWithContext = `File: ${filePath}\n\n${text}`;
+
+        await vscode.env.clipboard.writeText(contentWithContext);
+        vscode.window.setStatusBarMessage(`✅ Context copied: ${filePath}`, 3000);
+    }));
+
     context.subscriptions.push(vscode.commands.registerCommand('mcp-gateway.connect', async () => {
         // 1. Case: Starting -> Show Logs
         if (isStarting) {

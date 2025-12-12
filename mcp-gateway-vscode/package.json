@@ -21,10 +21,23 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "menus": {
+      "editor/context": [
+        {
+          "command": "mcp-gateway.copyContext",
+          "when": "editorHasSelection",
+          "group": "9_cutcopypaste@100"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "mcp-gateway-vscode.restart",
         "title": "MCP: Restart Gateway Server"
+      },
+      {
+        "command": "mcp-gateway.copyContext",
+        "title": "WebMCP: Copy Context"
       }
     ],
     "configuration": {
