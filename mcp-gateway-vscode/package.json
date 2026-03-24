@@ -98,11 +98,21 @@
                 "type": "object",
                 "description": "DOM selectors for this AI site. Leave empty to use defaults for known sites.",
                 "properties": {
-                  "messageBlocks": { "type": "string" },
-                  "codeBlocks": { "type": "string" },
-                  "inputArea": { "type": "string" },
-                  "sendButton": { "type": "string" },
-                  "stopButton": { "type": "string" }
+                  "messageBlocks": {
+                    "type": "string"
+                  },
+                  "codeBlocks": {
+                    "type": "string"
+                  },
+                  "inputArea": {
+                    "type": "string"
+                  },
+                  "sendButton": {
+                    "type": "string"
+                  },
+                  "stopButton": {
+                    "type": "string"
+                  }
                 }
               }
             }
@@ -186,26 +196,8 @@
               }
             }
           },
-          "default": {
-            "filesystem": {
-              "command": "npx",
-              "args": [
-                "-y",
-                "@modelcontextprotocol/server-filesystem",
-                "."
-              ]
-            },
-            "command": {
-              "command": "node",
-              "args": [
-                "${extensionPath}/dist/commandServer.js",
-                "--project-root",
-                "."
-              ],
-              "disabled": true
-            }
-          },
-          "description": "Configuration for MCP Servers."
+          "default": {},
+          "description": "Additional third-party MCP servers. Built-in filesystem and command capabilities are managed automatically by WebMCP."
         }
       }
     }
@@ -224,6 +216,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.1",
+    "@modelcontextprotocol/server-filesystem": "^2026.1.14",
     "@webmcp/shared": "workspace:*",
     "cors": "^2.8.5",
     "express": "^4.18.2",
