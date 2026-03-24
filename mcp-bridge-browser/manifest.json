@@ -13,10 +13,7 @@
   "host_permissions": [
     "http://127.0.0.1/*",
     "http://localhost/*",
-    "https://chatgpt.com/*",
-    "https://gemini.google.com/*",
-    "https://aistudio.google.com/*",
-    "https://chat.deepseek.com/*"
+    "<all_urls>"
   ],
   "action": {
     "default_popup": "index.html",
@@ -72,10 +69,7 @@
     },
     {
       "matches": [
-        "https://chatgpt.com/*",
-        "https://gemini.google.com/*",
-        "https://aistudio.google.com/*",
-        "https://chat.deepseek.com/*"
+        "<all_urls>"
       ],
       "js": ["src/content/main.ts"]
     }

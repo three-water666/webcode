@@ -8,3 +8,6 @@ mcp-bridge-browser.zip
 release
 .claude
 out/
+.agents
+skills
+skills-lock.json

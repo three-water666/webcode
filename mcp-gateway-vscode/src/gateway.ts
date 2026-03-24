@@ -10,6 +10,7 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import { ToolExecutionPayload } from '@webmcp/shared';
 import { DEFAULT_SELECTORS, PROMPTS } from './defaults';
+import { SkillManager } from './skillManager';
 
 const RUN_IN_TERMINAL_TOOL = {
     name: "run_in_terminal",
@@ -40,12 +41,61 @@ const GET_TOOL_DEFINITIONS_TOOL = {
     }
 };
 
+const LIST_SKILLS_TOOL = {
+    name: "list_skills",
+    description: "List skills discovered in the current VS Code workspace. Use this before loading a skill so you know what is available.",
+    inputSchema: {
+        type: "object",
+        properties: {}
+    }
+};
+
+const SEARCH_SKILLS_TOOL = {
+    name: "search_skills",
+    description: "Search workspace skills by task or keyword. Use this when the user asks for a workflow, template, guide, or specialized capability.",
+    inputSchema: {
+        type: "object",
+        properties: {
+            query: { type: "string", description: "Keywords describing the task or domain to match against skills." },
+            limit: { type: "number", description: "Maximum number of matches to return. Default: 10.", default: 10 }
+        },
+        required: ["query"]
+    }
+};
+
+const GET_SKILL_TOOL = {
+    name: "get_skill",
+    description: "Load the full SKILL.md content for a workspace skill. Prefer passing skill_id from list_skills or search_skills when available.",
+    inputSchema: {
+        type: "object",
+        properties: {
+            skill_id: { type: "string", description: "Stable skill identifier returned by list_skills or search_skills." },
+            skill_name: { type: "string", description: "Fallback skill name when skill_id is unavailable." }
+        }
+    }
+};
+
+const GET_SKILL_RESOURCE_TOOL = {
+    name: "get_skill_resource",
+    description: "Read a text resource referenced by a workspace skill, such as a file under references/, templates/, or scripts/.",
+    inputSchema: {
+        type: "object",
+        properties: {
+            skill_id: { type: "string", description: "Stable skill identifier returned by list_skills or search_skills." },
+            skill_name: { type: "string", description: "Fallback skill name when skill_id is unavailable." },
+            resource_path: { type: "string", description: "Path relative to the skill directory." }
+        },
+        required: ["resource_path"]
+    }
+};
+
 // Tools that always show full schema (Hot Tools)
 const BASIC_TOOLS = [
     'read_file', 'read_text_file', 'write_file', 'edit_file', 
     'list_directory', 'list_directory_with_sizes', 
     'run_in_terminal', 'execute_command', 
-    'search_files', 'get_tool_definitions', 'list_tools'
+    'search_files', 'get_tool_definitions', 'list_tools',
+    'list_skills', 'search_skills', 'get_skill', 'get_skill_resource'
 ];
 
 // 定义服务器配置接口
@@ -64,6 +114,8 @@ interface Config {
     preferredPort?: number;
     mcpServers: Record<string, ServerConfig>;
     allowedOrigins: string[]; // [Security] Whitelist for CORS
+    aiSites?: any[]; // Dynamic sites from config
+    skillDirectories?: string[];
 }
 
 interface StartResult {
@@ -85,6 +137,10 @@ export class GatewayManager {
         // 2. Inject Internal Tools
         allTools.push({ ...RUN_IN_TERMINAL_TOOL, _server: 'internal' });
         allTools.push({ ...GET_TOOL_DEFINITIONS_TOOL, _server: 'internal' });
+        allTools.push({ ...LIST_SKILLS_TOOL, _server: 'internal' });
+        allTools.push({ ...SEARCH_SKILLS_TOOL, _server: 'internal' });
+        allTools.push({ ...GET_SKILL_TOOL, _server: 'internal' });
+        allTools.push({ ...GET_SKILL_RESOURCE_TOOL, _server: 'internal' });
 
         // 3. Group by Server
         const groups: Record<string, { tools: any[], hidden_tools: string[] }> = {};
@@ -121,12 +177,15 @@ export class GatewayManager {
     private watchdogTimer: NodeJS.Timeout | null = null;
     private readonly WATCHDOG_TIMEOUT = 30 * 60 * 1000; // 30 minutes
     private onAutoStop: (() => void) | null = null;
+    private skillManager: SkillManager;
+    private skillDirectories: string[] = [];
 
     constructor(outputChannel: vscode.OutputChannel, extensionPath: string, context: vscode.ExtensionContext, onAutoStop?: () => void) {
         this.outputChannel = outputChannel;
         this.extensionPath = extensionPath;
         this.context = context;
         this.onAutoStop = onAutoStop || null;
+        this.skillManager = new SkillManager(outputChannel);
         // [Persistence] Generate token once per VS Code session
         this.authToken = crypto.randomUUID();
     }
@@ -150,6 +209,10 @@ export class GatewayManager {
         const now = new Date();
         const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
         this.outputChannel.appendLine(`[${time}] ❌ ${message} ${err ? (err.message || JSON.stringify(err)) : ''}`);
+    }
+
+    invalidateSkillCache(reason?: string) {
+        this.skillManager.invalidateCache(reason);
     }
 
     async connectToServers(servers: Record<string, ServerConfig>) {
@@ -246,6 +309,7 @@ export class GatewayManager {
         if (this.server) {
             await this.stop();
         }
+        this.skillDirectories = config.skillDirectories || [];
         await this.connectToServers(config.mcpServers);
 
         // 1. 使用持久化 Token (仅首次生成)
@@ -319,8 +383,25 @@ export class GatewayManager {
         // 4.1 核心配置与协议下发接口 (Initialization)
         this.app.get('/v1/init', (req, res) => {
             this.log('📥 Init Sync: Browser requested default rules and prompts');
+
+            // Generate syncedAiSites with merged selectors
+            const syncedAiSites = (config.aiSites || []).map(site => {
+                let defaultSelectors = {};
+                const address = site.address.toLowerCase();
+                if (address.includes('chatgpt.com') || address.includes('openai.com')) {defaultSelectors = DEFAULT_SELECTORS.chatgpt;}
+                else if (address.includes('gemini.google.com')) {defaultSelectors = DEFAULT_SELECTORS.gemini;}
+                else if (address.includes('aistudio.google.com')) {defaultSelectors = DEFAULT_SELECTORS.aistudio;}
+                else if (address.includes('deepseek.com')) {defaultSelectors = DEFAULT_SELECTORS.deepseek;}
+
+                return {
+                    ...site,
+                    selectors: { ...defaultSelectors, ...(site.selectors || {}) }
+                };
+            });
+
             res.json({
-                selectors: DEFAULT_SELECTORS,
+                selectors: DEFAULT_SELECTORS, // Keep for backward compatibility if needed
+                syncedAiSites: syncedAiSites,
                 prompts: PROMPTS
             });
         });
@@ -485,6 +566,14 @@ export class GatewayManager {
                         definitions.push(RUN_IN_TERMINAL_TOOL);
                     } else if (tName === 'get_tool_definitions') {
                         definitions.push(GET_TOOL_DEFINITIONS_TOOL);
+                    } else if (tName === 'list_skills') {
+                        definitions.push(LIST_SKILLS_TOOL);
+                    } else if (tName === 'search_skills') {
+                        definitions.push(SEARCH_SKILLS_TOOL);
+                    } else if (tName === 'get_skill') {
+                        definitions.push(GET_SKILL_TOOL);
+                    } else if (tName === 'get_skill_resource') {
+                        definitions.push(GET_SKILL_RESOURCE_TOOL);
                     }
                 }
 
@@ -493,6 +582,87 @@ export class GatewayManager {
                     content: [{ type: 'text', text: JSON.stringify(definitions, null, 2) }],
                     isError: false
                 });
+            }
+
+            if (name === 'list_skills') {
+                try {
+                    const result = await this.skillManager.listSkills(this.skillDirectories);
+                    this.log(`   🚀 Executing: list_skills (Internal) - Found ${result.length} skills`);
+                    this.log(`   ✅ Finished: list_skills (0ms)`);
+                    return res.json({
+                        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+                        isError: false
+                    });
+                } catch (error: any) {
+                    this.error('Skill listing failed', error);
+                    return res.status(500).json({
+                        isError: true,
+                        content: [{ type: 'text', text: `Error: ${error.message}` }]
+                    });
+                }
+            }
+
+            if (name === 'search_skills') {
+                try {
+                    const query = String(args?.query || '');
+                    const limit = typeof args?.limit === 'number' ? args.limit : 10;
+                    this.log(`   🚀 Executing: search_skills "${query}"`);
+                    const result = await this.skillManager.searchSkills(query, this.skillDirectories, limit);
+                    this.log(`   ✅ Finished: search_skills (Found ${result.length})`);
+                    return res.json({
+                        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+                        isError: false
+                    });
+                } catch (error: any) {
+                    this.error('Skill search failed', error);
+                    return res.status(500).json({
+                        isError: true,
+                        content: [{ type: 'text', text: `Error: ${error.message}` }]
+                    });
+                }
+            }
+
+            if (name === 'get_skill') {
+                try {
+                    this.log(`   🚀 Executing: get_skill`);
+                    const result = await this.skillManager.getSkillDetails({
+                        skill_id: args?.skill_id,
+                        skill_name: args?.skill_name
+                    }, this.skillDirectories);
+                    this.log(`   ✅ Finished: get_skill (${result.skill.id})`);
+                    return res.json({
+                        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+                        isError: false
+                    });
+                } catch (error: any) {
+                    this.error('Skill load failed', error);
+                    return res.status(500).json({
+                        isError: true,
+                        content: [{ type: 'text', text: `Error: ${error.message}` }]
+                    });
+                }
+            }
+
+            if (name === 'get_skill_resource') {
+                try {
+                    this.log(`   🚀 Executing: get_skill_resource`);
+                    const result = await this.skillManager.getSkillResource({
+                        skill_id: args?.skill_id,
+                        skill_name: args?.skill_name,
+                        resource_path: args?.resource_path
+                    }, this.skillDirectories);
+                    this.log(`   ✅ Finished: get_skill_resource (${result.resource_path})`);
+                    return res.json({
+                        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+                        isError: false
+                    });
+                } catch (error: any) {
+                    this.error('Skill resource load failed', error);
+                    return res.status(500).json({
+                        isError: true,
+                        content: [{ type: 'text', text: `Error: ${error.message}` }]
+                    });
+                }
             }
 
             const route = this.toolRouter.get(name);

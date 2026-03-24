@@ -99,67 +99,68 @@ chrome.runtime.onMessage.addListener((request) => {
 });
 
 // === DOM 选择器与配置 ===
-let activeSelectors = DEFAULT_SELECTORS;
 let DOM: SiteSelectors | null = null;
-const host = location.host;
-const currentPlatform = host.includes("deepseek")
-  ? "deepseek"
-  : host.includes("gemini")
-    ? "gemini"
-    : host.includes("aistudio")
-      ? "aistudio"
-      : (host.includes("chatgpt") || host.includes("openai"))
-        ? "chatgpt"
-        : null;
+let currentPlatform: string | null = null;
 
-function updateDOMConfig() {
-  if (currentPlatform && activeSelectors && activeSelectors[currentPlatform]) { DOM = activeSelectors[currentPlatform]; }
+function initDOMConfig() {
+  chrome.storage.sync.get(
+    ["autoSend", "autoPromptEnabled", "user_rules"],
+    (items) => {
+      CONFIG.autoSend = items.autoSend ?? true;
+      CONFIG.autoPromptEnabled = items.autoPromptEnabled ?? false;
+      if (items.user_rules) { userRules = items.user_rules; }
+
+      chrome.storage.local.get(["syncedAiSites"], (localItems) => {
+        const sites = localItems.syncedAiSites || [];
+        const currentUrl = location.href;
+
+        // Find matching site by URL prefix
+        const matchedSite = sites.find((site: any) => currentUrl.startsWith(site.address));
+
+        if (matchedSite && matchedSite.selectors) {
+          DOM = matchedSite.selectors;
+          currentPlatform = matchedSite.name;
+          startObserver();
+        } else {
+          // Fallback logic for built-in sites if gateway hasn't synced yet (or old version)
+          const host = location.host;
+          const legacyPlatform = host.includes("deepseek") ? "deepseek"
+            : host.includes("gemini") ? "gemini"
+            : host.includes("aistudio") ? "aistudio"
+            : (host.includes("chatgpt") || host.includes("openai")) ? "chatgpt"
+            : null;
+
+          if (legacyPlatform) {
+            // Read from defaultSelectors (from VS Code init sync) or fallback to hardcoded
+            chrome.storage.local.get(["defaultSelectors"], (defItems) => {
+               const defaults = defItems.defaultSelectors || DEFAULT_SELECTORS;
+               DOM = defaults[legacyPlatform];
+               currentPlatform = legacyPlatform;
+               startObserver();
+            });
+          } else {
+            console.log("WebMCP: Current site is not configured in VS Code. Idle.");
+          }
+        }
+      });
+    }
+  );
 }
-
-chrome.storage.sync.get(
-  ["autoSend", "autoPromptEnabled", "customSelectors", "user_rules"],
-  (items) => {
-    CONFIG.autoSend = items.autoSend ?? true;
-    CONFIG.autoPromptEnabled = items.autoPromptEnabled ?? false;
-    if (items.user_rules) { userRules = items.user_rules; }
-
-    // Combine customSelectors with defaultSelectors from Local (which came from VS Code)
-    chrome.storage.local.get(["defaultSelectors"], (localItems) => {
-      const defaults = localItems.defaultSelectors || DEFAULT_SELECTORS;
-      const custom = items.customSelectors || {};
-
-      // Deep merge per platform
-      activeSelectors = { ...defaults };
-      for (const platform of Object.keys(custom)) {
-        activeSelectors[platform] = { ...defaults[platform], ...custom[platform] };
-      }
-      updateDOMConfig();
-    });
-  }
-);
 
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === "sync") {
     if (changes.autoSend) { CONFIG.autoSend = changes.autoSend.newValue; }
     if (changes.autoPromptEnabled) { CONFIG.autoPromptEnabled = changes.autoPromptEnabled.newValue; }
     if (changes.user_rules) { userRules = changes.user_rules.newValue; }
-    if (changes.customSelectors) {
-      chrome.storage.local.get(["defaultSelectors"], (localItems) => {
-        const defaults = localItems.defaultSelectors || DEFAULT_SELECTORS;
-        const custom = changes.customSelectors.newValue || {};
-        activeSelectors = { ...defaults };
-        for (const platform of Object.keys(custom)) {
-          activeSelectors[platform] = { ...defaults[platform], ...custom[platform] };
-        }
-        updateDOMConfig();
-        Logger.log(t("config_updated"), "action");
-      });
-    }
   }
   if (namespace === "local") {
     if (changes[`allowed_tools_${currentWorkspaceId}`]) {
       allowedTools = new Set(changes[`allowed_tools_${currentWorkspaceId}`].newValue || []);
       Logger.log(`Allowed tools updated (Workspace: ${currentWorkspaceId})`, "action");
+    }
+    if (changes.syncedAiSites) {
+      initDOMConfig();
+      Logger.log(t("config_updated"), "action");
     }
     if (changes[promptKey] || changes[trainKey] || changes[errorKey] || changes[initKey]) {
       loadPromptsFromStorage();
@@ -399,7 +400,12 @@ const observer = new MutationObserver(() => {
   }
 });
 
-if (currentPlatform) {
+function startObserver() {
+  if (!currentPlatform || !DOM) {return;}
+  // Initialize observer only once
+  if ((window as any)._webmcp_observer_started) {return;}
+  (window as any)._webmcp_observer_started = true;
+
   // 1. Start observing immediately (but logic inside is guarded by isClientConnected)
   observer.observe(document.body, {
     childList: true,
@@ -421,11 +427,12 @@ if (currentPlatform) {
     } else {
       isClientConnected = false;
       console.log(`WebMCP loaded for ${currentPlatform} (Disconnected - Idle)`);
+      // Optional: Inform user that connection is missing
     }
   });
-} else {
-  console.log("WebMCP: Platform not supported, staying idle.");
 }
+
+initDOMConfig();
 
 // === 执行工具 ===
 function executeTool(payload: ToolExecutionPayload) {

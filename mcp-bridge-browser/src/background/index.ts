@@ -5,7 +5,7 @@ import { Session, MessageRequest, HandshakeResponse } from '../types';
 // 初始化：设置默认状态
 chrome.runtime.onInstalled.addListener(async () => {
   // 初始化用户配置 (storage.sync)
-  const syncKeys = ["autoSend", "autoPromptEnabled", "customSelectors", "user_rules"];
+  const syncKeys = ["autoSend", "autoPromptEnabled", "user_rules"];
   const existingSync = await chrome.storage.sync.get(syncKeys);
   const syncToSet: Record<string, any> = {};
 
@@ -19,26 +19,53 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 // === 工具函数：检查 URL 是否在白名单 ===
-function isUrlAllowed(url: string | undefined): boolean {
-  if (!url) {return false;}
-  const manifest = chrome.runtime.getManifest();
-
-  const hostPatterns = manifest.host_permissions || [];
-  const scriptPatterns = (manifest.content_scripts || []).flatMap(
-    (cs) => cs.matches || []
-  );
-  const allPatterns = [...new Set([...hostPatterns, ...scriptPatterns])];
-
-  return allPatterns.some((pattern) => {
-    const base = pattern.replace(/\*$/, "");
-    return url.startsWith(base) || url === base.replace(/\/$/, "");
-  });
+// Helper to extract the core domain/URL path without query parameters or hash
+function getBaseUrl(url: string): string {
+  try {
+    const urlObj = new URL(url);
+    // Special handling for legacy matching behavior (e.g. ignoring trailing slashes)
+    return urlObj.origin + urlObj.pathname;
+  } catch {
+    return url;
+  }
 }
 
 // === 保持连接逻辑 & 安全熔断 ===
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  // Use URL from changeInfo if available, otherwise fallback to tab.url
+  const currentUrl = changeInfo.url || tab.url;
+
+  if (!currentUrl) {return;}
+
+  const isBridgePage = currentUrl.startsWith('http://127.0.0.1:') || currentUrl.startsWith('http://localhost:');
+
+  const checkUrlSafety = async (url: string) => {
+    if (isBridgePage) {return true;}
+
+    // Check against dynamic sites configuration
+    const localItems = await chrome.storage.local.get(["syncedAiSites"]);
+    const sites = localItems.syncedAiSites || [];
+
+    // Fallback static whitelist to prevent immediate disconnection right after update or during boot
+    const fallbackWhitelist = [
+      "https://chatgpt.com",
+      "https://gemini.google.com",
+      "https://aistudio.google.com",
+      "https://chat.deepseek.com",
+      "https://chat.openai.com"
+    ];
+
+    // Allow if the URL starts with any configured address or fallback address
+    const baseUrl = getBaseUrl(url);
+    const inDynamic = sites.some((site: any) => baseUrl.startsWith(site.address));
+    const inFallback = fallbackWhitelist.some(fb => baseUrl.startsWith(fb));
+
+    return inDynamic || inFallback;
+  };
+
   if (changeInfo.url) {
-    if (!isUrlAllowed(changeInfo.url)) {
+    const isSafe = await checkUrlSafety(changeInfo.url);
+    if (!isSafe) {
       const session = await getSession(tabId);
       if (session) {
         console.log(`[WebMCP] Security Fuse: Url changed to ${changeInfo.url}, revoking session.`);
@@ -51,14 +78,18 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
   if (changeInfo.status === "complete") {
     const session = await getSession(tabId);
-    if (session && isUrlAllowed(tab.url)) {
+    if (!session) {return;}
+
+    const isSafe = await checkUrlSafety(currentUrl);
+
+    if (isSafe) {
       updateBadge(tabId, true);
       // [Sync] Restore connection state in Content Script after reload
       chrome.tabs.sendMessage(tabId, { type: "STATUS_UPDATE", connected: true, workspaceId: session.workspaceId }).catch(() => {});
       if (session.showLog) {
         chrome.tabs.sendMessage(tabId, { type: "TOGGLE_LOG", show: true }).catch(() => {});
       }
-    } else if (session && !isUrlAllowed(tab.url)) {
+    } else {
       await removeSession(tabId);
       updateBadge(tabId, false);
     }
@@ -233,6 +264,7 @@ async function fetchInitDataFromGateway(port: number, token: string) {
       // Save pure defaults for Read-Only access in options or merging in content
       await chrome.storage.local.set({
         defaultSelectors: data.selectors,
+        syncedAiSites: data.syncedAiSites || [], // Save dynamically injected AI sites & selectors
         ...data.prompts // prompt_en, prompt_zh, train_en... etc.
       });
     }

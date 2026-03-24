@@ -9,6 +9,7 @@ interface AISiteConfig {
     address: string;
     showQuickLaunch?: boolean; // 可选，默认为 true
     browser?: string; // 新增：站点专属浏览器配置 (default, chrome, edge)
+    selectors?: Record<string, string>; // 新增：自定义选择器
 }
 
 // 定义统一的 QuickPickItem 接口，解决类型推断报错
@@ -26,6 +27,7 @@ let currentPort: number | null = null;
 let currentToken: string | null = null;
 let isStarting = false;
 let isRunning = false;
+let skillWatchers: vscode.Disposable[] = [];
 
 export async function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel("MCP Gateway");
@@ -40,6 +42,49 @@ export async function activate(context: vscode.ExtensionContext) {
         outputChannel.appendLine("💤 Auto-shutdown triggered due to inactivity.");
     });
 
+    const disposeSkillWatchers = () => {
+        vscode.Disposable.from(...skillWatchers).dispose();
+        skillWatchers = [];
+    };
+
+    const refreshSkillWatchers = () => {
+        disposeSkillWatchers();
+
+        const config = vscode.workspace.getConfiguration('mcpGateway');
+        const skillDirectories = config.get<string[]>('skillDirectories') || [];
+        const workspaceFolders = vscode.workspace.workspaceFolders || [];
+        const normalizedDirectories = Array.from(new Set(
+            ['.agents/skills', '.codex/skills', 'skills', ...skillDirectories]
+                .map(dir => dir.trim())
+                .filter(Boolean)
+        ));
+
+        const invalidateSkills = (reason: string) => {
+            manager.invalidateSkillCache(reason);
+        };
+
+        for (const folder of workspaceFolders) {
+            for (const relativeDir of normalizedDirectories) {
+                const pattern = new vscode.RelativePattern(folder, `${relativeDir.replace(/[\\/]+/g, '/')}/**`);
+                const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+
+                watcher.onDidCreate(uri => invalidateSkills(`created ${vscode.workspace.asRelativePath(uri)}`));
+                watcher.onDidChange(uri => invalidateSkills(`changed ${vscode.workspace.asRelativePath(uri)}`));
+                watcher.onDidDelete(uri => invalidateSkills(`deleted ${vscode.workspace.asRelativePath(uri)}`));
+
+                skillWatchers.push(watcher);
+            }
+        }
+
+        context.subscriptions.push(...skillWatchers);
+    };
+
+    refreshSkillWatchers();
+    context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(() => {
+        refreshSkillWatchers();
+        manager.invalidateSkillCache('workspace folders changed');
+    }));
+
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     statusBarItem.command = 'mcp-gateway.connect';
     context.subscriptions.push(statusBarItem);
@@ -52,6 +97,7 @@ export async function activate(context: vscode.ExtensionContext) {
         const config = vscode.workspace.getConfiguration('mcpGateway');
         const portConfig = config.get<number>('port') || 34567;
         const mcpServers = config.get<any>('servers') || {};
+        const skillDirectories = config.get<string[]>('skillDirectories') || [];
         const lastUsedPort = context.workspaceState.get<number>('mcp.lastPort');
 
         // [Security] Extract Allowed Origins from AI Sites config
@@ -69,7 +115,9 @@ export async function activate(context: vscode.ExtensionContext) {
                 port: portConfig,
                 preferredPort: lastUsedPort,
                 mcpServers,
-                allowedOrigins
+                allowedOrigins,
+                aiSites,
+                skillDirectories
             });
 
             currentPort = result.port;
@@ -256,7 +304,15 @@ export async function activate(context: vscode.ExtensionContext) {
     }));
 
     context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(async (e) => {
-        if (e.affectsConfiguration('mcpGateway.port') || e.affectsConfiguration('mcpGateway.servers')) {
+        if (
+            e.affectsConfiguration('mcpGateway.port') ||
+            e.affectsConfiguration('mcpGateway.servers') ||
+            e.affectsConfiguration('mcpGateway.skillDirectories')
+        ) {
+            if (e.affectsConfiguration('mcpGateway.skillDirectories')) {
+                refreshSkillWatchers();
+                manager.invalidateSkillCache('skillDirectories configuration changed');
+            }
             if (isRunning) {
                 outputChannel.appendLine("⚙️ Server configuration changed, restarting...");
                 await startService();

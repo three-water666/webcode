@@ -41,70 +41,88 @@ document.addEventListener("DOMContentLoaded", async () => {
         statusDot.classList.remove("online");
 
         // [Security] Only scan if URL is allowed
-        const manifest = chrome.runtime.getManifest();
-        const hostPatterns = manifest.host_permissions || [];
-        const scriptPatterns = (manifest.content_scripts || []).flatMap(
-          (cs) => cs.matches || []
-        );
-        const patterns = [...new Set([...hostPatterns, ...scriptPatterns])];
         const currentUrl = tabs[0].url || "";
 
-        const isAllowed = patterns.some((pattern) => {
-          // 1. 去掉末尾的通配符 *
-          const base = pattern.replace(/\*$/, "");
-          // 2. 宽松匹配
-          return (
-            currentUrl.startsWith(base) ||
-            currentUrl === base.replace(/\/$/, "")
-          );
-        });
+        // Helper matching the logic from background
+        const getBaseUrl = (url: string) => {
+          try {
+            const u = new URL(url);
+            return u.origin + u.pathname;
+          } catch {
+            return url;
+          }
+        };
 
-        if (!isAllowed) {
-          availableView.classList.add("hidden");
-          disconnectedView.classList.remove("hidden");
-          return;
-        }
-
-        // Scan for existing gateways
-        chrome.storage.local.get(null, (items) => {
-          const uniqueGateways = new Map<number, string>();
-          for (const [key, val] of Object.entries(items)) {
-            if (key.startsWith("session_") && (val as Session).port && (val as Session).token) {
-              uniqueGateways.set((val as Session).port, (val as Session).token);
-            }
+        const checkSafety = async () => {
+          if (currentUrl.startsWith('http://127.0.0.1:') || currentUrl.startsWith('http://localhost:')) {
+            return true;
           }
 
-          if (uniqueGateways.size > 0) {
-            availableView.classList.remove("hidden");
-            disconnectedView.classList.add("hidden");
-            gatewayList.innerHTML = "";
+          const localItems = await chrome.storage.local.get(["syncedAiSites"]);
+          const sites = localItems.syncedAiSites || [];
+          const fallbackWhitelist = [
+            "https://chatgpt.com",
+            "https://gemini.google.com",
+            "https://aistudio.google.com",
+            "https://chat.deepseek.com",
+            "https://chat.openai.com"
+          ];
 
-            uniqueGateways.forEach((token, port) => {
-              const btn = document.createElement("button");
-              btn.className = "btn";
-              btn.style.marginBottom = "8px";
-              btn.style.display = "flex";
-              btn.style.justifyContent = "space-between";
-              btn.innerHTML = `<span>🔗 Connect to <b>${port}</b></span> <span>⚡</span>`;
-              btn.onclick = () => {
-                chrome.runtime.sendMessage(
-                  {
-                    type: "CONNECT_EXISTING",
-                    port,
-                    token,
-                    tabId: currentTabId,
-                  },
-                  (res) => {
-                    if (res && res.success) {window.close();} // Close popup on success
-                  }
-                );
-              };
-              gatewayList.appendChild(btn);
-            });
-          } else {
+          const baseUrl = getBaseUrl(currentUrl);
+          const inDynamic = sites.some((site: any) => baseUrl.startsWith(site.address));
+          const inFallback = fallbackWhitelist.some(fb => baseUrl.startsWith(fb));
+
+          return inDynamic || inFallback;
+        };
+
+        checkSafety().then(isAllowed => {
+          if (!isAllowed) {
             availableView.classList.add("hidden");
             disconnectedView.classList.remove("hidden");
+            return;
           }
+
+          // Scan for existing gateways
+          chrome.storage.local.get(null, (items) => {
+            const uniqueGateways = new Map<number, string>();
+            for (const [key, val] of Object.entries(items)) {
+              if (key.startsWith("session_") && (val as Session).port && (val as Session).token) {
+                uniqueGateways.set((val as Session).port, (val as Session).token);
+              }
+            }
+
+            if (uniqueGateways.size > 0) {
+              availableView.classList.remove("hidden");
+              disconnectedView.classList.add("hidden");
+              gatewayList.innerHTML = "";
+
+              uniqueGateways.forEach((token, port) => {
+                const btn = document.createElement("button");
+                btn.className = "btn";
+                btn.style.marginBottom = "8px";
+                btn.style.display = "flex";
+                btn.style.justifyContent = "space-between";
+                btn.innerHTML = `<span>🔗 Connect to <b>${port}</b></span> <span>⚡</span>`;
+                btn.onclick = () => {
+                  chrome.runtime.sendMessage(
+                    {
+                      type: "CONNECT_EXISTING",
+                      port,
+                      token,
+                      tabId: currentTabId,
+                    },
+                    (res) => {
+                      if (res && res.success) {window.close();} // Close popup on success
+                    }
+                  );
+                };
+                gatewayList.appendChild(btn);
+              });
+            } else {
+              availableView.classList.add("hidden");
+              disconnectedView.classList.remove("hidden");
+            }
+          });
         });
       }
     }
