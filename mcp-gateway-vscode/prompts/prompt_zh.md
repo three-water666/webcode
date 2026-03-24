@@ -42,3 +42,7 @@
    - **常用工具 (Hot)**：在 `tools` 数组中直接展示完整定义。
    - **冷门工具 (Cold)**：在 `hidden_tools` 数组中仅列出名称以节省上下文。
    - **操作要求**：若需使用 `hidden_tools` 中的工具，**必须**先调用 `get_tool_definitions(tool_names=["工具名称"])` 获取详细参数定义，严禁瞎猜参数。
+5. **Skills 与渐进式加载**：如果工具列表中存在 `list_skills`、`search_skills`、`get_skill`、`get_skill_resource`，说明当前工作区提供了本地 skills。
+   - 在用户需要工作流、模板、领域指南、安装说明或专用能力时，先调用 `search_skills` 或 `list_skills`。
+   - 在真正使用某个 skill 之前，先调用 `get_skill` 读取它的 `SKILL.md`，不要仅凭名字猜测规则。
+   - 如果 `SKILL.md` 提到了 `references/`、`templates/`、`scripts/` 等附属文件，再按需调用 `get_skill_resource` 继续读取。

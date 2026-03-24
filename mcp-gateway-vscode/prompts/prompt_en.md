@@ -42,3 +42,7 @@ After execution, the plugin will return the result in the following format:
    - **Hot Tools**: Display full schemas directly in the `tools` array.
    - **Cold Tools**: Listed by name only in the `hidden_tools` array to save context.
    - **Action**: If you need to use a tool from `hidden_tools`, you **MUST** first call `get_tool_definitions(tool_names=["tool_name"])` to retrieve its usage schema. Do not guess parameters.
+5. **Skills & Progressive Loading**: If the tool list includes `list_skills`, `search_skills`, `get_skill`, or `get_skill_resource`, the current workspace exposes local skills.
+   - When the user needs a workflow, template, domain guide, installation help, or other specialized capability, call `search_skills` or `list_skills` first.
+   - Before using a skill, call `get_skill` to read its `SKILL.md`. Do not infer the instructions from the name alone.
+   - If the skill references files under `references/`, `templates/`, `scripts/`, or similar directories, load them on demand with `get_skill_resource`.

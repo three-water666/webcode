@@ -70,6 +70,32 @@ Now you can ask the Web AI to operate on your local project:
 - "Check the file structure of the current directory."
 - "Generate project documentation in the `docs` folder."
 
+### 5. Workspace Skills
+WebMCP can expose local skills from the current VS Code workspace to the web model.
+
+- Default scan directories:
+  - `.agents/skills`
+  - `.codex/skills`
+  - `skills`
+- A skill is any folder containing `SKILL.md`.
+- The AI should discover and load skills progressively:
+  1. Call `list_skills` or `search_skills`
+  2. Call `get_skill` for the selected skill
+  3. Call `get_skill_resource` only if the skill references extra files under `references/`, `templates/`, `scripts/`, etc.
+
+Example structure:
+
+```text
+.agents/
+  skills/
+    my-skill/
+      SKILL.md
+      references/
+        examples.md
+```
+
+You can customize scan paths with the VS Code setting `mcpGateway.skillDirectories`.
+
 > **Tips**:
 > - Click the status bar and select `Custom Launch...` to manually choose which browser to open.
 > - Search for `Browser Rules` in VS Code Settings to configure default "Domain-Browser" mapping rules.

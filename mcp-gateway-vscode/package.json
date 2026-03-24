@@ -123,6 +123,18 @@
           ],
           "description": "Global default browser. Used if no site-specific browser is configured."
         },
+        "mcpGateway.skillDirectories": {
+          "type": "array",
+          "default": [
+            ".agents/skills",
+            ".codex/skills",
+            "skills"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Workspace-relative directories to scan for skill folders that contain SKILL.md."
+        },
         "mcpGateway.servers": {
           "type": "object",
           "additionalProperties": {

@@ -11,12 +11,30 @@
 * **零配置连接**: 自动寻找可用端口，无需繁琐设置。
 * **安全桥接**: 使用一次性 Token 机制，确保浏览器与编辑器之间的通信安全。
 * **工具暴露**: 将本地文件系统操作、终端命令等能力标准化为 MCP 工具提供给 AI。
+* **工作区 Skills**: 自动发现当前工作区中的本地 `SKILL.md` 工作流，并通过渐进式加载工具暴露给模型。
 
 ## ⚙️ 安装与使用
 
 1. **安装插件**: 在 VS Code 扩展市场搜索并安装 `WebMCP Gateway`。
 2. **启动服务**: 安装完成后，点击 VS Code 底部状态栏右侧的 `WebMCP: OFF` 按钮，然后选择开启。当状态变为 `WebMCP: <端口号>`（如 `34567`）时，服务即已启动成功。
 3. **浏览器配套**: 确保您的浏览器已安装 **WebMCP Bridge** 插件。
+
+### 工作区 Skills
+
+插件默认会扫描以下工作区相对目录：
+
+- `.agents/skills`
+- `.codex/skills`
+- `skills`
+
+只要目录中存在 `SKILL.md`，就会被暴露为本地 skill。随后模型可以通过以下工具渐进式读取：
+
+- `list_skills`
+- `search_skills`
+- `get_skill`
+- `get_skill_resource`
+
+您也可以通过设置项 `mcpGateway.skillDirectories` 覆盖默认扫描路径。
 
 ## ❓ 常见问题
 

@@ -68,6 +68,32 @@
 - “检查当前目录下的文件结构。”
 - “在 `docs` 目录下生成项目文档。”
 
+### 5. 工作区 Skills
+WebMCP 现在可以把当前 VS Code 工作区中的本地 skills 暴露给网页模型。
+
+- 默认扫描目录：
+  - `.agents/skills`
+  - `.codex/skills`
+  - `skills`
+- 只要某个目录下存在 `SKILL.md`，它就会被识别为一个 skill。
+- AI 的推荐读取流程是渐进式的：
+  1. 先调用 `list_skills` 或 `search_skills`
+  2. 再对目标 skill 调用 `get_skill`
+  3. 只有当 skill 引用了 `references/`、`templates/`、`scripts/` 等附属文件时，再调用 `get_skill_resource`
+
+目录示例：
+
+```text
+.agents/
+  skills/
+    my-skill/
+      SKILL.md
+      references/
+        examples.md
+```
+
+您也可以通过 VS Code 设置项 `mcpGateway.skillDirectories` 自定义扫描目录。
+
 > **小贴士**：
 > - 点击状态栏选择 `Custom Launch...` 可以临时手动选择用哪个浏览器打开。
 > - 在 VS Code 设置中搜索 `Browser Rules` 可配置默认的“域名-浏览器”映射规则。
