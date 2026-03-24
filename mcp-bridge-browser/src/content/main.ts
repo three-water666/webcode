@@ -131,11 +131,13 @@ function initDOMConfig() {
             : null;
 
           if (legacyPlatform) {
-            // Note: DEFAULT_SELECTORS might be empty depending on what Gateway sent,
-            // but this is just a safe fallback.
-            DOM = DEFAULT_SELECTORS[legacyPlatform];
-            currentPlatform = legacyPlatform;
-            startObserver();
+            // Read from defaultSelectors (from VS Code init sync) or fallback to hardcoded
+            chrome.storage.local.get(["defaultSelectors"], (defItems) => {
+               const defaults = defItems.defaultSelectors || DEFAULT_SELECTORS;
+               DOM = defaults[legacyPlatform];
+               currentPlatform = legacyPlatform;
+               startObserver();
+            });
           } else {
             console.log("WebMCP: Current site is not configured in VS Code. Idle.");
           }
@@ -425,6 +427,7 @@ function startObserver() {
     } else {
       isClientConnected = false;
       console.log(`WebMCP loaded for ${currentPlatform} (Disconnected - Idle)`);
+      // Optional: Inform user that connection is missing
     }
   });
 }
