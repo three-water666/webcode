@@ -11,14 +11,22 @@ import * as crypto from 'crypto';
 import { ToolExecutionPayload } from '@webmcp/shared';
 import { DEFAULT_SELECTORS, PROMPTS } from './defaults';
 import { SkillManager } from './skillManager';
+import { TerminalSessionManager } from './terminalSessionManager';
+import {
+    formatAllowedCommands,
+    parseCommandLine,
+    resolveExecutionPlan,
+    validateParsedCommand
+} from './servers/commandSecurity';
 
 const RUN_IN_TERMINAL_TOOL = {
     name: "run_in_terminal",
-    description: "Execute a command in the VS Code integrated terminal. Use this for long-running processes (e.g., 'npm start', 'python server.py') or when you want the user to see the output in real-time. Returns immediately after sending the command.",
+    description: "Start a single long-running command in a visible VS Code terminal session. Returns a session_id immediately so you can inspect output, check status, or stop it later.",
     inputSchema: {
         type: "object",
         properties: {
-            command: { type: "string", description: "The command to execute" },
+            command: { type: "string", description: "A single command to execute (for example: 'pnpm dev'). Shell chaining, pipes, redirects, and command substitution are blocked." },
+            cwd: { type: "string", description: "Optional working directory inside the workspace. Defaults to the workspace root." },
             auto_focus: { type: "boolean", description: "Focus the terminal after sending the command", default: true }
         },
         required: ["command"]
@@ -89,13 +97,60 @@ const GET_SKILL_RESOURCE_TOOL = {
     }
 };
 
+const LIST_TERMINAL_SESSIONS_TOOL = {
+    name: "list_terminal_sessions",
+    description: "List visible terminal sessions created by run_in_terminal.",
+    inputSchema: {
+        type: "object",
+        properties: {}
+    }
+};
+
+const GET_TERMINAL_SESSION_TOOL = {
+    name: "get_terminal_session",
+    description: "Get the current status for a run_in_terminal session by session_id.",
+    inputSchema: {
+        type: "object",
+        properties: {
+            session_id: { type: "string", description: "The session id returned by run_in_terminal." }
+        },
+        required: ["session_id"]
+    }
+};
+
+const READ_TERMINAL_OUTPUT_TOOL = {
+    name: "read_terminal_output",
+    description: "Read recent output from a run_in_terminal session.",
+    inputSchema: {
+        type: "object",
+        properties: {
+            session_id: { type: "string", description: "The session id returned by run_in_terminal." },
+            tail_lines: { type: "number", description: "Number of recent lines to return. Default: 200.", default: 200 }
+        },
+        required: ["session_id"]
+    }
+};
+
+const STOP_TERMINAL_SESSION_TOOL = {
+    name: "stop_terminal_session",
+    description: "Stop a run_in_terminal session by session_id.",
+    inputSchema: {
+        type: "object",
+        properties: {
+            session_id: { type: "string", description: "The session id returned by run_in_terminal." }
+        },
+        required: ["session_id"]
+    }
+};
+
 // Tools that always show full schema (Hot Tools)
 const BASIC_TOOLS = [
     'read_file', 'read_text_file', 'write_file', 'edit_file', 
     'list_directory', 'list_directory_with_sizes', 
     'run_in_terminal', 'execute_command', 
     'search_files', 'get_tool_definitions', 'list_tools',
-    'list_skills', 'search_skills', 'get_skill', 'get_skill_resource'
+    'list_skills', 'search_skills', 'get_skill', 'get_skill_resource',
+    'list_terminal_sessions', 'get_terminal_session', 'read_terminal_output', 'stop_terminal_session'
 ];
 
 // 定义服务器配置接口
@@ -141,6 +196,10 @@ export class GatewayManager {
         allTools.push({ ...SEARCH_SKILLS_TOOL, _server: 'internal' });
         allTools.push({ ...GET_SKILL_TOOL, _server: 'internal' });
         allTools.push({ ...GET_SKILL_RESOURCE_TOOL, _server: 'internal' });
+        allTools.push({ ...LIST_TERMINAL_SESSIONS_TOOL, _server: 'internal' });
+        allTools.push({ ...GET_TERMINAL_SESSION_TOOL, _server: 'internal' });
+        allTools.push({ ...READ_TERMINAL_OUTPUT_TOOL, _server: 'internal' });
+        allTools.push({ ...STOP_TERMINAL_SESSION_TOOL, _server: 'internal' });
 
         // 3. Group by Server
         const groups: Record<string, { tools: any[], hidden_tools: string[] }> = {};
@@ -178,6 +237,7 @@ export class GatewayManager {
     private readonly WATCHDOG_TIMEOUT = 30 * 60 * 1000; // 30 minutes
     private onAutoStop: (() => void) | null = null;
     private skillManager: SkillManager;
+    private terminalSessionManager: TerminalSessionManager;
     private skillDirectories: string[] = [];
 
     constructor(outputChannel: vscode.OutputChannel, extensionPath: string, context: vscode.ExtensionContext, onAutoStop?: () => void) {
@@ -186,6 +246,7 @@ export class GatewayManager {
         this.context = context;
         this.onAutoStop = onAutoStop || null;
         this.skillManager = new SkillManager(outputChannel);
+        this.terminalSessionManager = new TerminalSessionManager(outputChannel);
         // [Persistence] Generate token once per VS Code session
         this.authToken = crypto.randomUUID();
     }
@@ -213,6 +274,53 @@ export class GatewayManager {
 
     invalidateSkillCache(reason?: string) {
         this.skillManager.invalidateCache(reason);
+    }
+
+    private resolveWorkspaceCwd(requestedCwd: unknown): string {
+        if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
+            throw new Error('A workspace folder is required to run terminal commands.');
+        }
+
+        const root = vscode.workspace.workspaceFolders[0].uri.fsPath;
+        if (!requestedCwd) {
+            return root;
+        }
+
+        const cwd = String(requestedCwd);
+        const resolved = path.isAbsolute(cwd) ? path.normalize(cwd) : path.resolve(root, cwd);
+        const relative = path.relative(root, resolved);
+        const isSubPath = relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+
+        if (!isSubPath) {
+            throw new Error(`Permission denied: cwd must stay inside the workspace (${root}).`);
+        }
+
+        return resolved;
+    }
+
+    private validateTerminalCommand(command: unknown, cwd: string) {
+        const commandLine = String(command || '').trim();
+        const parsed = parseCommandLine(commandLine);
+
+        if (!parsed.ok) {
+            throw new Error(`${parsed.reason} Allowed commands: ${formatAllowedCommands(process.platform)}`);
+        }
+
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || cwd;
+        const validation = validateParsedCommand(parsed.value, {
+            projectRoot: workspaceRoot,
+            platform: process.platform
+        });
+
+        if (!validation.valid) {
+            throw new Error(`${validation.reason} Allowed commands: ${formatAllowedCommands(process.platform)}`);
+        }
+
+        return {
+            commandLine,
+            execution: resolveExecutionPlan(parsed.value, process.platform, process.env),
+            env: { ...process.env } as NodeJS.ProcessEnv
+        };
     }
 
     async connectToServers(servers: Record<string, ServerConfig>) {
@@ -535,22 +643,41 @@ export class GatewayManager {
             }
 
             if (name === 'run_in_terminal') {
-                this.log(`   🚀 Executing: run_in_terminal ${args.command}`);
-                const termName = 'WebMCP';
-                let terminal = vscode.window.terminals.find(t => t.name === termName);
-                if (!terminal) {
-                    terminal = vscode.window.createTerminal(termName);
+                try {
+                    const cwd = this.resolveWorkspaceCwd(args?.cwd);
+                    const validated = this.validateTerminalCommand(args?.command, cwd);
+                    this.log(`   🚀 Executing: run_in_terminal ${validated.commandLine}`);
+
+                    const session = this.terminalSessionManager.createSession({
+                        commandLine: validated.commandLine,
+                        file: validated.execution.file,
+                        args: validated.execution.args,
+                        cwd,
+                        env: validated.env,
+                        autoFocus: args?.auto_focus !== false
+                    });
+
+                    this.log(`   ✅ Finished: run_in_terminal (${session.id})`);
+                    return res.json({
+                        content: [{
+                            type: 'text',
+                            text: JSON.stringify({
+                                session_id: session.id,
+                                name: session.name,
+                                status: session.status,
+                                cwd: session.cwd,
+                                command: session.command
+                            }, null, 2)
+                        }],
+                        isError: false
+                    });
+                } catch (error: any) {
+                    this.error('Terminal session start failed', error);
+                    return res.status(400).json({
+                        isError: true,
+                        content: [{ type: 'text', text: `Error: ${error.message}` }]
+                    });
                 }
-                if (args.auto_focus !== false) {
-                    terminal.show();
-                }
-                terminal.sendText(args.command);
-                
-                this.log(`   ✅ Finished: run_in_terminal (Async dispatch)`);
-                return res.json({
-                    content: [{ type: 'text', text: `Command sent to terminal '${termName}': ${args.command}` }],
-                    isError: false
-                });
             }
 
             if (name === 'get_tool_definitions') {
@@ -574,6 +701,14 @@ export class GatewayManager {
                         definitions.push(GET_SKILL_TOOL);
                     } else if (tName === 'get_skill_resource') {
                         definitions.push(GET_SKILL_RESOURCE_TOOL);
+                    } else if (tName === 'list_terminal_sessions') {
+                        definitions.push(LIST_TERMINAL_SESSIONS_TOOL);
+                    } else if (tName === 'get_terminal_session') {
+                        definitions.push(GET_TERMINAL_SESSION_TOOL);
+                    } else if (tName === 'read_terminal_output') {
+                        definitions.push(READ_TERMINAL_OUTPUT_TOOL);
+                    } else if (tName === 'stop_terminal_session') {
+                        definitions.push(STOP_TERMINAL_SESSION_TOOL);
                     }
                 }
 
@@ -659,6 +794,60 @@ export class GatewayManager {
                 } catch (error: any) {
                     this.error('Skill resource load failed', error);
                     return res.status(500).json({
+                        isError: true,
+                        content: [{ type: 'text', text: `Error: ${error.message}` }]
+                    });
+                }
+            }
+
+            if (name === 'list_terminal_sessions') {
+                const sessions = this.terminalSessionManager.listSessions();
+                return res.json({
+                    content: [{ type: 'text', text: JSON.stringify(sessions, null, 2) }],
+                    isError: false
+                });
+            }
+
+            if (name === 'get_terminal_session') {
+                try {
+                    const session = this.terminalSessionManager.getSession(String(args?.session_id || ''));
+                    return res.json({
+                        content: [{ type: 'text', text: JSON.stringify(session, null, 2) }],
+                        isError: false
+                    });
+                } catch (error: any) {
+                    return res.status(404).json({
+                        isError: true,
+                        content: [{ type: 'text', text: `Error: ${error.message}` }]
+                    });
+                }
+            }
+
+            if (name === 'read_terminal_output') {
+                try {
+                    const tailLines = typeof args?.tail_lines === 'number' ? args.tail_lines : 200;
+                    const result = this.terminalSessionManager.readSessionOutput(String(args?.session_id || ''), tailLines);
+                    return res.json({
+                        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+                        isError: false
+                    });
+                } catch (error: any) {
+                    return res.status(404).json({
+                        isError: true,
+                        content: [{ type: 'text', text: `Error: ${error.message}` }]
+                    });
+                }
+            }
+
+            if (name === 'stop_terminal_session') {
+                try {
+                    const session = this.terminalSessionManager.stopSession(String(args?.session_id || ''));
+                    return res.json({
+                        content: [{ type: 'text', text: JSON.stringify(session, null, 2) }],
+                        isError: false
+                    });
+                } catch (error: any) {
+                    return res.status(404).json({
                         isError: true,
                         content: [{ type: 'text', text: `Error: ${error.message}` }]
                     });
