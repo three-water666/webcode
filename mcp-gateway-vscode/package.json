@@ -93,6 +93,17 @@
                 ],
                 "default": "default",
                 "description": "Specific browser for this site (overrides global setting)"
+              },
+              "selectors": {
+                "type": "object",
+                "description": "DOM selectors for this AI site. Leave empty to use defaults for known sites.",
+                "properties": {
+                  "messageBlocks": { "type": "string" },
+                  "codeBlocks": { "type": "string" },
+                  "inputArea": { "type": "string" },
+                  "sendButton": { "type": "string" },
+                  "stopButton": { "type": "string" }
+                }
               }
             }
           }

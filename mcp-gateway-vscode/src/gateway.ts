@@ -64,6 +64,7 @@ interface Config {
     preferredPort?: number;
     mcpServers: Record<string, ServerConfig>;
     allowedOrigins: string[]; // [Security] Whitelist for CORS
+    aiSites?: any[]; // Dynamic sites from config
 }
 
 interface StartResult {
@@ -319,8 +320,25 @@ export class GatewayManager {
         // 4.1 核心配置与协议下发接口 (Initialization)
         this.app.get('/v1/init', (req, res) => {
             this.log('📥 Init Sync: Browser requested default rules and prompts');
+
+            // Generate syncedAiSites with merged selectors
+            const syncedAiSites = (config.aiSites || []).map(site => {
+                let defaultSelectors = {};
+                const address = site.address.toLowerCase();
+                if (address.includes('chatgpt.com') || address.includes('openai.com')) {defaultSelectors = DEFAULT_SELECTORS.chatgpt;}
+                else if (address.includes('gemini.google.com')) {defaultSelectors = DEFAULT_SELECTORS.gemini;}
+                else if (address.includes('aistudio.google.com')) {defaultSelectors = DEFAULT_SELECTORS.aistudio;}
+                else if (address.includes('deepseek.com')) {defaultSelectors = DEFAULT_SELECTORS.deepseek;}
+
+                return {
+                    ...site,
+                    selectors: { ...defaultSelectors, ...(site.selectors || {}) }
+                };
+            });
+
             res.json({
-                selectors: DEFAULT_SELECTORS,
+                selectors: DEFAULT_SELECTORS, // Keep for backward compatibility if needed
+                syncedAiSites: syncedAiSites,
                 prompts: PROMPTS
             });
         });

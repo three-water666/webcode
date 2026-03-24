@@ -9,6 +9,7 @@ interface AISiteConfig {
     address: string;
     showQuickLaunch?: boolean; // 可选，默认为 true
     browser?: string; // 新增：站点专属浏览器配置 (default, chrome, edge)
+    selectors?: Record<string, string>; // 新增：自定义选择器
 }
 
 // 定义统一的 QuickPickItem 接口，解决类型推断报错
@@ -69,7 +70,8 @@ export async function activate(context: vscode.ExtensionContext) {
                 port: portConfig,
                 preferredPort: lastUsedPort,
                 mcpServers,
-                allowedOrigins
+                allowedOrigins,
+                aiSites
             });
 
             currentPort = result.port;

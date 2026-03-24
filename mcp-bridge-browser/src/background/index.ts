@@ -5,7 +5,7 @@ import { Session, MessageRequest, HandshakeResponse } from '../types';
 // 初始化：设置默认状态
 chrome.runtime.onInstalled.addListener(async () => {
   // 初始化用户配置 (storage.sync)
-  const syncKeys = ["autoSend", "autoPromptEnabled", "customSelectors", "user_rules"];
+  const syncKeys = ["autoSend", "autoPromptEnabled", "user_rules"];
   const existingSync = await chrome.storage.sync.get(syncKeys);
   const syncToSet: Record<string, any> = {};
 
@@ -233,6 +233,7 @@ async function fetchInitDataFromGateway(port: number, token: string) {
       // Save pure defaults for Read-Only access in options or merging in content
       await chrome.storage.local.set({
         defaultSelectors: data.selectors,
+        syncedAiSites: data.syncedAiSites || [], // Save dynamically injected AI sites & selectors
         ...data.prompts // prompt_en, prompt_zh, train_en... etc.
       });
     }
