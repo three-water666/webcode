@@ -1,21 +1,5 @@
 import * as path from 'path';
 
-const CROSS_PLATFORM_COMMANDS = [
-  'npm', 'pnpm', 'yarn', 'bun', 'npx',
-  'git', 'svn',
-  'eslint', 'prettier', 'tsc',
-  'vite', 'webpack', 'rollup', 'esbuild', 'parcel',
-  'make', 'cmake', 'gradle', 'mvn', 'cargo', 'dotnet'
-] as const;
-
-const POSIX_ONLY_COMMANDS = [
-  'ls', 'cat', 'touch', 'grep', 'pwd', 'test'
-] as const;
-
-const WINDOWS_ONLY_COMMANDS = [
-  'where'
-] as const;
-
 const BLOCKED_PATH_FLAGS = [
   '-C', '--cwd', '--prefix', '--dir', '--git-dir', '--work-tree'
 ];
@@ -28,28 +12,32 @@ const BLOCKED_FLAG_PREFIXES = [
   '--work-tree='
 ];
 
-const WINDOWS_CMD_SHIMS = new Set([
-  'npm', 'pnpm', 'yarn', 'npx',
-  'eslint', 'prettier', 'tsc',
-  'vite', 'webpack', 'rollup', 'esbuild', 'parcel'
+const DIRECT_BLOCKED_COMMANDS = new Set([
+  'bash', 'sh', 'zsh', 'fish',
+  'cmd', 'powershell', 'pwsh',
+  'sudo', 'su',
+  'reg', 'sc', 'netsh',
+  'shutdown', 'reboot', 'halt', 'poweroff',
+  'format', 'diskpart',
+  'rm', 'rmdir', 'del', 'erase'
+]);
+
+const INTERPRETER_EVAL_FLAGS = new Map<string, string[]>([
+  ['python', ['-c']],
+  ['python3', ['-c']],
+  ['py', ['-c']],
+  ['node', ['-e', '--eval', '-p', '--print']],
+  ['deno', ['eval']],
+  ['ruby', ['-e']],
+  ['perl', ['-e']],
+  ['php', ['-r']],
+  ['bun', ['eval', '-e']]
 ]);
 
 export interface ParsedCommand {
   executable: string;
   args: string[];
   baseCommand: string;
-}
-
-export function getAllowedCommandsForPlatform(platform: NodeJS.Platform): Set<string> {
-  const commands = new Set<string>(CROSS_PLATFORM_COMMANDS);
-
-  if (platform === 'win32') {
-    WINDOWS_ONLY_COMMANDS.forEach((command) => commands.add(command));
-  } else {
-    POSIX_ONLY_COMMANDS.forEach((command) => commands.add(command));
-  }
-
-  return commands;
 }
 
 export function parseCommandLine(command: string): { ok: true; value: ParsedCommand } | { ok: false; reason: string } {
@@ -140,12 +128,18 @@ export function validateParsedCommand(
   parsed: ParsedCommand,
   options: { projectRoot: string; platform: NodeJS.Platform }
 ): { valid: true } | { valid: false; reason: string } {
-  const allowedCommands = getAllowedCommandsForPlatform(options.platform);
-
-  if (!allowedCommands.has(parsed.baseCommand)) {
+  if (DIRECT_BLOCKED_COMMANDS.has(parsed.baseCommand)) {
     return {
       valid: false,
-      reason: `Command "${parsed.baseCommand}" is not in the allowed whitelist for ${options.platform}.`
+      reason: `Blocked command "${parsed.baseCommand}" because it is a high-risk shell or system command.`
+    };
+  }
+
+  const blockedEvalFlags = INTERPRETER_EVAL_FLAGS.get(parsed.baseCommand);
+  if (blockedEvalFlags && parsed.args.some((arg) => blockedEvalFlags.includes(arg))) {
+    return {
+      valid: false,
+      reason: `Blocked command "${parsed.baseCommand}" because inline code execution flags are not allowed.`
     };
   }
 
@@ -185,7 +179,7 @@ export function validateParsedCommand(
       };
     }
 
-    if (options.platform === 'win32' && WINDOWS_CMD_SHIMS.has(parsed.baseCommand) && /[%!]/.test(arg)) {
+    if (options.platform === 'win32' && /[%!]/.test(arg)) {
       return {
         valid: false,
         reason: `Blocked Windows shell-expansion character in argument "${arg}".`
@@ -208,25 +202,29 @@ export function resolveExecutionPlan(
     };
   }
 
-  if (!WINDOWS_CMD_SHIMS.has(parsed.baseCommand)) {
+  if (hasWindowsExecutableExtension(parsed.executable) || hasPathSeparator(parsed.executable)) {
     return {
       file: parsed.executable,
       args: parsed.args
     };
   }
 
-  const commandFile = parsed.executable.endsWith('.cmd') || parsed.executable.endsWith('.bat')
-    ? parsed.executable
-    : `${parsed.executable}.cmd`;
-
   return {
     file: env.comspec || 'cmd.exe',
-    args: ['/d', '/s', '/c', buildWindowsCommandLine(commandFile, parsed.args)]
+    args: ['/d', '/s', '/c', buildWindowsCommandLine(parsed.executable, parsed.args)]
   };
 }
 
 export function formatAllowedCommands(platform: NodeJS.Platform): string {
-  return Array.from(getAllowedCommandsForPlatform(platform)).sort().join(', ');
+  return `single command only; workspace-scoped paths only; high-risk shell/system commands blocked on ${platform}`;
+}
+
+export function formatCommandPolicyError(reason: string): string {
+  if (isCommandChainingReason(reason)) {
+    return `${reason} This tool accepts exactly one command per call. Split chained workflows into multiple tool calls and execute them one command at a time.`;
+  }
+
+  return reason;
 }
 
 function detectUnsafeShellSyntax(command: string): { ok: true } | { ok: false; reason: string } {
@@ -275,8 +273,22 @@ function detectUnsafeShellSyntax(command: string): { ok: true } | { ok: false; r
   return { ok: true };
 }
 
+function isCommandChainingReason(reason: string): boolean {
+  return reason === 'Blocked shell control operator: newline'
+    || reason.startsWith('Blocked shell control operator:')
+    || reason === 'Blocked shell substitution syntax.';
+}
+
 function containsParentTraversal(arg: string): boolean {
   return /(^|[\\/])\.\.([\\/]|$)/.test(arg);
+}
+
+function hasPathSeparator(value: string): boolean {
+  return /[\\/]/.test(value);
+}
+
+function hasWindowsExecutableExtension(executable: string): boolean {
+  return /\.(exe|cmd|bat|com|ps1)$/i.test(executable);
 }
 
 function isSubPath(parent: string, child: string): boolean {

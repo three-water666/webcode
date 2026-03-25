@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { execFile } from 'child_process';
 import * as path from 'path';
 import {
+  formatCommandPolicyError,
   formatAllowedCommands,
   parseCommandLine,
   resolveExecutionPlan,
@@ -85,7 +86,7 @@ server.registerTool(
     if (!parsed.ok) {
       return {
         content: [
-          { type: 'text', text: `❌ Security Error: ${parsed.reason}\nAllowed commands: ${formatAllowedCommands(process.platform)}` },
+          { type: 'text', text: `❌ Security Error: ${formatCommandPolicyError(parsed.reason)}\nPolicy: ${formatAllowedCommands(process.platform)}` },
         ],
         isError: true,
       };
@@ -98,7 +99,7 @@ server.registerTool(
     if (!validation.valid) {
       return {
         content: [
-          { type: 'text', text: `❌ Security Error: ${validation.reason}\nAllowed commands: ${formatAllowedCommands(process.platform)}` },
+          { type: 'text', text: `❌ Security Error: ${validation.reason}\nPolicy: ${formatAllowedCommands(process.platform)}` },
         ],
         isError: true,
       };

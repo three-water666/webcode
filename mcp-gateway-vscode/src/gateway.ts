@@ -13,6 +13,7 @@ import { DEFAULT_SELECTORS, PROMPTS } from './defaults';
 import { SkillManager } from './skillManager';
 import { TerminalSessionManager } from './terminalSessionManager';
 import {
+    formatCommandPolicyError,
     formatAllowedCommands,
     parseCommandLine,
     resolveExecutionPlan,
@@ -303,7 +304,7 @@ export class GatewayManager {
         const parsed = parseCommandLine(commandLine);
 
         if (!parsed.ok) {
-            throw new Error(`${parsed.reason} Allowed commands: ${formatAllowedCommands(process.platform)}`);
+            throw new Error(`${formatCommandPolicyError(parsed.reason)} Policy: ${formatAllowedCommands(process.platform)}`);
         }
 
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || cwd;
@@ -313,7 +314,7 @@ export class GatewayManager {
         });
 
         if (!validation.valid) {
-            throw new Error(`${validation.reason} Allowed commands: ${formatAllowedCommands(process.platform)}`);
+            throw new Error(`${validation.reason} Policy: ${formatAllowedCommands(process.platform)}`);
         }
 
         return {

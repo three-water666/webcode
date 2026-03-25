@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import {
+  formatCommandPolicyError,
   formatAllowedCommands,
-  getAllowedCommandsForPlatform,
   parseCommandLine,
   resolveExecutionPlan,
   validateParsedCommand,
@@ -11,6 +11,12 @@ suite('Command Security', () => {
   test('rejects shell chaining syntax', () => {
     const result = parseCommandLine('git status && whoami');
     assert.strictEqual(result.ok, false);
+  });
+
+  test('formats chained-command errors with guidance', () => {
+    const message = formatCommandPolicyError('Blocked shell control operator: "&"');
+    assert.strictEqual(message.includes('exactly one command per call'), true);
+    assert.strictEqual(message.includes('one command at a time'), true);
   });
 
   test('parses quoted arguments without invoking shell', () => {
@@ -57,16 +63,40 @@ suite('Command Security', () => {
     assert.strictEqual(validation.valid, false);
   });
 
-  test('platform allowlist differs between windows and posix', () => {
-    const windowsAllowed = getAllowedCommandsForPlatform('win32');
-    const linuxAllowed = getAllowedCommandsForPlatform('linux');
+  test('blocks high-risk shell commands', () => {
+    const parsed = parseCommandLine('powershell -Command "Get-ChildItem"');
+    assert.strictEqual(parsed.ok, true);
 
-    assert.strictEqual(windowsAllowed.has('ls'), false);
-    assert.strictEqual(linuxAllowed.has('ls'), true);
+    if (!parsed.ok) {
+      return;
+    }
+
+    const validation = validateParsedCommand(parsed.value, {
+      projectRoot: 'C:/repo',
+      platform: 'win32'
+    });
+
+    assert.strictEqual(validation.valid, false);
   });
 
-  test('windows shim commands are wrapped through cmd.exe', () => {
-    const parsed = parseCommandLine('npm run build');
+  test('blocks interpreter inline evaluation flags', () => {
+    const parsed = parseCommandLine('node -e "console.log(1)"');
+    assert.strictEqual(parsed.ok, true);
+
+    if (!parsed.ok) {
+      return;
+    }
+
+    const validation = validateParsedCommand(parsed.value, {
+      projectRoot: 'C:/repo',
+      platform: 'win32'
+    });
+
+    assert.strictEqual(validation.valid, false);
+  });
+
+  test('windows bare commands are wrapped through cmd.exe', () => {
+    const parsed = parseCommandLine('agent-browser open https://example.com');
     assert.strictEqual(parsed.ok, true);
 
     if (!parsed.ok) {
@@ -76,12 +106,12 @@ suite('Command Security', () => {
     const execution = resolveExecutionPlan(parsed.value, 'win32', { comspec: 'C:/Windows/System32/cmd.exe' });
     assert.strictEqual(execution.file, 'C:/Windows/System32/cmd.exe');
     assert.strictEqual(execution.args[0], '/d');
-    assert.strictEqual(execution.args[3].startsWith('npm.cmd '), true);
+    assert.strictEqual(execution.args[3].startsWith('agent-browser '), true);
   });
 
-  test('allowed command list stays readable', () => {
+  test('policy summary stays readable', () => {
     const allowed = formatAllowedCommands('linux');
-    assert.strictEqual(allowed.includes('git'), true);
-    assert.strictEqual(allowed.includes('npm'), true);
+    assert.strictEqual(allowed.includes('single command only'), true);
+    assert.strictEqual(allowed.includes('workspace-scoped paths'), true);
   });
 });
