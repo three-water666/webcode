@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import { GatewayManager } from './gateway';
 import { exec } from 'child_process';
+import * as fs from 'fs';
 import * as os from 'os';
+import * as path from 'path';
 
 // 定义配置文件的 AI 站点结构
 interface AISiteConfig {
@@ -110,7 +112,7 @@ export async function activate(context: vscode.ExtensionContext) {
         const portConfig = config.get<number>('port') || 34567;
         const customServers = filterCustomServers(config.get<Record<string, BuiltinServerConfig>>('servers') || {}, outputChannel);
         const mcpServers = {
-            ...getBuiltinServers(context.extensionPath),
+            ...getBuiltinServers(context.extensionPath, outputChannel),
             ...customServers
         };
         const skillDirectories = config.get<string[]>('skillDirectories') || [];
@@ -341,12 +343,21 @@ export async function activate(context: vscode.ExtensionContext) {
     // Do not auto-start
 }
 
-function getBuiltinServers(extensionPath: string): Record<string, BuiltinServerConfig> {
+function getBuiltinServers(extensionPath: string, output: vscode.OutputChannel): Record<string, BuiltinServerConfig> {
+    const filesystemEntry = path.join(extensionPath, 'dist', 'filesystemServer.js');
+
+    if (!fs.existsSync(filesystemEntry)) {
+        output.appendLine(
+            `[Builtin] Missing bundled filesystem server at ${filesystemEntry}. ` +
+            `The extension package or build output is incomplete.`
+        );
+    }
+
     return {
         builtin_filesystem: {
             command: 'node',
             args: [
-                `${extensionPath}/node_modules/@modelcontextprotocol/server-filesystem/dist/index.js`,
+                filesystemEntry,
                 '.'
             ]
         },

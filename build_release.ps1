@@ -34,11 +34,21 @@ Set-Location "mcp-gateway-vscode"
 $json = Get-Content "package.json" -Raw | ConvertFrom-Json
 $vsVersion = $json.version
 $vsName = "WebMCP-Gateway-VSCode-$vsVersion.vsix"
+$vsReleasePath = Join-Path (Get-Location) "..\release\$vsName"
+$vsTempName = "WebMCP-Gateway-VSCode-$vsVersion.tmp.vsix"
+$vsTempPath = Join-Path (Get-Location) $vsTempName
 
-# Package (Use --no-dependencies to skip npm install check by vsce, as we use pnpm)
-cmd /c "pnpm exec vsce package --out ../release/$vsName --no-dependencies"
+# Package to a temp file inside the extension folder first, then move into release.
+if (Test-Path $vsTempPath) {
+    Remove-Item $vsTempPath -Force
+}
+cmd /c "pnpm exec vsce package --out $vsTempName --no-dependencies"
 
 if ($LASTEXITCODE -eq 0) {
+    if (Test-Path $vsReleasePath) {
+        Remove-Item $vsReleasePath -Force
+    }
+    Move-Item $vsTempPath $vsReleasePath -Force
     Write-Host "[OK] VS Code Extension built: release\$vsName" -ForegroundColor Green
 } else {
     Write-Host "[ERROR] VS Code Extension build failed" -ForegroundColor Red
@@ -68,15 +78,24 @@ if ($LASTEXITCODE -ne 0) {
 # Zip 'dist' folder content
 $distPath = Join-Path (Get-Location) "dist"
 $releasePath = Join-Path (Get-Location) "..\release\$browserName"
+$tempZipPath = Join-Path (Get-Location) $browserName
 
 Write-Host "[*] Zipping dist folder to $browserName..." -ForegroundColor Cyan
 
 # Use built-in tar.exe to create a zip file with proper forward slash path separators
 # Note: Chromium-based browsers require forward slashes in extension zip files.
 # PowerShell's Compress-Archive uses backslashes which breaks the extension loading.
+if (Test-Path $tempZipPath) {
+    Remove-Item $tempZipPath -Force
+}
 Push-Location $distPath
-tar.exe -a -c -f "$releasePath" *
+tar.exe -a -c -f "$tempZipPath" *
 Pop-Location
+
+if (Test-Path $releasePath) {
+    Remove-Item $releasePath -Force
+}
+Move-Item $tempZipPath $releasePath -Force
 
 if (Test-Path $releasePath) {
     Write-Host "[OK] Browser Extension built: release\$browserName" -ForegroundColor Green
