@@ -4,6 +4,7 @@ import { exec } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { t } from './i18n';
 
 // 定义配置文件的 AI 站点结构
 interface AISiteConfig {
@@ -44,7 +45,7 @@ let isRunning = false;
 let skillWatchers: vscode.Disposable[] = [];
 
 export async function activate(context: vscode.ExtensionContext) {
-    outputChannel = vscode.window.createOutputChannel("MCP Gateway");
+    outputChannel = vscode.window.createOutputChannel(t('output_channel_name'));
     // outputChannel.show(true); // 静默启动，不自动弹出面板
     outputChannel.appendLine("🚀 MCP Gateway Extension Activating...");
 
@@ -52,7 +53,7 @@ export async function activate(context: vscode.ExtensionContext) {
         // Auto-stop callback
         isRunning = false;
         updateStatusBar(false);
-        vscode.window.showInformationMessage("WebMCP Server stopped due to inactivity (30m).");
+        vscode.window.showInformationMessage(t('auto_stop_message'));
         outputChannel.appendLine("💤 Auto-shutdown triggered due to inactivity.");
     });
 
@@ -150,7 +151,7 @@ export async function activate(context: vscode.ExtensionContext) {
             updateStatusBar(true, currentPort);
 
         } catch (e: any) {
-            vscode.window.showErrorMessage(`Failed to start MCP Gateway: ${e.message}`);
+            vscode.window.showErrorMessage(t('start_failed', { message: e.message }));
             isStarting = false;
             isRunning = false;
             updateStatusBar(false);
@@ -164,7 +165,7 @@ export async function activate(context: vscode.ExtensionContext) {
         currentPort = null;
         currentToken = null;
         updateStatusBar(false);
-        vscode.window.showInformationMessage("WebMCP Server Stopped");
+        vscode.window.showInformationMessage(t('server_stopped'));
     };
 
     // Command: Copy Context (File Path + Selection)
@@ -187,7 +188,7 @@ export async function activate(context: vscode.ExtensionContext) {
         const contentWithContext = `File: ${filePath}\n\n${text}`;
 
         await vscode.env.clipboard.writeText(contentWithContext);
-        vscode.window.setStatusBarMessage(`✅ Context copied: ${filePath}`, 3000);
+        vscode.window.setStatusBarMessage(t('context_copied', { filePath }), 3000);
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand('mcp-gateway.connect', async () => {
@@ -200,14 +201,14 @@ export async function activate(context: vscode.ExtensionContext) {
         // 2. Case: Offline -> Show Start Option
         if (!isRunning) {
             const items: CustomActionItem[] = [
-                { label: '$(play) Turn On WebMCP', description: 'Start the local MCP server', action: 'start' },
-                { label: '$(output) View Logs', description: 'Show output panel', action: 'showLogs' },
-                { label: '$(settings-gear) Configure', description: 'Open settings', action: 'settings' }
+                { label: t('offline_start_label'), description: t('offline_start_desc'), action: 'start' },
+                { label: t('view_logs_label'), description: t('view_logs_desc'), action: 'showLogs' },
+                { label: t('configure_label'), description: t('configure_desc'), action: 'settings' }
             ];
             
             const selection = await vscode.window.showQuickPick(items, {
-                placeHolder: 'WebMCP is Offline',
-                title: 'WebMCP Manager'
+                placeHolder: t('offline_placeholder'),
+                title: t('manager_title')
             });
             
             if (!selection) {return;}
@@ -238,7 +239,7 @@ export async function activate(context: vscode.ExtensionContext) {
         const quickLaunchItems: CustomActionItem[] = aiSites
             .filter(site => site.showQuickLaunch === true)
             .map(site => ({
-                label: `$(globe) Open ${site.name}`,
+                label: t('open_label', { name: site.name }),
                 description: site.address.replace(/^https?:\/\//, ''),
                 target: site.address,
             }));
@@ -246,16 +247,16 @@ export async function activate(context: vscode.ExtensionContext) {
         // 3. 准备完整的 QuickPick 列表
         const items: CustomActionItem[] = [
             ...quickLaunchItems,
-            { label: '$(run) Custom Launch...', description: 'Select AI and Browser manually', action: 'custom' },
-            { label: '$(output) View Logs', description: 'Show MCP Gateway output panel', action: 'showLogs' },
-            { label: '$(settings-gear) Configure Gateway', description: 'Quick access to MCP Gateway settings', action: 'settings' },
-            { label: '$(refresh) Restart Server', description: 'Restart local gateway', action: 'restart' },
-            { label: '$(stop) Turn Off WebMCP', description: 'Stop the local server', action: 'stop' }
+            { label: t('custom_launch_label'), description: t('custom_launch_desc'), action: 'custom' },
+            { label: t('view_logs_label'), description: t('view_gateway_logs_desc'), action: 'showLogs' },
+            { label: t('configure_gateway_label'), description: t('configure_gateway_desc'), action: 'settings' },
+            { label: t('restart_label'), description: t('restart_desc'), action: 'restart' },
+            { label: t('stop_label'), description: t('stop_desc'), action: 'stop' }
         ];
 
         const selection = await vscode.window.showQuickPick<CustomActionItem>(items, {
-            placeHolder: 'Select AI Platform or Action',
-            title: `WebMCP (Port: ${currentPort})`
+            placeHolder: t('online_placeholder'),
+            title: t('online_title', { port: currentPort })
         });
 
         if (!selection) { return; }
@@ -277,7 +278,7 @@ export async function activate(context: vscode.ExtensionContext) {
             outputChannel.appendLine("🔄 Manual restart triggered.");
             await manager.stop();
             await startService();
-            vscode.window.showInformationMessage("Server Restarted");
+            vscode.window.showInformationMessage(t('server_restarted'));
             return;
         }
 
@@ -297,17 +298,17 @@ export async function activate(context: vscode.ExtensionContext) {
             }));
 
             const aiSelection = await vscode.window.showQuickPick<CustomActionItem>(aiOptionsForCustomLaunch, {
-                placeHolder: 'Step 1: Select AI Platform'
+                placeHolder: t('custom_step1')
             });
             if (!aiSelection) { return; }
 
             const browserOptions: CustomActionItem[] = [
-                { label: '$(browser) Google Chrome', value: 'chrome' },
-                { label: '$(browser) Microsoft Edge', value: 'edge' },
-                { label: '$(terminal) System Default', value: 'default' }
+                { label: t('browser_chrome'), value: 'chrome' },
+                { label: t('browser_edge'), value: 'edge' },
+                { label: t('browser_default'), value: 'default' }
             ];
             const browserSelection = await vscode.window.showQuickPick<CustomActionItem>(browserOptions, {
-                placeHolder: `Step 2: Open ${aiSelection.label.replace('$(globe) ', '')} in...`
+                placeHolder: t('custom_step2', { name: aiSelection.label.replace('$(globe) ', '') })
             });
             if (!browserSelection) { return; }
 
@@ -416,17 +417,17 @@ function launchBridge(targetUrl: string, browserMode: string) {
 
 function updateStatusBar(online: boolean, port?: number, isLoading: boolean = false) {
     if (isLoading) {
-        statusBarItem.text = `$(sync~spin) WebMCP: Starting...`;
-        statusBarItem.tooltip = "Gateway is initializing...";
+        statusBarItem.text = t('status_starting');
+        statusBarItem.tooltip = t('status_starting_tooltip');
         statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
     } else if (online && port) {
         statusBarItem.text = `$(rocket) WebMCP: ${port}`;
-        statusBarItem.tooltip = "Click to connect AI";
+        statusBarItem.tooltip = t('status_online_tooltip');
         statusBarItem.backgroundColor = undefined;
     } else {
         // Default OFF state
-        statusBarItem.text = `$(circle-slash) WebMCP: OFF`;
-        statusBarItem.tooltip = "Click to Start WebMCP Server";
+        statusBarItem.text = t('status_offline');
+        statusBarItem.tooltip = t('status_offline_tooltip');
         statusBarItem.backgroundColor = undefined;
     }
     statusBarItem.show();
@@ -465,7 +466,7 @@ function openBrowser(url: string, browserType: string) {
     if (command) {
         exec(command, (err) => {
             if (err) {
-                vscode.window.showErrorMessage(`Failed to open browser: ${err.message}`);
+                vscode.window.showErrorMessage(t('open_browser_failed', { message: err.message }));
             }
         });
     } else {
