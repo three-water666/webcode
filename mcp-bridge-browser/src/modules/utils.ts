@@ -60,6 +60,7 @@ const LOG_MSGS: Record<string, { en: string; zh: string }> = {
   label_tool: { en: "Tool Name", zh: "工具名称" },
   label_purpose: { en: "Purpose", zh: "操作意图" },
   label_args: { en: "Arguments", zh: "调用参数" },
+  label_rule_key: { en: "Rule Key", zh: "匹配规则" },
   placeholder_reason: { en: "Reason for rejection (Optional)...", zh: "拒绝理由 (可选)..." },
   
   btn_always: { en: "⚡ Always Allow", zh: "⚡ 永久允许" },
@@ -68,10 +69,21 @@ const LOG_MSGS: Record<string, { en: string; zh: string }> = {
   btn_reject_confirm: { en: "Confirm Rejection", zh: "确认拒绝" },
   btn_approve: { en: "Approve", zh: "允许" },
   btn_allow_confirm: { en: "Confirm Allow", zh: "确认永久允许" },
+  btn_allow_exact: { en: "Allow Exact Command", zh: "允许精确命令" },
+  btn_allow_executable: { en: "Allow Executable", zh: "允许可执行文件" },
+  btn_allow_prefix: { en: "Allow Prefix", zh: "允许命令前缀" },
 
   always_title: { en: "Remove Protection?", zh: "移除保护？" },
   always_desc_1: { en: "You are about to permanently allow", zh: "您即将把以下工具移出保护名单：" },
-  always_desc_2: { en: "Future calls will execute automatically without approval.", zh: "今后 AI 调用此工具将不再经过人工审批。" }
+  always_desc_2: { en: "Future calls will execute automatically without approval.", zh: "今后 AI 调用此工具将不再经过人工审批。" },
+  cmd_always_title: { en: "Allow This Command Permanently?", zh: "永久允许这条命令？" },
+  cmd_always_desc: { en: "Choose the permanent approval scope for this command in the current workspace.", zh: "为当前工作区的这条命令选择永久授权范围。" },
+  cmd_scope_exact_title: { en: "Exact Command", zh: "精确命令" },
+  cmd_scope_exact_desc: { en: "Only this normalized command will be auto-approved.", zh: "只有这条归一化后的命令会被自动放行。" },
+  cmd_scope_executable_title: { en: "Executable", zh: "可执行文件" },
+  cmd_scope_executable_desc: { en: "Any command for this tool whose executable matches this value will be auto-approved.", zh: "此工具下，只要可执行文件匹配该值的命令都会被自动放行。" },
+  cmd_scope_prefix_title: { en: "Command Prefix", zh: "命令前缀" },
+  cmd_scope_prefix_desc: { en: "Any command starting with this normalized prefix will be auto-approved.", zh: "只要以这个归一化前缀开头的命令都会被自动放行。" }
 };
 
 export function t(key: string): string {

@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import { GatewayManager } from './gateway';
 import { exec } from 'child_process';
+import * as fs from 'fs';
 import * as os from 'os';
+import * as path from 'path';
 
 // 定义配置文件的 AI 站点结构
 interface AISiteConfig {
@@ -19,6 +21,18 @@ interface CustomActionItem extends vscode.QuickPickItem {
     action?: string; // 特殊动作
     value?: string; // 用于浏览器选择
 }
+
+interface BuiltinServerConfig {
+    type?: 'stdio' | 'sse' | 'http';
+    command?: string;
+    args?: string[];
+    url?: string;
+    headers?: Record<string, string>;
+    env?: Record<string, string>;
+    disabled?: boolean;
+}
+
+const LEGACY_BUILTIN_SERVER_IDS = new Set(['filesystem', 'command', 'builtin_filesystem', 'builtin_command']);
 
 let manager: GatewayManager;
 let outputChannel: vscode.OutputChannel;
@@ -96,7 +110,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
         const config = vscode.workspace.getConfiguration('mcpGateway');
         const portConfig = config.get<number>('port') || 34567;
-        const mcpServers = config.get<any>('servers') || {};
+        const customServers = filterCustomServers(config.get<Record<string, BuiltinServerConfig>>('servers') || {}, outputChannel);
+        const mcpServers = {
+            ...getBuiltinServers(context.extensionPath, outputChannel),
+            ...customServers
+        };
         const skillDirectories = config.get<string[]>('skillDirectories') || [];
         const lastUsedPort = context.workspaceState.get<number>('mcp.lastPort');
 
@@ -323,6 +341,52 @@ export async function activate(context: vscode.ExtensionContext) {
     // Initialize in OFF state
     updateStatusBar(false, undefined, false);
     // Do not auto-start
+}
+
+function getBuiltinServers(extensionPath: string, output: vscode.OutputChannel): Record<string, BuiltinServerConfig> {
+    const filesystemEntry = path.join(extensionPath, 'dist', 'filesystemServer.js');
+
+    if (!fs.existsSync(filesystemEntry)) {
+        output.appendLine(
+            `[Builtin] Missing bundled filesystem server at ${filesystemEntry}. ` +
+            `The extension package or build output is incomplete.`
+        );
+    }
+
+    return {
+        builtin_filesystem: {
+            command: 'node',
+            args: [
+                filesystemEntry,
+                '.'
+            ]
+        },
+        builtin_command: {
+            command: 'node',
+            args: [
+                `${extensionPath}/dist/commandServer.js`,
+                '--project-root',
+                '.'
+            ]
+        }
+    };
+}
+
+function filterCustomServers(
+    servers: Record<string, BuiltinServerConfig>,
+    output: vscode.OutputChannel
+): Record<string, BuiltinServerConfig> {
+    const filtered = Object.fromEntries(
+        Object.entries(servers).filter(([serverId]) => {
+            if (LEGACY_BUILTIN_SERVER_IDS.has(serverId)) {
+                output.appendLine(`[Builtin] Ignoring legacy built-in server config '${serverId}'. Built-in servers are now managed automatically.`);
+                return false;
+            }
+            return true;
+        })
+    );
+
+    return filtered;
 }
 
 function launchBridge(targetUrl: string, browserMode: string) {

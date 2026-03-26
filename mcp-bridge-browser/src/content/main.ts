@@ -2,6 +2,7 @@ import { Logger, i18n, t } from "../modules/utils";
 import * as UI from "../modules/ui";
 import { DEFAULT_SELECTORS, SiteSelectors } from "../modules/config";
 import { ToolExecutionPayload } from "../types";
+import type { CommandApprovalScope } from "../modules/ui";
 
 // === 配置与状态 ===
 interface ConfigState {
@@ -22,8 +23,10 @@ let currentWorkspaceId = "global";
 
 let userRules = ""; // [User Rules]
 let allowedTools = new Set<string>();
+let allowedCommandRules = new Set<string>();
 const confirmationQueue: ToolExecutionPayload[] = [];
 let isPopupOpen = false;
+const COMMAND_APPROVAL_TOOLS = new Set(["execute_command", "run_in_terminal"]);
 
 // === 加载资源 (Prompt/Hints) ===
 const lang = i18n.lang;
@@ -47,7 +50,21 @@ function loadPromptsFromStorage(): Promise<void> {
 function loadWorkspaceData(workspaceId: string): Promise<void> {
   return new Promise((resolve) => {
     chrome.storage.local.get([`allowed_tools_${workspaceId}`], (localItems) => {
-      allowedTools = new Set(localItems[`allowed_tools_${workspaceId}`] || []);
+      const rawEntries = localItems[`allowed_tools_${workspaceId}`] || [];
+      allowedTools = new Set<string>();
+      allowedCommandRules = new Set<string>();
+
+      for (const entry of rawEntries) {
+        if (typeof entry !== "string") {continue;}
+        if (entry.startsWith("command:")) {
+          allowedCommandRules.add(upgradeLegacyCommandRule(entry));
+        } else if (entry.startsWith("tool:")) {
+          allowedTools.add(entry.slice("tool:".length));
+        } else {
+          allowedTools.add(entry);
+        }
+      }
+
       resolve();
     });
   });
@@ -155,7 +172,19 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
   }
   if (namespace === "local") {
     if (changes[`allowed_tools_${currentWorkspaceId}`]) {
-      allowedTools = new Set(changes[`allowed_tools_${currentWorkspaceId}`].newValue || []);
+      const rawEntries = changes[`allowed_tools_${currentWorkspaceId}`].newValue || [];
+      allowedTools = new Set<string>();
+      allowedCommandRules = new Set<string>();
+      for (const entry of rawEntries) {
+        if (typeof entry !== "string") {continue;}
+        if (entry.startsWith("command:")) {
+          allowedCommandRules.add(upgradeLegacyCommandRule(entry));
+        } else if (entry.startsWith("tool:")) {
+          allowedTools.add(entry.slice("tool:".length));
+        } else {
+          allowedTools.add(entry);
+        }
+      }
       Logger.log(`Allowed tools updated (Workspace: ${currentWorkspaceId})`, "action");
     }
     if (changes.syncedAiSites) {
@@ -460,7 +489,7 @@ function executeTool(payload: ToolExecutionPayload) {
     return;
   }
 
-  if (!allowedTools.has(payload.name)) {
+  if (!isPayloadApproved(payload)) {
     Logger.log(`${t("hitl_intercept")}: ${payload.name}`, "warn");
     (payload as any).request_id = (payload as any).request_id || "unknown_id";
     confirmationQueue.push(payload);
@@ -572,7 +601,7 @@ function processConfirmationQueue() {
 
   UI.showConfirmationModal(
     payload,
-    (isAlways) => {
+    (scope) => {
       confirmationQueue.shift();
       isPopupOpen = false;
       if (DOM) {
@@ -580,13 +609,13 @@ function processConfirmationQueue() {
         if (inputEl) { inputEl.focus(); }
       }
 
-      if (isAlways) {
-        allowedTools.add(payload.name);
+      if (scope) {
+        persistApprovalRule(payload, scope);
         const key = `allowed_tools_${currentWorkspaceId}`;
         chrome.storage.local.set({
-          [key]: Array.from(allowedTools),
+          [key]: buildStoredApprovalEntries(),
         });
-        Logger.log(`⚡ Tool '${payload.name}' set to Always Allow in this workspace`, "action");
+        Logger.log(`⚡ Approval saved for '${getApprovalLabel(payload, scope)}' in this workspace`, "action");
       }
 
       performExecution(payload);
@@ -609,4 +638,144 @@ function processConfirmationQueue() {
       processConfirmationQueue();
     }
   );
+}
+
+function isPayloadApproved(payload: ToolExecutionPayload): boolean {
+  if (!COMMAND_APPROVAL_TOOLS.has(payload.name)) {
+    return allowedTools.has(payload.name);
+  }
+
+  return getCommandApprovalRules(payload).some((rule) => allowedCommandRules.has(rule));
+}
+
+function persistApprovalRule(payload: ToolExecutionPayload, scope: Exclude<CommandApprovalScope, false>) {
+  if (!COMMAND_APPROVAL_TOOLS.has(payload.name)) {
+    allowedTools.add(payload.name);
+    return;
+  }
+
+  const commandRule = getCommandApprovalRule(payload, scope);
+  if (commandRule) {
+    allowedCommandRules.add(commandRule);
+  }
+}
+
+function buildStoredApprovalEntries(): string[] {
+  return [
+    ...Array.from(allowedTools).sort().map((toolName) => `tool:${toolName}`),
+    ...Array.from(allowedCommandRules).sort(),
+  ];
+}
+
+function getCommandApprovalRules(payload: ToolExecutionPayload): string[] {
+  const exact = getCommandApprovalRule(payload, 'exact');
+  const executable = getCommandApprovalRule(payload, 'executable');
+  const prefix = getCommandApprovalRule(payload, 'prefix');
+  return [exact, executable, prefix].filter((value): value is string => !!value);
+}
+
+function getCommandApprovalRule(payload: ToolExecutionPayload, scope: Exclude<CommandApprovalScope, false>): string | null {
+  const command = normalizeCommandValue(payload.arguments?.command);
+  if (!command) {return null;}
+
+  if (scope === 'exact') {
+    return `command-exact:${payload.name}:${command}`;
+  }
+
+  const executable = getNormalizedCommandExecutable(command);
+  if (!executable) {return null;}
+
+  if (scope === 'executable') {
+    return `command-executable:${payload.name}:${executable}`;
+  }
+
+  const prefix = getNormalizedCommandPrefix(command);
+  return prefix ? `command-prefix:${payload.name}:${prefix}` : null;
+}
+
+function getApprovalLabel(payload: ToolExecutionPayload, scope: Exclude<CommandApprovalScope, false> = 'exact'): string {
+  const command = normalizeCommandValue(payload.arguments?.command);
+  if (COMMAND_APPROVAL_TOOLS.has(payload.name) && command) {
+    const rule = getCommandApprovalRule(payload, scope);
+    return rule ? `${payload.name} -> ${rule}` : `${payload.name} -> ${command}`;
+  }
+  return payload.name;
+}
+
+function normalizeCommandValue(command: unknown): string | null {
+  if (typeof command !== "string") {return null;}
+  const normalized = command.trim().replace(/\s+/g, " ");
+  return normalized || null;
+}
+
+function getNormalizedCommandExecutable(command: string): string | null {
+  const tokens = tokenizeCommandLine(command);
+  return tokens[0] || null;
+}
+
+function getNormalizedCommandPrefix(command: string): string | null {
+  const tokens = tokenizeCommandLine(command);
+  if (tokens.length === 0) {return null;}
+  if (tokens.length === 1) {return tokens[0];}
+  return `${tokens[0]} ${tokens[1]}`;
+}
+
+function tokenizeCommandLine(command: string): string[] {
+  const tokens: string[] = [];
+  let current = "";
+  let quote: '"' | "'" | null = null;
+  let escaping = false;
+
+  for (let i = 0; i < command.length; i += 1) {
+    const char = command[i];
+
+    if (escaping) {
+      current += char;
+      escaping = false;
+      continue;
+    }
+
+    if (char === "\\" && quote !== "'") {
+      escaping = true;
+      continue;
+    }
+
+    if (quote) {
+      if (char === quote) {
+        quote = null;
+      } else {
+        current += char;
+      }
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+
+    if (/\s/.test(char)) {
+      if (current) {
+        tokens.push(current);
+        current = "";
+      }
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (current) {
+    tokens.push(current);
+  }
+
+  return tokens;
+}
+
+function upgradeLegacyCommandRule(entry: string): string {
+  if (!entry.startsWith("command:")) {
+    return entry;
+  }
+
+  return entry.replace(/^command:/, "command-exact:");
 }

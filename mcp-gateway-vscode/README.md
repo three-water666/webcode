@@ -12,7 +12,7 @@
 ## ✨ Core Features
 * **Zero-Config Connection**: Automatically finds available ports, no manual setup required.
 * **Secure Bridging**: Uses a one-time Token mechanism to ensure secure communication between the browser and the editor.
-* **Tool Exposure**: Standardizes local filesystem operations and terminal commands as MCP tools for the AI.
+* **Built-in Local Tools**: Filesystem access and command execution are provided by the extension out of the box, without extra server setup in settings.
 * **Workspace Skills**: Discovers local `SKILL.md` workflows in the current workspace and exposes them through progressive-loading tools.
 
 ## ⚙️ Installation & Usage
@@ -37,6 +37,14 @@ Each folder containing `SKILL.md` is exposed as a local skill. The model can the
 - `get_skill_resource`
 
 You can override the scan paths with the setting `mcpGateway.skillDirectories`.
+
+### Additional MCP Servers
+
+The setting `mcpGateway.servers` is now only for optional third-party MCP servers.
+
+- Built-in filesystem access is launched from the extension's bundled local dependency, without using `npx`.
+- Built-in command execution is enabled automatically.
+- Legacy `filesystem` / `command` entries in user settings are ignored.
 
 ## ❓ FAQ
 
