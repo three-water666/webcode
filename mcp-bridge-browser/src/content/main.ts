@@ -8,13 +8,11 @@ import type { CommandApprovalScope } from "../modules/ui";
 interface ConfigState {
   pollInterval: number;
   autoSend: boolean;
-  autoPromptEnabled: boolean;
 }
 
 let CONFIG: ConfigState = {
   pollInterval: 1000,
   autoSend: true,
-  autoPromptEnabled: false,
 };
 
 // [State] Connection Guard
@@ -121,10 +119,9 @@ let currentPlatform: string | null = null;
 
 function initDOMConfig() {
   chrome.storage.sync.get(
-    ["autoSend", "autoPromptEnabled", "user_rules"],
+    ["autoSend", "user_rules"],
     (items) => {
       CONFIG.autoSend = items.autoSend ?? true;
-      CONFIG.autoPromptEnabled = items.autoPromptEnabled ?? false;
       if (items.user_rules) { userRules = items.user_rules; }
 
       chrome.storage.local.get(["syncedAiSites"], (localItems) => {
@@ -167,7 +164,6 @@ function initDOMConfig() {
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === "sync") {
     if (changes.autoSend) { CONFIG.autoSend = changes.autoSend.newValue; }
-    if (changes.autoPromptEnabled) { CONFIG.autoPromptEnabled = changes.autoPromptEnabled.newValue; }
     if (changes.user_rules) { userRules = changes.user_rules.newValue; }
   }
   if (namespace === "local") {
@@ -228,24 +224,7 @@ function runMainLoop() {
   if (!DOM || !isClientConnected) { return; }
   // 所有大模型的消息块
   const messages = document.querySelectorAll(DOM.messageBlocks);
-  if (messages.length === 0) {
-    // Auto Prompt
-    const inputEl = document.querySelector(DOM.inputArea) as HTMLElement;
-    if (
-      inputEl &&
-      CONFIG.autoPromptEnabled &&
-      (inputEl.textContent || "").trim() === ""
-    ) {
-      if (i18n.resources.prompt) {
-        let finalPrompt = i18n.resources.prompt;
-        if (userRules) { finalPrompt += `\n\n=== User Rules ===\n${userRules}`; }
-        inputEl.innerText = finalPrompt;
-        inputEl.dispatchEvent(new Event("input", { bubbles: true }));
-        Logger.log(t("auto_filled"), "action");
-      }
-    }
-    return;
-  }
+  if (messages.length === 0) { return; }
 
   // 只处理最后一次大模型返回的消息块
   const lastMessage = messages[messages.length - 1];
