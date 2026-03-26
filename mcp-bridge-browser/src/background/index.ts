@@ -5,12 +5,11 @@ import { Session, MessageRequest, HandshakeResponse } from '../types';
 // 初始化：设置默认状态
 chrome.runtime.onInstalled.addListener(async () => {
   // 初始化用户配置 (storage.sync)
-  const syncKeys = ["autoSend", "autoPromptEnabled", "user_rules"];
+  const syncKeys = ["autoSend", "user_rules"];
   const existingSync = await chrome.storage.sync.get(syncKeys);
   const syncToSet: Record<string, any> = {};
 
   if (existingSync.autoSend === undefined) {syncToSet.autoSend = true;}
-  if (existingSync.autoPromptEnabled === undefined) {syncToSet.autoPromptEnabled = false;}
 
   if (Object.keys(syncToSet).length > 0) {
       await chrome.storage.sync.set(syncToSet);

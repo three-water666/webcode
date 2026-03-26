@@ -93,25 +93,24 @@
   <body>
     <h2>
       <div class="status-dot" id="statusDot"></div>
-      WebMCP Bridge
+      <span id="title">WebMCP Bridge</span>
     </h2>
 
     <div id="connectedView" class="hidden">
       <div class="card">
-        <p style="margin-bottom: 8px">✅ Connected to VS Code</p>
+        <p id="connectedText" style="margin-bottom: 8px">✅ Connected to VS Code</p>
         <p style="font-size: 11px; opacity: 0.7">
-          Port: <span id="portDisplay">-</span>
+          <span id="portLabel">Port</span>: <span id="portDisplay">-</span>
         </p>
       </div>
-      <button id="copyPromptBtn" class="btn">Copy System Prompt</button>
-      <button id="copyInitBtn" class="btn secondary" title="Use /webmcp in chat after setting this in Custom Instructions">Copy /webmcp Init Prompt</button>
+      <button id="copyInitBtn" class="btn" title="Add this to your AI memory, preferences, or custom instructions">Copy Initialization Prompt</button>
       <button id="openOptionsBtn" class="btn secondary">Open Settings</button>
       <div class="card" style="margin-top: 10px">
         <label class="checkbox-row">
-          <input type="checkbox" id="autoSend" checked /> Auto Send Message
+          <input type="checkbox" id="autoSend" checked /> <span id="autoSendLabel">Auto Send Message</span>
         </label>
         <label class="checkbox-row">
-          <input type="checkbox" id="showLog" /> Show Floating Log
+          <input type="checkbox" id="showLog" /> <span id="showLogLabel">Show Floating Log</span>
         </label>
       </div>
     </div>
@@ -119,6 +118,7 @@
     <div id="availableView" class="hidden">
       <div class="card" style="border: 1px solid #3498db">
         <h3
+          id="availableGateways"
           style="
             color: #3498db;
             margin: 0 0 10px 0;
@@ -137,6 +137,7 @@
     <div id="disconnectedView">
       <div class="card" style="padding: 15px 10px; border: 1px solid #555">
         <h3
+          id="disconnectedTitle"
           style="
             color: #e74c3c;
             margin: 0 0 10px 0;
@@ -162,9 +163,9 @@
               margin-bottom: 5px;
             "
           >
-            👉 Already Installed?
+            <span id="installedTitle">👉 Already Installed?</span>
           </p>
-          <p style="font-size: 11px; color: #ccc; line-height: 1.4">
+          <p id="installedDesc" style="font-size: 11px; color: #ccc; line-height: 1.4">
             Click
             <span style="color: #3498db; font-weight: bold">WebMCP</span> in VS
             Code Status Bar (bottom right) and follow the steps to launch.
@@ -180,7 +181,7 @@
               margin-bottom: 5px;
             "
           >
-            👉 Not Installed?
+            <span id="notInstalledTitle">👉 Not Installed?</span>
           </p>
           <div
             style="
@@ -190,7 +191,7 @@
               margin: 5px 0;
             "
           >
-            <p style="font-size: 10px; color: #888; margin-bottom: 2px">
+            <p id="marketplaceHint" style="font-size: 10px; color: #888; margin-bottom: 2px">
               Search in VS Code Marketplace:
             </p>
             <p style="font-weight: bold; color: #4caf50; font-size: 12px">

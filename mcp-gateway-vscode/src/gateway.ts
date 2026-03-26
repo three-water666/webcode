@@ -560,33 +560,59 @@ export class GatewayManager {
                 <body>
                     <div class="card" id="main-card">
                         <div class="loader" id="loader"></div>
-                        <h2>Connecting to WebMCP...</h2>
-                        <p>Synchronizing with VS Code...</p>
+                        <h2 id="bridge-title">Connecting to WebMCP...</h2>
+                        <p id="bridge-status">Synchronizing with VS Code...</p>
                     </div>
 
                     <div id="mcp-data" data-port="${port}" data-token="${token}" data-target="${target}" data-workspace-id="${workspaceId}" style="display:none;"></div>
 
                     <div class="card" id="install-guide" style="display:none; border: 1px solid #e74c3c; box-shadow: 0 4px 15px rgba(231, 76, 60, 0.2);">
-                        <h2 style="color:#e74c3c; margin-bottom:10px">⚠️ Extension Required</h2>
-                        <p style="margin-bottom:20px">To enable auto-connection, you need the companion browser extension:</p>
+                        <h2 id="install-title" style="color:#e74c3c; margin-bottom:10px">⚠️ Extension Required</h2>
+                        <p id="install-desc" style="margin-bottom:20px">To enable auto-connection, you need the companion browser extension:</p>
                         <div style="background:#333; padding:10px; border-radius:6px; margin-bottom:20px; font-weight:bold; color:#fff">
                             🧩 WebMCP Bridge
                         </div>
-                        <a href="#" onclick="alert('Please search for [WebMCP Bridge] in your browser store.'); return false;" style="display:inline-block; background:#e74c3c; color:white; padding:10px 20px; text-decoration:none; border-radius:4px; font-weight:bold;">
+                        <a id="install-button" href="#" onclick="alert(window.__webmcpBridgeI18n?.installAlert || 'Please search for [WebMCP Bridge] in your browser store.'); return false;" style="display:inline-block; background:#e74c3c; color:white; padding:10px 20px; text-decoration:none; border-radius:4px; font-weight:bold;">
                             Get Browser Extension
                         </a>
-                        <p class="warn" style="margin-top:15px; font-size:12px">Already installed? Try reloading this page.</p>
+                        <p id="install-warn" class="warn" style="margin-top:15px; font-size:12px">Already installed? Try reloading this page.</p>
                     </div>
 
                     <script>
+                        const isZh = navigator.language.toLowerCase().startsWith('zh');
+                        const bridgeI18n = isZh ? {
+                            connectingTitle: '正在连接 WebMCP...',
+                            connectingStatus: '正在与 VS Code 同步...',
+                            installTitle: '⚠️ 需要浏览器插件',
+                            installDesc: '要启用自动连接，您需要安装配套的浏览器插件：',
+                            installButton: '获取浏览器插件',
+                            installWarn: '如果已经安装，请尝试刷新当前页面。',
+                            installAlert: '请在浏览器扩展商店中搜索 [WebMCP Bridge]。'
+                        } : {
+                            connectingTitle: 'Connecting to WebMCP...',
+                            connectingStatus: 'Synchronizing with VS Code...',
+                            installTitle: '⚠️ Extension Required',
+                            installDesc: 'To enable auto-connection, you need the companion browser extension:',
+                            installButton: 'Get Browser Extension',
+                            installWarn: 'Already installed? Try reloading this page.',
+                            installAlert: 'Please search for [WebMCP Bridge] in your browser store.'
+                        };
+                        window.__webmcpBridgeI18n = bridgeI18n;
+                        document.getElementById('bridge-title').textContent = bridgeI18n.connectingTitle;
+                        document.getElementById('bridge-status').textContent = bridgeI18n.connectingStatus;
+                        document.getElementById('install-title').textContent = bridgeI18n.installTitle;
+                        document.getElementById('install-desc').textContent = bridgeI18n.installDesc;
+                        document.getElementById('install-button').textContent = bridgeI18n.installButton;
+                        document.getElementById('install-warn').textContent = bridgeI18n.installWarn;
+
                         // 检测逻辑：等待 1.5 秒
                         setTimeout(() => {
                             // 1. 检查插件是否打上了标记
                             const isInstalled = document.documentElement.getAttribute('data-extension-installed') === 'true';
 
                             // 2. 双重保险：检查页面内容是否已经被插件修改（例如出现了冲突提示）
-                            const bodyText = document.body.innerText;
-                            const isBusyOrConflict = bodyText.includes('Conflict') || bodyText.includes('Switching') || bodyText.includes('Connected');
+                            const bridgeState = document.body.dataset.bridgeState;
+                            const isBusyOrConflict = bridgeState === 'conflict' || bridgeState === 'switching' || bridgeState === 'connected';
 
                             // 只有在既没安装，也没发生冲突的情况下，才显示安装引导
                             if (!isInstalled && !isBusyOrConflict) {

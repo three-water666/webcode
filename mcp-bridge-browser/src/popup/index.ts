@@ -1,22 +1,92 @@
 import { Session } from '../types';
 
 document.addEventListener("DOMContentLoaded", async () => {
+  const lang = navigator.language.startsWith("zh") ? "zh" : "en";
+  const UI: Record<string, Record<string, string>> = {
+    en: {
+      title: "WebMCP Bridge",
+      connected_text: "✅ Connected to VS Code",
+      port_label: "Port",
+      copy_init: "Copy Initialization Prompt",
+      copy_init_title: "Add this to your AI memory, preferences, or custom instructions",
+      open_settings: "Open Settings",
+      auto_send: "Auto Send Message",
+      show_log: "Show Floating Log",
+      available_gateways: "⚡ Available Gateways",
+      disconnected: "🔴 Disconnected",
+      installed_title: "👉 Already Installed?",
+      installed_desc: "Click WebMCP in the VS Code status bar (bottom right) and follow the steps to launch.",
+      not_installed_title: "👉 Not Installed?",
+      marketplace_hint: "Search in VS Code Marketplace:",
+      connect_to: "Connect to",
+      copied_init: "Copied! Add to AI Memory",
+      init_missing: "Init Prompt Not Found",
+    },
+    zh: {
+      title: "WebMCP Bridge",
+      connected_text: "✅ 已连接到 VS Code",
+      port_label: "端口",
+      copy_init: "复制初始化提示词",
+      copy_init_title: "将此内容添加到 AI 的记忆、偏好或自定义指令中",
+      open_settings: "打开设置",
+      auto_send: "自动发送消息",
+      show_log: "显示悬浮日志",
+      available_gateways: "⚡ 可用网关",
+      disconnected: "🔴 未连接",
+      installed_title: "👉 已安装？",
+      installed_desc: "点击 VS Code 右下角状态栏中的 WebMCP，并按提示启动服务。",
+      not_installed_title: "👉 未安装？",
+      marketplace_hint: "在 VS Code 扩展市场中搜索：",
+      connect_to: "连接到",
+      copied_init: "已复制，可添加到 AI 偏好",
+      init_missing: "未找到初始化提示词",
+    },
+  };
+  const t = (key: string) => UI[lang][key] || UI.en[key];
+
   const connectedView = document.getElementById("connectedView") as HTMLElement;
   const disconnectedView = document.getElementById("disconnectedView") as HTMLElement;
   const statusDot = document.getElementById("statusDot") as HTMLElement;
   const portDisplay = document.getElementById("portDisplay") as HTMLElement;
-  const copyPromptBtn = document.getElementById("copyPromptBtn") as HTMLButtonElement;
   const copyInitBtn = document.getElementById("copyInitBtn") as HTMLButtonElement;
   const openOptionsBtn = document.getElementById("openOptionsBtn") as HTMLButtonElement;
   const autoSendInput = document.getElementById("autoSend") as HTMLInputElement;
   const showLogInput = document.getElementById("showLog") as HTMLInputElement;
   const availableView = document.getElementById("availableView") as HTMLElement;
   const gatewayList = document.getElementById("gatewayList") as HTMLElement;
+  const initKey = lang === "zh" ? "init_zh" : "init_en";
 
-  // 1. 语言检测与资源加载
-  const isZh = navigator.language.startsWith("zh");
-  const promptKey = isZh ? "prompt_zh" : "prompt_en";
-  const initKey = isZh ? "init_zh" : "init_en";
+  const title = document.getElementById("title") as HTMLElement;
+  const connectedText = document.getElementById("connectedText") as HTMLElement;
+  const portLabel = document.getElementById("portLabel") as HTMLElement;
+  const openOptionsText = document.getElementById("openOptionsBtn") as HTMLButtonElement;
+  const autoSendLabel = document.getElementById("autoSendLabel") as HTMLElement;
+  const showLogLabel = document.getElementById("showLogLabel") as HTMLElement;
+  const availableGateways = document.getElementById("availableGateways") as HTMLElement;
+  const disconnectedTitle = document.getElementById("disconnectedTitle") as HTMLElement;
+  const installedTitle = document.getElementById("installedTitle") as HTMLElement;
+  const installedDesc = document.getElementById("installedDesc") as HTMLElement;
+  const notInstalledTitle = document.getElementById("notInstalledTitle") as HTMLElement;
+  const marketplaceHint = document.getElementById("marketplaceHint") as HTMLElement;
+
+  function initUI() {
+    title.textContent = t("title");
+    connectedText.textContent = t("connected_text");
+    portLabel.textContent = t("port_label");
+    copyInitBtn.textContent = t("copy_init");
+    copyInitBtn.title = t("copy_init_title");
+    openOptionsText.textContent = t("open_settings");
+    autoSendLabel.textContent = t("auto_send");
+    showLogLabel.textContent = t("show_log");
+    availableGateways.innerHTML = `<span>⚡</span> ${t("available_gateways").replace(/^⚡\s*/, "")}`;
+    disconnectedTitle.textContent = t("disconnected");
+    installedTitle.textContent = t("installed_title");
+    installedDesc.innerHTML = `${t("installed_desc").replace("WebMCP", '<span style="color: #3498db; font-weight: bold">WebMCP</span>')}`;
+    notInstalledTitle.textContent = t("not_installed_title");
+    marketplaceHint.textContent = t("marketplace_hint");
+  }
+
+  initUI();
 
   // 获取当前 Tab ID
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -102,7 +172,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 btn.style.marginBottom = "8px";
                 btn.style.display = "flex";
                 btn.style.justifyContent = "space-between";
-                btn.innerHTML = `<span>🔗 Connect to <b>${port}</b></span> <span>⚡</span>`;
+                btn.innerHTML = `<span>🔗 ${t("connect_to")} <b>${port}</b></span> <span>⚡</span>`;
                 btn.onclick = () => {
                   chrome.runtime.sendMessage(
                     {
@@ -128,42 +198,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   );
 
-  // 2. 复制逻辑：动态读取对应语言的 Prompt
-  copyPromptBtn.addEventListener("click", () => {
-    // [Fix] 同时获取基础提示词和用户规则
-    // ⚠️ 存储键是 user_rules (带下划线), 修正
-    chrome.storage.local.get([promptKey, "user_rules"], (items) => {
-      let promptContent = items[promptKey];
-      const userRules = items.user_rules || "";
-
-      if (promptContent && userRules) {
-        // 拼接用户规则
-        promptContent = `${promptContent}\n\n--- [User Rules] ---\n${userRules}`;
-      }
-      if (promptContent) {
-        navigator.clipboard.writeText(promptContent).then(() => {
-          const originalText = copyPromptBtn.innerText;
-          copyPromptBtn.innerText = "Copied!";
-          copyPromptBtn.style.backgroundColor = "#0d8a6a";
-          setTimeout(() => {
-            copyPromptBtn.innerText = originalText;
-            copyPromptBtn.style.backgroundColor = "";
-          }, 1500);
-        });
-      } else {
-        copyPromptBtn.innerText = "Prompt Not Found";
-      }
-    });
-  });
-
-  // 3. 复制初始化命令 Prompt
+  // 2. 复制初始化提示词
   copyInitBtn.addEventListener("click", () => {
     chrome.storage.local.get([initKey], (items) => {
       const initContent = items[initKey];
       if (initContent) {
         navigator.clipboard.writeText(initContent).then(() => {
           const originalText = copyInitBtn.innerText;
-          copyInitBtn.innerText = "Copied! Add to AI Memory";
+          copyInitBtn.innerText = t("copied_init");
           copyInitBtn.style.backgroundColor = "#0d8a6a";
           setTimeout(() => {
             copyInitBtn.innerText = originalText;
@@ -171,7 +213,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           }, 3000);
         });
       } else {
-        copyInitBtn.innerText = "Init Prompt Not Found";
+        copyInitBtn.innerText = t("init_missing");
       }
     });
   });

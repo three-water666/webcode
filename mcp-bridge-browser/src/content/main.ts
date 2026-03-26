@@ -8,13 +8,11 @@ import type { CommandApprovalScope } from "../modules/ui";
 interface ConfigState {
   pollInterval: number;
   autoSend: boolean;
-  autoPromptEnabled: boolean;
 }
 
 let CONFIG: ConfigState = {
   pollInterval: 1000,
   autoSend: true,
-  autoPromptEnabled: false,
 };
 
 // [State] Connection Guard
@@ -121,10 +119,9 @@ let currentPlatform: string | null = null;
 
 function initDOMConfig() {
   chrome.storage.sync.get(
-    ["autoSend", "autoPromptEnabled", "user_rules"],
+    ["autoSend", "user_rules"],
     (items) => {
       CONFIG.autoSend = items.autoSend ?? true;
-      CONFIG.autoPromptEnabled = items.autoPromptEnabled ?? false;
       if (items.user_rules) { userRules = items.user_rules; }
 
       chrome.storage.local.get(["syncedAiSites"], (localItems) => {
@@ -167,7 +164,6 @@ function initDOMConfig() {
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === "sync") {
     if (changes.autoSend) { CONFIG.autoSend = changes.autoSend.newValue; }
-    if (changes.autoPromptEnabled) { CONFIG.autoPromptEnabled = changes.autoPromptEnabled.newValue; }
     if (changes.user_rules) { userRules = changes.user_rules.newValue; }
   }
   if (namespace === "local") {
@@ -228,24 +224,7 @@ function runMainLoop() {
   if (!DOM || !isClientConnected) { return; }
   // 所有大模型的消息块
   const messages = document.querySelectorAll(DOM.messageBlocks);
-  if (messages.length === 0) {
-    // Auto Prompt
-    const inputEl = document.querySelector(DOM.inputArea) as HTMLElement;
-    if (
-      inputEl &&
-      CONFIG.autoPromptEnabled &&
-      (inputEl.textContent || "").trim() === ""
-    ) {
-      if (i18n.resources.prompt) {
-        let finalPrompt = i18n.resources.prompt;
-        if (userRules) { finalPrompt += `\n\n=== User Rules ===\n${userRules}`; }
-        inputEl.innerText = finalPrompt;
-        inputEl.dispatchEvent(new Event("input", { bubbles: true }));
-        Logger.log(t("auto_filled"), "action");
-      }
-    }
-    return;
-  }
+  if (messages.length === 0) { return; }
 
   // 只处理最后一次大模型返回的消息块
   const lastMessage = messages[messages.length - 1];
@@ -467,19 +446,7 @@ initDOMConfig();
 function executeTool(payload: ToolExecutionPayload) {
   // 虚拟工具：系统初始化
   if (payload.name === "webmcp_init") {
-    let finalPrompt = i18n.resources.prompt || "";
-    if (userRules) { finalPrompt += `\n\n=== User Rules ===\n${userRules}`; }
-
-    Logger.log("Initializing WebMCP via /webmcp command", "action");
-
-    // 将提示词包装成格式化的JSON字符串塞入 buffer，交由主循环统一等待AI停止后写入输入框
-    // 不包裹为 mcp_action result，直接以纯文本的形式存入 resultBuffer
-    resultBuffer.set(payload.request_id!, finalPrompt);
-
-    activeExecutions.delete(payload.request_id!);
-
-    setTimeout(runMainLoop, 50);
-
+    void initializeWebMcp(payload);
     return;
   }
 
@@ -498,6 +465,59 @@ function executeTool(payload: ToolExecutionPayload) {
   }
 
   performExecution(payload);
+}
+
+async function initializeWebMcp(payload: ToolExecutionPayload) {
+  const requestId = payload.request_id!;
+  let finalPrompt = i18n.resources.prompt || "";
+  if (userRules) { finalPrompt += `\n\n=== User Rules ===\n${userRules}`; }
+
+  Logger.log("Initializing WebMCP with prompt, tool list, and skill list", "action");
+
+  try {
+    const [toolsResult, skillsResult] = await Promise.all([
+      executeInitToolCall("list_tools"),
+      executeInitToolCall("list_skills")
+    ]);
+
+    finalPrompt += `\n\n# Available Tools\n\`\`\`json\n${escapeInlineNewlines(toolsResult)}\n\`\`\``;
+    finalPrompt += `\n\n# Available Skills\n\`\`\`json\n${escapeInlineNewlines(skillsResult)}\n\`\`\``;
+  } catch (error: any) {
+    Logger.log(`Initialization data fetch failed: ${error.message}`, "error");
+    finalPrompt += `\n\n# Initialization Note\nFailed to fetch the tool or skill list. Call \`list_tools\` or \`list_skills\` manually if needed.`;
+  }
+
+  resultBuffer.set(requestId, finalPrompt);
+  activeExecutions.delete(requestId);
+  setTimeout(runMainLoop, 50);
+}
+
+function escapeInlineNewlines(value: string): string {
+  return value.replace(/\r/g, "\\r").replace(/\n/g, "\\n");
+}
+
+function executeInitToolCall(name: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(
+      {
+        type: "EXECUTE_TOOL",
+        payload: { name, arguments: {} }
+      },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+
+        if (!response?.success) {
+          reject(new Error(response?.error || `Failed to execute ${name}`));
+          return;
+        }
+
+        resolve(String(response.data || "[]"));
+      }
+    );
+  });
 }
 
 function performExecution(payload: any) {

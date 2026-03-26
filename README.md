@@ -57,15 +57,15 @@ We prioritize your safety with a "Human-in-the-Loop" design:
 3. The browser will open a bridge page, perform an **Automatic Handshake**, and then redirect to the AI page.
 4. **Connected!** The browser extension icon will turn green (`ON`).
 
-### 3. Initialize AI (Important)
-Before starting the conversation, you must let the AI know how to use the local tools:
+### 3. Configure the AI Initialization Prompt (Important)
+Before using WebMCP, add the initialization prompt to the Web AI's global memory, user preferences, or custom instructions:
 1. Click the **WebMCP Bridge** extension icon in the browser toolbar.
-2. Click the **Copy System Prompt** button in the popup.
-3. **Paste** the content to the AI and send it.
-4. Once the AI confirms it has received the tool definitions, initialization is complete.
+2. Click the **Copy Initialization Prompt** button in the popup.
+3. Add the copied content to the AI's memory, user preferences, or custom instructions.
+4. You usually only need to do this once.
 
 ### 4. Start Chatting
-Now you can ask the Web AI to operate on your local project:
+Now you can send `/webmcp` or `@webmcp` together with your actual request, for example:
 - "Read `src/utils.ts` and write a unit test for it."
 - "Check the file structure of the current directory."
 - "Generate project documentation in the `docs` folder."
