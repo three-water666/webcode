@@ -480,8 +480,8 @@ async function initializeWebMcp(payload: ToolExecutionPayload) {
       executeInitToolCall("list_skills")
     ]);
 
-    finalPrompt += `\n\n# Available Tools\n\`\`\`json\n${toolsResult}\n\`\`\``;
-    finalPrompt += `\n\n# Available Skills\n\`\`\`json\n${skillsResult}\n\`\`\``;
+    finalPrompt += `\n\n# Available Tools\n\`\`\`json\n${escapeInlineNewlines(toolsResult)}\n\`\`\``;
+    finalPrompt += `\n\n# Available Skills\n\`\`\`json\n${escapeInlineNewlines(skillsResult)}\n\`\`\``;
   } catch (error: any) {
     Logger.log(`Initialization data fetch failed: ${error.message}`, "error");
     finalPrompt += `\n\n# Initialization Note\nFailed to fetch the tool or skill list. Call \`list_tools\` or \`list_skills\` manually if needed.`;
@@ -490,6 +490,10 @@ async function initializeWebMcp(payload: ToolExecutionPayload) {
   resultBuffer.set(requestId, finalPrompt);
   activeExecutions.delete(requestId);
   setTimeout(runMainLoop, 50);
+}
+
+function escapeInlineNewlines(value: string): string {
+  return value.replace(/\r/g, "\\r").replace(/\n/g, "\\n");
 }
 
 function executeInitToolCall(name: string): Promise<string> {
