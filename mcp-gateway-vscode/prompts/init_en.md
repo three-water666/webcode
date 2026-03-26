@@ -1,8 +1,1 @@
-If I input /webmcp, please do not reply with any explanation text, but output exactly one Markdown JSON code block with the following content:
-```json
-{
-  "mcp_action": "call",
-  "name": "webmcp_init"
-}
-```
-Then wait for me to send you the system configuration.
+If I send `/webmcp` or `@webmcp`, it means local file read/write and other skills are available for you. Output `{"mcp_action":"call","name":"webmcp_init"}` to initialize, and make sure it is wrapped in a JSON code block.

@@ -5,7 +5,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   const disconnectedView = document.getElementById("disconnectedView") as HTMLElement;
   const statusDot = document.getElementById("statusDot") as HTMLElement;
   const portDisplay = document.getElementById("portDisplay") as HTMLElement;
-  const copyPromptBtn = document.getElementById("copyPromptBtn") as HTMLButtonElement;
   const copyInitBtn = document.getElementById("copyInitBtn") as HTMLButtonElement;
   const openOptionsBtn = document.getElementById("openOptionsBtn") as HTMLButtonElement;
   const autoSendInput = document.getElementById("autoSend") as HTMLInputElement;
@@ -15,7 +14,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // 1. 语言检测与资源加载
   const isZh = navigator.language.startsWith("zh");
-  const promptKey = isZh ? "prompt_zh" : "prompt_en";
   const initKey = isZh ? "init_zh" : "init_en";
 
   // 获取当前 Tab ID
@@ -128,42 +126,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   );
 
-  // 2. 复制逻辑：动态读取对应语言的 Prompt
-  copyPromptBtn.addEventListener("click", () => {
-    // [Fix] 同时获取基础提示词和用户规则
-    // ⚠️ 存储键是 user_rules (带下划线), 修正
-    chrome.storage.local.get([promptKey, "user_rules"], (items) => {
-      let promptContent = items[promptKey];
-      const userRules = items.user_rules || "";
-
-      if (promptContent && userRules) {
-        // 拼接用户规则
-        promptContent = `${promptContent}\n\n--- [User Rules] ---\n${userRules}`;
-      }
-      if (promptContent) {
-        navigator.clipboard.writeText(promptContent).then(() => {
-          const originalText = copyPromptBtn.innerText;
-          copyPromptBtn.innerText = "Copied!";
-          copyPromptBtn.style.backgroundColor = "#0d8a6a";
-          setTimeout(() => {
-            copyPromptBtn.innerText = originalText;
-            copyPromptBtn.style.backgroundColor = "";
-          }, 1500);
-        });
-      } else {
-        copyPromptBtn.innerText = "Prompt Not Found";
-      }
-    });
-  });
-
-  // 3. 复制初始化命令 Prompt
+  // 2. 复制初始化提示词
   copyInitBtn.addEventListener("click", () => {
     chrome.storage.local.get([initKey], (items) => {
       const initContent = items[initKey];
       if (initContent) {
         navigator.clipboard.writeText(initContent).then(() => {
           const originalText = copyInitBtn.innerText;
-          copyInitBtn.innerText = "Copied! Add to AI Memory";
+          copyInitBtn.innerText = isZh ? "已复制，可添加到 AI 偏好" : "Copied! Add to AI Memory";
           copyInitBtn.style.backgroundColor = "#0d8a6a";
           setTimeout(() => {
             copyInitBtn.innerText = originalText;
@@ -171,7 +141,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           }, 3000);
         });
       } else {
-        copyInitBtn.innerText = "Init Prompt Not Found";
+        copyInitBtn.innerText = isZh ? "未找到初始化提示词" : "Init Prompt Not Found";
       }
     });
   });

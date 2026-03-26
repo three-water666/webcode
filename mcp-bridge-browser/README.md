@@ -13,12 +13,12 @@
 
 1. **Preparation**: Open VS Code, ensure **WebMCP Gateway** is installed, and click the status bar to start the service.
 2. **Auto Connect**: Open Gemini or other supported AI pages. The extension will automatically detect and connect to the local service (the icon will turn green).
-3. **Send Prompt (Critical Step)**:
+3. **Save the Initialization Prompt (Critical Step)**:
     * Click the extension icon in the browser toolbar.
-    * Click the **Copy System Prompt** button.
-    * **Paste** the content to the AI and send it.
-    * *This step tells the AI which tools are available and how to call them.*
-4. **Start Chatting**: Once the AI confirms, you can ask it to read files or execute commands.
+    * Click the **Copy Initialization Prompt** button.
+    * Add the copied content to the AI's memory, user preferences, or custom instructions.
+    * *You only need to do this once.*
+4. **Start Chatting**: In the chat, send `/webmcp` or `@webmcp` together with your actual request. The AI will initialize WebMCP first, then continue with your task.
 5. **Troubleshooting**: If the icon is red or gray, click the icon to view detailed troubleshooting steps.
 
 ## 📥 Get VS Code Extension
