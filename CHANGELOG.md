@@ -2,148 +2,176 @@
 
 All notable changes to this project will be documented in this file.
 
-## v0.5.2 (2025-12-14)
-### ✨ Features
-- **Bridge**: 添加设置快捷按钮，并优化平台检测逻辑。
-- **Core**: 实现工具分组 (Tool Grouping) 显示与初始化逻辑优化。
+## v0.6.0 (2026-03-27)
+### Features
+- **Initialization Flow**: Added the `/webmcp init` setup flow for generating custom instructions; later simplified the onboarding flow and inlined tool and skill summaries to reduce first-run friction.
+- **Skills System**: Added workspace skill discovery and lazy loading so available skills can be exposed dynamically based on the current workspace.
+- **Localization**: Added localization for the browser extension popup, the Bridge Loader page, and the Gateway control panel.
+- **Browser Integration**: Switched browser-side site injection to read dynamic configuration from VS Code so extension behavior stays aligned with gateway configuration.
+- **Gateway**: Added observable terminal sessions and safer command execution for the VS Code gateway.
 
-### 🐛 Bug Fixes
-- **Bridge**: 增强 JSON 解析的健壮性，修复非标准空格 (non-breaking spaces) 导致的报错。
-- **Bridge**: 修复 Popup 中用户规则 (User Rules) 的存储 Key 错误。
-- **Bridge**: 修复从 Popup 复制 System Prompt 时未包含用户规则的问题。
-- **Bridge**: 修复 Content Script 结果处理中的竞态条件 (Race Condition)。
+### Improvements
+- **Security**: Migrated tool execution to a workspace-isolated allowlist model to further tighten execution boundaries.
+- **Packaging**: Bundled the built-in filesystem server locally and fixed related packaging issues in the VS Code release artifacts.
+- **Performance**: Synced content script state with connection status on the Bridge side to reduce idle polling.
+- **Architecture Cleanup**: Removed the unused `/v1/tools` API and prefetch logic, and cleaned up obsolete browser and gateway configuration.
+- **Docs**: Added the MIT License and updated README documentation and security notes.
+
+### Fixes
+- **Browser Extension**: Fixed incorrect URL validation that could drop connections and prevent the popup from showing available gateways correctly.
+- **Browser Extension**: Fixed storage loading, error message keys, and `webmcp_init` capture/output writing logic.
+- **Bridge**: Fixed connection hangs on the Bridge page.
+- **Build Compatibility**: Fixed CRX/Vite build compatibility issues, including output chunk naming, manifest typing, and compatibility fallout from the plugin rollback.
+- **Scripts**: Switched Windows extension packaging to `tar.exe` for more reliable archive generation.
+
+### Engineering
+- **Code Quality**: Introduced Husky and lint-staged, unified the monorepo ESLint configuration, and enabled stricter unused-variable checks.
+- **Dependency and Config Cleanup**: Removed unused Preact-related configuration, dropped the obsolete auto prompt setting, and added ignore rules for generated files.
+
+---
+
+## v0.5.2 (2025-12-14)
+### Features
+- **Bridge**: Added a settings shortcut button and improved platform detection logic.
+- **Core**: Implemented tool grouping display and optimized initialization logic.
+
+### Bug Fixes
+- **Bridge**: Improved JSON parsing robustness and fixed errors caused by non-breaking spaces.
+- **Bridge**: Fixed the storage key used for User Rules in the popup.
+- **Bridge**: Fixed an issue where copying the System Prompt from the popup did not include User Rules.
+- **Bridge**: Fixed a race condition in Content Script result handling.
 
 ---
 
 ## v0.5.1 (2025-12-13)
-### ✨ Features
-- **VSCode**: 新增编辑器右键菜单 "WebMCP: Copy Context"，一键复制文件路径和选中代码。
+### Features
+- **VSCode**: Added the editor context menu action `WebMCP: Copy Context` to copy the file path and selected code with one click.
 
 ---
 
 ## v0.5.0 (2025-12-12)
-**Major Update**: 架构重构与核心功能增强。
+**Major Update**: Architecture refactor and core feature enhancements.
 
-### ✨ Features
-- **Architecture**: 浏览器插件重构为 Vite + TypeScript Monorepo 结构。
-- **Performance**: 实现工具分层懒加载 (Tiered Tool Discovery)，大幅降低 Token 消耗。
-- **Sync**: 实现基于 Host 的配置云同步功能 (Host-based Config Sync)。
-- **Options**: 新增用户规则 (User Rules) 配置，支持自定义个性化指令。
-- **Adapters**: 新增对 AI Studio 的支持，更新页面选择器。
+### Features
+- **Architecture**: Refactored the browser extension into a Vite + TypeScript monorepo structure.
+- **Performance**: Implemented tiered tool discovery to significantly reduce token usage.
+- **Sync**: Added host-based config sync.
+- **Options**: Added User Rules configuration for custom personalized instructions.
+- **Adapters**: Added support for AI Studio and updated page selectors.
 
-### 🐛 Bug Fixes
-- **Bridge**: 修复自动发送的竞态条件死锁问题。
-- **Bridge**: 修复发送 Bug 及设置页配置持久化问题。
+### Bug Fixes
+- **Bridge**: Fixed a deadlock caused by an auto-send race condition.
+- **Bridge**: Fixed sending bugs and settings page persistence issues.
 
 ---
 
 ## v0.4.6 (2025-12-12)
-### ✨ Features
-- **Gateway**: 正式发布 `run_in_terminal` 工具，支持在前台终端执行交互式命令。
+### Features
+- **Gateway**: Officially released the `run_in_terminal` tool to support interactive command execution in a foreground terminal.
 
 ---
 
 ## v0.4.5 (2025-12-11)
-### ✨ Features
-- **Core**: 实现服务器闲置 30 分钟自动超时 (Timeout) 机制。
-- **Core**: 实现 Session Token 持久化，重启插件无需重新连接。
+### Features
+- **Core**: Added an automatic 30-minute idle timeout for the server.
+- **Core**: Added Session Token persistence so reconnecting after a restart is no longer required.
 
 ---
 
 ## v0.4.4 (2025-12-11)
-### ✨ Features
-- **UX**: 升级工具调用状态的可视化反馈。
-- **Protocol**: 引入 `purpose` 协议字段，增强操作意图说明。
-- **Config**: 支持配置的导入与导出功能。
+### Features
+- **UX**: Improved visual feedback for tool invocation state.
+- **Protocol**: Introduced the `purpose` protocol field to better explain operation intent.
+- **Config**: Added configuration import and export support.
 
 ---
 
 ## v0.4.1 (2025-12-11)
-### ✨ Features
-- **Config**: 翻转服务器加载逻辑，由 `enabled` 改为 `disabled` (默认启用)。
-- **Security**: 添加命令执行的安全验证机制。
+### Features
+- **Config**: Inverted server loading logic from `enabled` to `disabled` so servers are enabled by default.
+- **Security**: Added security validation for command execution.
 
 ---
 
 ## v0.4.0 (2025-12-11)
-### ✨ Features
-- **Command**: 集成 `mcp-server-command`，支持后台命令执行。
+### Features
+- **Command**: Integrated `mcp-server-command` to support background command execution.
 
-### 🛡️ HITL & UX Polish
-- **Security**: 修复 HITL 弹窗的 XSS 漏洞及超长参数显示问题。
-- **UX**: 移除原生 Alert，改为卡片内视图切换 (Inline View Transition)。
-- **I18n**: HITL 审批弹窗全面支持本地化。
-- **UX**: 设置页增加底部悬浮保存栏 (Sticky Save Footer)。
-- **Fix**: 修复 Gateway 对远程工具 (GitHub) 相对路径解析错误的问题。
+### HITL & UX Polish
+- **Security**: Fixed XSS issues and long-argument rendering problems in the HITL dialog.
+- **UX**: Replaced native alerts with inline view transitions inside cards.
+- **I18n**: Added full localization support for the HITL approval dialog.
+- **UX**: Added a sticky save footer to the settings page.
+- **Fix**: Fixed incorrect relative-path resolution for remote tools such as GitHub in the Gateway.
 
 ---
 
 ## v0.3.2 (2025-12-10)
-### ✨ Features
-- **Transport**: 完善 HTTP/SSE 传输支持，最大化向后兼容性。
+### Features
+- **Transport**: Improved HTTP/SSE transport support to maximize backward compatibility.
 
 ---
 
 ## v0.3.0 (2025-12-10)
-**Major Update**: 人工介入审批系统 (HITL)。
+**Major Update**: Human-in-the-loop approval system (HITL).
 
-### ✨ Features
-- **HITL**: 实现工具调用审批系统 (Human-in-the-Loop)。
-- **Security**: 实现自动防御 (Auto-Protect) 逻辑，新工具默认加入保护名单。
-- **UX**: 支持 "Always Allow" (永久允许) 选项。
+### Features
+- **HITL**: Implemented a Human-in-the-Loop approval system for tool calls.
+- **Security**: Added Auto-Protect logic so new tools are added to the protected list by default.
+- **UX**: Added an `Always Allow` option.
 
-### 🐛 Bug Fixes
-- **Bridge**: 移除 `tabs` 权限以符合商店合规要求。
-- **Bridge**: 优化批处理队列，修复死锁风险。
+### Bug Fixes
+- **Bridge**: Removed the `tabs` permission to meet extension store compliance requirements.
+- **Bridge**: Optimized the batch queue and fixed deadlock risks.
 
 ---
 
 ## v0.2.0 (2025-12-10)
-### ✨ Features
-- **Core**: 引入请求队列 (Request Queue)，确保并发工具调用的结果顺序回填。
-- **Logging**: 增加队列日志可视化。
-- **Control**: 支持手动控制本地服务的启停。
+### Features
+- **Core**: Introduced a request queue to ensure concurrent tool call results are returned in order.
+- **Logging**: Added visualized queue logging.
+- **Control**: Added manual start/stop control for the local service.
 
 ---
 
 ## v0.1.7 (2025-12-09)
-### ✨ Features
-- **Bridge**: 优化通知流程，增强 JSON 容错能力。
-- **UX**: 浏览器插件增加未成功发送的系统提示，VS Code 插件增加 "Starting" 状态显示。
+### Features
+- **Bridge**: Improved the notification flow and strengthened JSON fault tolerance.
+- **UX**: Added a system prompt hint for failed sends in the browser extension, and a `Starting` state in the VS Code extension.
 
 ---
 
 ## v0.1.5 (2025-12-09)
-### ✨ Features
-- **Architecture**: 针对 Multi-Host 和 Popup 逻辑进行全面更新。
+### Features
+- **Architecture**: Fully updated Multi-Host and popup logic.
 
 ---
 
 ## v0.1.4 (2025-12-08)
-### ✨ Features
-- **Config**: 重构浏览器配置为“以站点为中心 (Site-centric)”的模型。
-- **I18n**: 支持可配置的选择器和多语言 Prompt。
+### Features
+- **Config**: Refactored browser configuration into a site-centric model.
+- **I18n**: Added configurable selectors and multilingual prompts.
 
 ---
 
 ## v0.1.3 (2025-12-07)
-### ✨ Features
-- **Dev**: 添加调试功能与实现说明。
-- **Log**: 统一日志格式，添加状态指示。
+### Features
+- **Dev**: Added debugging capabilities and implementation notes.
+- **Log**: Unified log formatting and added status indicators.
 
 ---
 
 ## v0.1.2 (2025-12-07)
-### ✨ Features
-- **UX**: 优化输入处理逻辑，标准化换行符。
-- **UX**: 简化复制按钮文本。
+### Features
+- **UX**: Optimized input handling logic and standardized line endings.
+- **UX**: Simplified copy button text.
 
 ---
 
 ## v0.1.1 (2025-12-05)
 **Initial Release**: Zero-Config Support.
 
-### ✨ Features
-- **Gateway**: 核心功能初始化，支持 Zero-Config 连接。
-- **Bridge**: 支持动态端口配置与浏览器选择。
-- **Docs**: 添加中英文文档与项目交接文档。
+### Features
+- **Gateway**: Initial core functionality with Zero-Config connection support.
+- **Bridge**: Added support for dynamic port configuration and browser selection.
+- **Docs**: Added Chinese and English documentation plus project integration docs.
