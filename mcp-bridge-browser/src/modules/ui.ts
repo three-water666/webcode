@@ -75,8 +75,37 @@ export function writeToInputBox(text: string, inputSelector: string) {
   Logger.log(t("result_written"), "action");
 }
 
+export async function deliverResult(text: string, domSelectors: SiteSelectors): Promise<{ uploaded: boolean }> {
+  const maxInlineChars = typeof domSelectors.maxInlineChars === "number"
+    ? domSelectors.maxInlineChars
+    : 0;
+
+  if (!maxInlineChars || text.length <= maxInlineChars) {
+    writeToInputBox(text, domSelectors.inputArea);
+    return { uploaded: false };
+  }
+
+  const attachmentMode = domSelectors.attachmentMode || "pasteFile";
+  const uploaded = attachmentMode === "fileInput"
+    ? await uploadTextAsAttachment(text, domSelectors)
+    : await pasteTextAsAttachment(text, domSelectors);
+
+  if (!uploaded) {
+    Logger.log("Attachment upload failed. Falling back to inline result.", "warn");
+    writeToInputBox(text, domSelectors.inputArea);
+    return { uploaded: false };
+  }
+
+  Logger.log(`Attached oversized result as TXT (${text.length} chars)`, "action");
+  return { uploaded: true };
+}
+
 // === 自动发送逻辑 ===
-export function triggerAutoSend(config: { autoSend: boolean }, domSelectors: SiteSelectors) {
+export function triggerAutoSend(
+  config: { autoSend: boolean },
+  domSelectors: SiteSelectors,
+  options: { allowEmptyInput?: boolean } = {}
+) {
   if (!config.autoSend) {return;}
   if (autoSendTimer) {
     clearTimeout(autoSendTimer);
@@ -95,7 +124,7 @@ export function triggerAutoSend(config: { autoSend: boolean }, domSelectors: Sit
       ? (inputEl as any).value || inputEl.innerText || ""
       : "";
       
-    if (currentVal.trim().length === 0) {
+    if (currentVal.trim().length === 0 && !options.allowEmptyInput) {
       Logger.log(t("send_success_cleared"), "success");
       return;
     }
@@ -105,17 +134,24 @@ export function triggerAutoSend(config: { autoSend: boolean }, domSelectors: Sit
       inputEl.dispatchEvent(new Event("change", { bubbles: true }));
     }
 
-    if (btn && !btn.disabled) {
-      btn.focus();
-      btn.click();
-      Logger.log(
-        `${t("auto_send_attempt")} (${retryCount + 1})`,
-        "action"
-      );
+    let triggered = false;
+    if (isSendButtonReady(btn)) {
+      triggered = triggerButtonSend(btn);
+      if (triggered) {
+        Logger.log(
+          `${t("auto_send_attempt")} (${retryCount + 1})`,
+          "action"
+        );
+      }
     } else if (!btn) {
       Logger.log(t("send_btn_missing"), "warn");
     } else {
       Logger.log(t("send_btn_disabled"), "warn");
+    }
+
+    if (!triggered && inputEl) {
+      triggerCtrlEnterSend(inputEl);
+      Logger.log(`Auto-send fallback: Ctrl+Enter (${retryCount + 1})`, "action");
     }
 
     retryCount++;
@@ -131,6 +167,144 @@ export function triggerAutoSend(config: { autoSend: boolean }, domSelectors: Sit
     }
   };
   autoSendTimer = setTimeout(trySend, 1000);
+}
+
+async function uploadTextAsAttachment(text: string, domSelectors: SiteSelectors): Promise<boolean> {
+  let fileInput = queryFileInput(domSelectors.fileInput);
+
+  if (!fileInput && domSelectors.attachButton) {
+    const attachButton = document.querySelector(domSelectors.attachButton) as HTMLElement | null;
+    if (attachButton) {
+      triggerButtonSend(attachButton);
+      await delay(300);
+      fileInput = queryFileInput(domSelectors.fileInput);
+    }
+  }
+
+  if (!fileInput) {return false;}
+
+  const filename = `webmcp-result-${Date.now()}.txt`;
+  const file = new File([text], filename, { type: "text/plain" });
+  const transfer = new DataTransfer();
+  transfer.items.add(file);
+
+  try {
+    fileInput.files = transfer.files;
+  } catch {
+    return false;
+  }
+
+  fileInput.dispatchEvent(new Event("input", { bubbles: true }));
+  fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+  if (domSelectors.attachmentReadyIndicator) {
+    return waitForAttachmentReady(domSelectors.attachmentReadyIndicator, 8000);
+  }
+
+  await delay(800);
+  return true;
+}
+
+async function pasteTextAsAttachment(text: string, domSelectors: SiteSelectors): Promise<boolean> {
+  const inputEl = document.querySelector(domSelectors.inputArea) as HTMLElement | null;
+  if (!inputEl) {return false;}
+
+  const filename = `webmcp-result-${Date.now()}.txt`;
+  const file = new File([text], filename, { type: "text/plain" });
+  const clipboardData = new DataTransfer();
+  clipboardData.items.add(file);
+
+  inputEl.focus();
+  const pasteEvent = new ClipboardEvent("paste", {
+    bubbles: true,
+    cancelable: true,
+    clipboardData,
+  });
+  inputEl.dispatchEvent(pasteEvent);
+
+  if (domSelectors.attachmentReadyIndicator) {
+    return waitForAttachmentReady(domSelectors.attachmentReadyIndicator, 8000);
+  }
+
+  await delay(800);
+  return true;
+}
+
+function queryFileInput(selector?: string): HTMLInputElement | null {
+  if (selector) {
+    return document.querySelector(selector) as HTMLInputElement | null;
+  }
+
+  return document.querySelector('input[type="file"]') as HTMLInputElement | null;
+}
+
+async function waitForAttachmentReady(selector: string, timeoutMs: number): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const el = document.querySelector(selector) as HTMLElement | null;
+    if (el && isElementVisible(el)) {return true;}
+    await delay(200);
+  }
+  return false;
+}
+
+function isElementVisible(el: HTMLElement): boolean {
+  const style = window.getComputedStyle(el);
+  if (style.display === "none" || style.visibility === "hidden" || style.pointerEvents === "none") {
+    return false;
+  }
+
+  const rect = el.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isSendButtonReady(btn: HTMLButtonElement | null): btn is HTMLButtonElement {
+  if (!btn) {return false;}
+  if (btn.disabled) {return false;}
+  if (btn.getAttribute("aria-disabled") === "true") {return false;}
+
+  return isElementVisible(btn);
+}
+
+function triggerButtonSend(btn: HTMLElement): boolean {
+  btn.focus();
+  const mouseEventTypes: Array<"pointerdown" | "mousedown" | "pointerup" | "mouseup" | "click"> = [
+    "pointerdown",
+    "mousedown",
+    "pointerup",
+    "mouseup",
+    "click",
+  ];
+
+  for (const type of mouseEventTypes) {
+    btn.dispatchEvent(new MouseEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+    }));
+  }
+
+  btn.click();
+  return true;
+}
+
+function triggerCtrlEnterSend(inputEl: HTMLElement) {
+  inputEl.focus();
+  const keyboardEventInit: KeyboardEventInit = {
+    key: "Enter",
+    code: "Enter",
+    bubbles: true,
+    cancelable: true,
+    ctrlKey: true,
+  };
+
+  inputEl.dispatchEvent(new KeyboardEvent("keydown", keyboardEventInit));
+  inputEl.dispatchEvent(new KeyboardEvent("keypress", keyboardEventInit));
+  inputEl.dispatchEvent(new KeyboardEvent("keyup", keyboardEventInit));
 }
 
 // === HITL 弹窗 (Shadow DOM) ===

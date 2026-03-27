@@ -357,18 +357,20 @@ function runMainLoop() {
       });
 
       if (hasUnflushedContent && DOM) {
+        const selectors = DOM;
         Logger.log(
           `Batch finished: ${orderedResults.length} tools. Writing...`,
           "success"
         );
         // 回填
-        UI.writeToInputBox(orderedResults.join("\n\n"), DOM.inputArea);
+        const finalOutput = orderedResults.join("\n\n");
         actionableIds.forEach((id) => {
           resultBuffer.delete(id);
           flushedRequests.add(id);
         });
-        // 自动发送
-        UI.triggerAutoSend(CONFIG, DOM);
+        void UI.deliverResult(finalOutput, selectors).then((delivery) => {
+          UI.triggerAutoSend(CONFIG, selectors, { allowEmptyInput: delivery.uploaded });
+        });
       } else {
         // 纯虚拟工具（无输出）
         const anyVirtual = actionableIds.some((id) => resultBuffer.has(id));
