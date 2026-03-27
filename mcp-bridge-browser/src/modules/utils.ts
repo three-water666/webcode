@@ -99,51 +99,47 @@ export const Logger = {
 
   init() {
     if (this.el) {return;}
-    this.el = document.createElement("div");
-    Object.assign(this.el.style, {
+
+    const host = document.createElement("div");
+    Object.assign(host.style, {
       position: "fixed",
       top: "20px",
       right: "20px",
       width: "320px",
       height: "200px",
-      backgroundColor: "rgba(0,0,0,0.85)",
-      color: "#00ff00",
-      fontFamily: "Consolas, monospace",
-      fontSize: "12px",
-      zIndex: "99999",
-      borderRadius: "8px",
+      zIndex: "2147483647",
       display: "none",
-      flexDirection: "column",
-      border: "1px solid #333",
-      backdropFilter: "blur(4px)",
-      boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
     });
+
+    const shadow = host.attachShadow({ mode: "open" });
+    const style = document.createElement("style");
+    style.textContent =       ':host{all:initial;color-scheme:dark;}*{box-sizing:border-box;}.logger{width:320px;height:200px;background:rgba(0,0,0,0.85);color:#00ff00;font-family:Consolas,"SFMono-Regular",Menlo,monospace;font-size:12px;border-radius:8px;display:flex;flex-direction:column;border:1px solid #333;backdrop-filter:blur(4px);box-shadow:0 4px 12px rgba(0,0,0,0.5);overflow:hidden;}.header{padding:6px;background:#333;color:#fff;cursor:move;display:flex;justify-content:space-between;align-items:center;user-select:none;}.clear{cursor:pointer;}.content{flex:1;overflow-y:auto;padding:8px;}.line{margin-bottom:4px;line-height:1.4;word-break:break-word;}.time{color:#888;font-size:10px;}';
+
+    const panel = document.createElement("div");
+    panel.className = "logger";
+
     const header = document.createElement("div");
+    header.className = "header";
     header.innerText = "WebMCP Bridge Process Log";
-    Object.assign(header.style, {
-      padding: "6px",
-      backgroundColor: "#333",
-      color: "#fff",
-      cursor: "move",
-      display: "flex",
-      justifyContent: "space-between",
-    });
+
     const clearBtn = document.createElement("span");
+    clearBtn.className = "clear";
     clearBtn.innerText = "🗑️";
-    clearBtn.style.cursor = "pointer";
     clearBtn.onclick = () => {
-        if (this.contentEl) {this.contentEl.innerHTML = "";}
+      if (this.contentEl) {this.contentEl.innerHTML = "";}
     };
-    header.appendChild(clearBtn);
+
     this.contentEl = document.createElement("div");
-    Object.assign(this.contentEl.style, {
-      flex: "1",
-      overflowY: "auto",
-      padding: "8px",
-    });
-    this.el.appendChild(header);
-    this.el.appendChild(this.contentEl);
-    document.body.appendChild(this.el);
+    this.contentEl.className = "content";
+
+    header.appendChild(clearBtn);
+    panel.appendChild(header);
+    panel.appendChild(this.contentEl);
+    shadow.appendChild(style);
+    shadow.appendChild(panel);
+    document.body.appendChild(host);
+
+    this.el = host;
     this.makeDraggable(header);
   },
 
@@ -174,12 +170,13 @@ export const Logger = {
 
   toggle(show: boolean) {
     if (!this.el && show) {this.init();}
-    if (this.el) {this.el.style.display = show ? "flex" : "none";}
+    if (this.el) {this.el.style.display = show ? "block" : "none";}
   },
 
   log(msg: string, type: "info" | "success" | "error" | "warn" | "action" = "info") {
     if (!this.el || this.el.style.display === "none") {return;}
     const line = document.createElement("div");
+    line.className = "line";
     const time = new Date().toLocaleTimeString("en-US", { hour12: false });
     let icon = "🔹",
       color = "#ddd";
@@ -196,10 +193,10 @@ export const Logger = {
       icon = "⚡";
       color = "#00bcd4";
     }
-    line.innerHTML = `<span style="color:#888; font-size:10px">[${time}]</span> ${icon} <span style="color:${color}">${msg}</span>`;
+    line.innerHTML = `<span class="time">[${time}]</span> ${icon} <span style="color:${color}">${msg}</span>`;
     if (this.contentEl) {
-        this.contentEl.appendChild(line);
-        this.contentEl.scrollTop = this.contentEl.scrollHeight;
+      this.contentEl.appendChild(line);
+      this.contentEl.scrollTop = this.contentEl.scrollHeight;
     }
   },
 };
