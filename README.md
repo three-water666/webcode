@@ -1,89 +1,124 @@
-# WebMCP 🌉
+# WebMCP
 
-## ⚠️ Disclaimer (Read Before Use)
+WebMCP connects web-based AI products such as ChatGPT, Gemini, and DeepSeek to local development tools exposed through MCP in VS Code.
 
-> 1. **Use at Your Own Risk**: This tool connects unpredictable LLMs to your local filesystem. **You are solely responsible for any file loss or system damage.**
-> 2. **Account Safety**: Automated interaction may violate ToS of AI providers (e.g., OpenAI, DeepSeek). Use test accounts and avoid high-frequency requests.
-> 3. **Data Privacy**: Do NOT upload sensitive data (API Keys, secrets). Your local code is sent to third-party AI servers.
+[中文说明](README_zh.md)
 
-**Universal Bridge connecting Web AI to Local Development Environments.**
+## Disclaimer
 
-[中文文档](README_zh.md)
+Please read this before using WebMCP:
 
-> 🛑 **No More Copy-Paste**: Stop manually copying code between Gemini/ChatGPT/DeepSeek and VS Code.
-> 🚀 **Zero-Config**: No complex configuration required, just click and use.
-> 🔐 **Secure**: Uses dynamic Token authentication to ensure only your VS Code can connect.
+1. Use at your own risk. WebMCP bridges remote AI systems with local tools and files. You are responsible for what those tools are allowed to do.
+2. Check the terms of service of the AI products you use. Automated interaction may not be allowed on some platforms.
+3. Do not send secrets or sensitive code unless you are comfortable sharing that data with the AI provider you are using.
 
----
+## What It Does
 
-## 🌟 Core Features
+- Starts a local MCP gateway in VS Code.
+- Opens a supported web AI product through a bridge page.
+- Lets the web model call local MCP tools after connection is established.
+- Supports multiple browsers, multiple VS Code windows, and browser routing rules.
 
-- **⚡️ Zero-Config**: VS Code manages ports and tokens automatically, one-click handshake.
-- **🌍 Cross-Platform**: Fully supports **Gemini**, **ChatGPT**, **DeepSeek**, and other web-based AIs.
-- **🔌 Standardized**: Based on [Model Context Protocol (MCP)](https://modelcontextprotocol.io/), supports mounting local filesystems, Git, and other tools.
-- **🛡️ Dynamic Security**:
-  - Random **Token** generated per session, eliminating the need for fixed Extension ID whitelists.
-  - Supports **Origin Isolation** to prevent malicious pages from accessing the local gateway.
-- **🧠 Smart Routing**:
-  - Automatically selects the browser based on the URL (e.g., Gemini -> Edge, ChatGPT -> Chrome).
-  - Supports multiple VS Code windows and multiple concurrent connections.
+## Key Features
 
----
+- **Zero-config connection**: VS Code manages the local port and session token automatically.
+- **Browser routing**: Different domains can open in different browsers.
+- **Dynamic authentication**: Each session uses a temporary token instead of a fixed browser extension ID allowlist.
+- **Origin isolation**: The gateway only accepts requests from the expected origin.
+- **Workspace skills**: Local skills can be discovered from the current workspace and exposed to the model progressively.
+- **Human-in-the-loop safety**: Sensitive operations can require explicit approval before execution.
 
-## 🛡️ Security & Privacy
-We prioritize your safety with a "Human-in-the-Loop" design:
+## Security Model
 
-- **👮 Human-in-the-Loop (HITL)**:
-  - **Approval Required**: Sensitive operations (e.g., `write_file`, `execute_command`) are **blocked by default**.
-  - **Explicit Consent**: You must click "Approve" in the popup for every new tool call.
-- **🔒 Local Execution**: All logic runs locally in your browser and VS Code. No intermediate servers.
-- **🛡️ Sandbox Mode**: Commands are executed in the current workspace root. Access to system directories is restricted.
+WebMCP is designed to keep the user in control:
 
----
+- Sensitive operations such as file writes or command execution can be blocked until you approve them.
+- The gateway runs locally. There is no hosted relay service in the middle.
+- Commands are executed relative to the current workspace and can be restricted by the gateway.
 
-## 📖 Usage Guide
+That said, WebMCP is still a bridge between a remote model and local tools. Review your tool permissions carefully.
 
-### 1. Installation
-- **VS Code**: Search for `WebMCP Gateway` in the Extension Marketplace and install.
-- **Browser (Manual Install)**:
-  1. Download the latest `mcp-bridge-browser.zip` from [Releases](https://github.com/three-water666/WebMCP/releases).
-  2. Unzip the file.
-  3. Go to Chrome/Edge Extensions (`chrome://extensions`), enable **Developer mode**.
-  4. Click **Load unpacked** and select the unzipped folder.
+## Installation
 
-### 2. Connect
-1. Open VS Code. Click the `WebMCP: OFF` button in the status bar (bottom right) to start the service. When it shows `WebMCP: <Port>` (e.g., `34567`), it is ready.
-2. Click the status bar icon and select the AI platform you want to use (e.g., `Open Gemini`).
-3. The browser will open a bridge page, perform an **Automatic Handshake**, and then redirect to the AI page.
-4. **Connected!** The browser extension icon will turn green (`ON`).
+### VS Code Extension
 
-### 3. Configure the AI Initialization Prompt (Important)
-Before using WebMCP, add the initialization prompt to the Web AI's global memory, user preferences, or custom instructions:
-1. Click the **WebMCP Bridge** extension icon in the browser toolbar.
-2. Click the **Copy Initialization Prompt** button in the popup.
-3. Add the copied content to the AI's memory, user preferences, or custom instructions.
-4. You usually only need to do this once.
+Install `WebMCP Gateway` from the VS Code Marketplace.
 
-### 4. Start Chatting
-Now you can send `/webmcp` or `@webmcp` together with your actual request, for example:
-- "Read `src/utils.ts` and write a unit test for it."
-- "Check the file structure of the current directory."
-- "Generate project documentation in the `docs` folder."
+### Browser Extension
 
-### 5. Workspace Skills
-WebMCP can expose local skills from the current VS Code workspace to the web model.
+1. Download the latest `mcp-bridge-browser.zip` from [Releases](https://github.com/three-water666/WebMCP/releases).
+2. Extract the archive.
+3. Open the browser extensions page:
+   - Chrome: `chrome://extensions`
+   - Edge: `edge://extensions`
+4. Enable Developer Mode.
+5. Click `Load unpacked` and select the extracted folder.
 
-- Default scan directories:
-  - `.agents/skills`
-  - `.codex/skills`
-  - `skills`
-- A skill is any folder containing `SKILL.md`.
-- The AI should discover and load skills progressively:
-  1. Call `list_skills` or `search_skills`
-  2. Call `get_skill` for the selected skill
-  3. Call `get_skill_resource` only if the skill references extra files under `references/`, `templates/`, `scripts/`, etc.
+## Quick Start
 
-Example structure:
+### 1. Start the Gateway
+
+1. Open VS Code.
+2. Click `WebMCP: OFF` in the bottom-right status bar.
+3. In the menu that opens, click `Start WebMCP`.
+4. Wait for the status bar item to change to `WebMCP: <port>`.
+
+When the status bar shows a port number, the local gateway is running.
+
+### 2. Open a Supported AI Product
+
+1. Click `WebMCP: <port>` in the status bar.
+2. Choose the target site you want to open, such as `Open Gemini`, `Open ChatGPT`, or another supported entry.
+3. WebMCP opens the bridge page in the configured browser.
+4. The bridge page completes the handshake with the local gateway automatically.
+5. After the handshake succeeds, the browser redirects to the target AI site.
+
+When the browser extension shows `ON`, the connection is ready to use.
+
+### 3. Add the Initialization Prompt
+
+Before first use, add the WebMCP initialization prompt to the AI product you use.
+
+1. Click the WebMCP browser extension icon in the browser toolbar.
+2. Click `Copy Initialization Prompt`.
+3. Open the settings page of the AI product you are using.
+4. Find the area for memory, preferences, profile instructions, or custom instructions.
+5. Paste the copied prompt there and save it.
+
+You usually only need to do this once per product/account.
+
+### 4. Use It in Chat
+
+1. Open a new chat or an existing chat on the target AI site.
+2. Enter `/webmcp` or `@webmcp`.
+3. Add your actual task in the same message.
+4. Send the message.
+
+For example:
+
+- `Read src/utils.ts and write a unit test for it.`
+- `List the files in the current workspace.`
+- `Create project docs under the docs directory.`
+
+## Workspace Skills
+
+WebMCP can expose local skills from the current VS Code workspace.
+
+Default scan directories:
+
+- `.agents/skills`
+- `.codex/skills`
+- `skills`
+
+A skill is any directory containing `SKILL.md`.
+
+The recommended loading flow is:
+
+1. Call `list_skills` or `search_skills`.
+2. Call `get_skill` for the selected skill.
+3. Call `get_skill_resource` only when the skill references extra files such as `references/`, `templates/`, or `scripts/`.
+
+Example:
 
 ```text
 .agents/
@@ -96,54 +131,48 @@ Example structure:
 
 You can customize scan paths with the VS Code setting `mcpGateway.skillDirectories`.
 
-> **Tips**:
-> - Click the status bar and select `Custom Launch...` to manually choose which browser to open.
-> - Search for `Browser Rules` in VS Code Settings to configure default "Domain-Browser" mapping rules.
-
----
-
-## 🛠️ Developer Guide (Build from Source)
-
-If you want to compile or contribute, follow these steps:
+## Build From Source
 
 ### Requirements
-- Node.js (v18+)
+
+- Node.js 18+
 - VS Code
 
-### 1. Get Source
+### 1. Clone the Repository
+
 ```bash
-git clone [https://github.com/three-water666/WebMCP.git](https://github.com/three-water666/WebMCP.git)
+git clone https://github.com/three-water666/WebMCP.git
 cd WebMCP
 ```
 
 ### 2. Build
-The project includes a cross-platform build script to generate both the VS Code extension (`.vsix`) and the Browser extension (`.zip`).
 
-**Mac / Linux:**
+The build scripts generate both the VS Code extension (`.vsix`) and the browser extension package (`.zip`).
+
+macOS / Linux:
+
 ```bash
 chmod +x build_release.sh
 ./build_release.sh
 ```
 
-**Windows (PowerShell):**
+Windows PowerShell:
+
 ```powershell
 .\build_release.ps1
 ```
 
-The artifacts will be in the `release/` folder.
+Build artifacts are written to the `release/` directory.
 
-### 3. Install & Debug
-- **VS Code**: Sidebar -> `...` -> `Install from VSIX...` -> Select the `.vsix` file.
-- **Browser**: Extensions page -> Enable "Developer mode" -> "Load unpacked" -> Select the unzipped folder in `release/` (or the `mcp-bridge-browser` source folder).
+### 3. Install for Debugging
 
----
+- VS Code: open Extensions, choose `...`, then `Install from VSIX...`
+- Browser: open the extensions page, enable Developer Mode, click `Load unpacked`, and select the extracted extension folder from `release/` or `mcp-bridge-browser`
 
-## 🤝 Contributing
+## Contributing
 
-Contributions are welcome! Whether it's reporting bugs or submitting Pull Requests, we appreciate your help.
+Issues and pull requests are welcome.
 
----
-
-## 📄 License
+## License
 
 [MIT License](LICENSE)
