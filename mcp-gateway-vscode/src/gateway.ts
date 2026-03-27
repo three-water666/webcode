@@ -572,7 +572,7 @@ export class GatewayManager {
                         <div style="background:#333; padding:10px; border-radius:6px; margin-bottom:20px; font-weight:bold; color:#fff">
                             🧩 WebMCP Bridge
                         </div>
-                        <a id="install-button" href="#" onclick="alert(window.__webmcpBridgeI18n?.installAlert || 'Please search for [WebMCP Bridge] in your browser store.'); return false;" style="display:inline-block; background:#e74c3c; color:white; padding:10px 20px; text-decoration:none; border-radius:4px; font-weight:bold;">
+                        <a id="install-button" href="https://github.com/three-water666/WebMCP/releases" target="_blank" rel="noopener noreferrer" onclick="alert(window.__webmcpBridgeI18n?.installAlert || 'Please download the browser extension from GitHub Releases: https://github.com/three-water666/WebMCP/releases');" style="display:inline-block; background:#e74c3c; color:white; padding:10px 20px; text-decoration:none; border-radius:4px; font-weight:bold;">
                             Get Browser Extension
                         </a>
                         <p id="install-warn" class="warn" style="margin-top:15px; font-size:12px">Already installed? Try reloading this page.</p>
@@ -583,19 +583,19 @@ export class GatewayManager {
                         const bridgeI18n = isZh ? {
                             connectingTitle: '正在连接 WebMCP...',
                             connectingStatus: '正在与 VS Code 同步...',
-                            installTitle: '⚠️ 需要浏览器插件',
-                            installDesc: '要启用自动连接，您需要安装配套的浏览器插件：',
-                            installButton: '获取浏览器插件',
+                            installTitle: '需要浏览器扩展',
+                            installDesc: '要启用自动连接，您需要先安装配套的浏览器扩展：',
+                            installButton: '前往下载浏览器扩展',
                             installWarn: '如果已经安装，请尝试刷新当前页面。',
-                            installAlert: '请在浏览器扩展商店中搜索 [WebMCP Bridge]。'
+                            installAlert: '请前往 GitHub Releases 下载浏览器插件：https://github.com/three-water666/WebMCP/releases'
                         } : {
                             connectingTitle: 'Connecting to WebMCP...',
                             connectingStatus: 'Synchronizing with VS Code...',
-                            installTitle: '⚠️ Extension Required',
+                            installTitle: 'Browser Extension Required',
                             installDesc: 'To enable auto-connection, you need the companion browser extension:',
-                            installButton: 'Get Browser Extension',
+                            installButton: 'Download Browser Extension',
                             installWarn: 'Already installed? Try reloading this page.',
-                            installAlert: 'Please search for [WebMCP Bridge] in your browser store.'
+                            installAlert: 'Please download the browser extension from GitHub Releases: https://github.com/three-water666/WebMCP/releases'
                         };
                         window.__webmcpBridgeI18n = bridgeI18n;
                         document.getElementById('bridge-title').textContent = bridgeI18n.connectingTitle;

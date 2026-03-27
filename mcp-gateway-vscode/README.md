@@ -5,6 +5,9 @@
 > ⚠️ **IMPORTANT**
 > This extension requires the companion browser extension **WebMCP Bridge** to function.
 > Please ensure you have installed the corresponding extension in Chrome or Edge.
+> Browser extension download: https://github.com/three-water666/WebMCP/releases
+>
+> Project: https://github.com/three-water666/WebMCP
 
 ## 🚀 Introduction
 **WebMCP Gateway** turns your VS Code into a local MCP (Model Context Protocol) server. This allows Web-based AI models (like Gemini, ChatGPT, DeepSeek) to securely access your local files, execute terminal commands, and assist you in writing code.

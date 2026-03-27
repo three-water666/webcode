@@ -3,6 +3,9 @@
 > ⚠️ **重要提示**
 > 本插件必须配合浏览器插件 **WebMCP Bridge** 使用才能生效。
 > 请确保您已在 Chrome 或 Edge 浏览器中安装了对应的扩展。
+> 浏览器插件下载地址：https://github.com/three-water666/WebMCP/releases
+>
+> 项目地址：https://github.com/three-water666/WebMCP
 
 ## 🚀 简介
 **WebMCP Gateway** 将您的 VS Code 转变为一个本地 MCP (Model Context Protocol) 服务器。这使得基于 Web 的 AI 模型（如 Gemini, ChatGPT, DeepSeek 等）能够安全地访问您的本地文件、执行终端命令，并协助您编写代码。

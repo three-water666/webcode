@@ -3,6 +3,7 @@
 > ⚠️ **重要提示**
 > 本扩展是 **WebMCP Gateway** 的配套组件。
 > 使用前，请务必在 VS Code 中安装并启动 `WebMCP Gateway` 插件。
+项目地址：https://github.com/three-water666/WebMCP
 
 ## 🚀 简介
 **WebMCP Bridge** 是连接 Web AI（如 Gemini, ChatGPT, DeepSeek）与本地 VS Code 环境的桥梁。它负责拦截特定的 AI 工具调用请求，并将其安全地转发给本地的 VS Code 服务器，从而让云端 AI 能够“看见”并“操作”您的本地项目。

@@ -1,6 +1,8 @@
 # WebMCP Bridge (Browser Extension)
 
 [中文文档](README_zh.md)
+Project: https://github.com/three-water666/WebMCP
+
 
 > ⚠️ **IMPORTANT**
 > This extension is a companion for **WebMCP Gateway**.
