@@ -110,39 +110,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         connectedView.classList.add("hidden");
         statusDot.classList.remove("online");
 
-        // [Security] Only scan if URL is allowed
+        // [Security] Manual attach is only available on normal web pages
         const currentUrl = tabs[0].url || "";
-
-        // Helper matching the logic from background
-        const getBaseUrl = (url: string) => {
-          try {
-            const u = new URL(url);
-            return u.origin + u.pathname;
-          } catch {
-            return url;
-          }
-        };
 
         const checkSafety = async () => {
           if (currentUrl.startsWith('http://127.0.0.1:') || currentUrl.startsWith('http://localhost:')) {
             return true;
           }
 
-          const localItems = await chrome.storage.local.get(["syncedAiSites"]);
-          const sites = localItems.syncedAiSites || [];
-          const fallbackWhitelist = [
-            "https://chatgpt.com",
-            "https://gemini.google.com",
-            "https://aistudio.google.com",
-            "https://chat.deepseek.com",
-            "https://chat.openai.com"
-          ];
-
-          const baseUrl = getBaseUrl(currentUrl);
-          const inDynamic = sites.some((site: any) => baseUrl.startsWith(site.address));
-          const inFallback = fallbackWhitelist.some(fb => baseUrl.startsWith(fb));
-
-          return inDynamic || inFallback;
+          return currentUrl.startsWith('https://') || currentUrl.startsWith('http://');
         };
 
         checkSafety().then(isAllowed => {
@@ -180,6 +156,13 @@ document.addEventListener("DOMContentLoaded", async () => {
                       port,
                       token,
                       tabId: currentTabId,
+                      targetOrigin: (() => {
+                        try {
+                          return new URL(currentUrl).origin;
+                        } catch {
+                          return undefined;
+                        }
+                      })(),
                     },
                     (res) => {
                       if (res && res.success) {window.close();} // Close popup on success

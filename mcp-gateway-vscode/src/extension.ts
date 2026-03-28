@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { t } from './i18n';
+import { getConfiguredAiSites } from './platforms';
 
 // 定义配置文件的 AI 站点结构
 interface AISiteConfig {
@@ -120,7 +121,7 @@ export async function activate(context: vscode.ExtensionContext) {
         const lastUsedPort = context.workspaceState.get<number>('mcp.lastPort');
 
         // [Security] Extract Allowed Origins from AI Sites config
-        const aiSites = config.get<AISiteConfig[]>('aiSites') || [];
+        const aiSites = getConfiguredAiSites(config.get<AISiteConfig[]>('aiSites'));
         const allowedOrigins = aiSites.map(site => {
             try {
                 return new URL(site.address).origin;
@@ -233,7 +234,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
         // 1. 从配置中读取 AI 站点列表
         const config = vscode.workspace.getConfiguration('mcpGateway');
-        const aiSites = config.get<AISiteConfig[]>('aiSites') || [];
+        const aiSites = getConfiguredAiSites(config.get<AISiteConfig[]>('aiSites'));
 
         // 2. 动态生成快速启动项 (仅显示 showQuickLaunch 为 true 的项)
         const quickLaunchItems: CustomActionItem[] = aiSites
@@ -398,7 +399,7 @@ function launchBridge(targetUrl: string, browserMode: string) {
 
     if (browserMode === 'auto') {
         // 新逻辑：优先检查 aiSites 中是否有配置 browser
-        const aiSites = config.get<AISiteConfig[]>('aiSites') || [];
+        const aiSites = getConfiguredAiSites(config.get<AISiteConfig[]>('aiSites'));
         const matchedSite = aiSites.find(site => site.address === targetUrl);
 
         if (matchedSite && matchedSite.browser && matchedSite.browser !== 'default') {

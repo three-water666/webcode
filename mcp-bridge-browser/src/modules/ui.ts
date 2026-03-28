@@ -79,10 +79,7 @@ export function writeToInputBox(text: string, inputSelector: string) {
     return;
   }
 
-  let cur = inputEl.innerText || (inputEl as any).value || "";
-  cur = cur.replace(/\r\n/g, "\n").replace(/\n+/g, "\n").trim();
-  const sep = cur ? "\n\n" : "";
-  const final = cur + sep + text;
+  const final = buildFinalInputText(inputEl, text);
 
   inputEl.focus();
   let success = false;
@@ -118,8 +115,11 @@ export async function deliverResult(text: string, domSelectors: SiteSelectors): 
   const maxInlineChars = typeof domSelectors.maxInlineChars === "number"
     ? domSelectors.maxInlineChars
     : 0;
+  const inputEl = document.querySelector(domSelectors.inputArea) as HTMLElement | HTMLInputElement | HTMLTextAreaElement | null;
+  const finalInlineText = inputEl ? buildFinalInputText(inputEl, text) : text;
+  const finalInlineLength = finalInlineText.length;
 
-  if (!maxInlineChars || text.length <= maxInlineChars) {
+  if (!maxInlineChars || finalInlineLength <= maxInlineChars) {
     writeToInputBox(text, domSelectors.inputArea);
     return { uploaded: false };
   }
@@ -132,13 +132,23 @@ export async function deliverResult(text: string, domSelectors: SiteSelectors): 
     return { uploaded: false };
   }
 
-  Logger.log(`Attached oversized result as TXT (${text.length} chars)`, "action");
+  Logger.log(`Attached oversized result as TXT (${finalInlineLength} chars inline)`, "action");
 
   // Also provide a textual indication inside the input box to the LLM
   const oversizePrompt = i18n.resources.oversize || `The result exceeds the character limit. It has been attached as a text file. Please read the attached file for the full details.`;
   writeToInputBox(oversizePrompt, domSelectors.inputArea);
 
   return { uploaded: true };
+}
+
+function buildFinalInputText(
+  inputEl: HTMLElement | HTMLInputElement | HTMLTextAreaElement,
+  text: string
+): string {
+  let cur = inputEl.innerText || (inputEl as any).value || "";
+  cur = cur.replace(/\r\n/g, "\n").replace(/\n+/g, "\n").trim();
+  const sep = cur ? "\n\n" : "";
+  return cur + sep + text;
 }
 
 // === 自动发送逻辑 ===

@@ -31,4 +31,5 @@ export interface Session {
   token: string;
   showLog: boolean;
   workspaceId: string;
+  allowedOrigins?: string[];
 }

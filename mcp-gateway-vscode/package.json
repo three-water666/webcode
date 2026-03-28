@@ -45,29 +45,8 @@
       "properties": {
         "mcpGateway.aiSites": {
           "type": "array",
-          "default": [
-            {
-              "name": "ChatGPT",
-              "address": "https://chatgpt.com",
-              "showQuickLaunch": true
-            },
-            {
-              "name": "Gemini",
-              "address": "https://gemini.google.com",
-              "showQuickLaunch": true
-            },
-            {
-              "name": "aistudio",
-              "address": "https://aistudio.google.com/",
-              "showQuickLaunch": true
-            },
-            {
-              "name": "DeepSeek",
-              "address": "https://chat.deepseek.com",
-              "showQuickLaunch": true
-            }
-          ],
-          "description": "User-defined list of AI platforms.",
+          "default": [],
+          "description": "User-defined list of AI platforms. Leave empty to use the built-in platform registry managed by the VS Code extension.",
           "items": {
             "type": "object",
             "properties": {

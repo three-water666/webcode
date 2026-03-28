@@ -9,7 +9,8 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { ToolExecutionPayload } from '@webmcp/shared';
-import { DEFAULT_SELECTORS, PROMPTS } from './defaults';
+import { PROMPTS } from './defaults';
+import { getDefaultBridgeTarget, getDefaultSelectors, getPlatformIdByAddress } from './platforms';
 import { SkillManager } from './skillManager';
 import { TerminalSessionManager } from './terminalSessionManager';
 import {
@@ -143,6 +144,8 @@ const STOP_TERMINAL_SESSION_TOOL = {
         required: ["session_id"]
     }
 };
+
+const BUILTIN_SELECTORS = getDefaultSelectors();
 
 // Tools that always show full schema (Hot Tools)
 const BASIC_TOOLS = [
@@ -495,12 +498,8 @@ export class GatewayManager {
 
             // Generate syncedAiSites with merged selectors
             const syncedAiSites = (config.aiSites || []).map(site => {
-                let defaultSelectors = {};
-                const address = site.address.toLowerCase();
-                if (address.includes('chatgpt.com') || address.includes('openai.com')) {defaultSelectors = DEFAULT_SELECTORS.chatgpt;}
-                else if (address.includes('gemini.google.com')) {defaultSelectors = DEFAULT_SELECTORS.gemini;}
-                else if (address.includes('aistudio.google.com')) {defaultSelectors = DEFAULT_SELECTORS.aistudio;}
-                else if (address.includes('deepseek.com')) {defaultSelectors = DEFAULT_SELECTORS.deepseek;}
+                const platformId = getPlatformIdByAddress(site.address);
+                const defaultSelectors = platformId ? BUILTIN_SELECTORS[platformId] || {} : {};
 
                 return {
                     ...site,
@@ -509,7 +508,6 @@ export class GatewayManager {
             });
 
             res.json({
-                selectors: DEFAULT_SELECTORS, // Keep for backward compatibility if needed
                 syncedAiSites: syncedAiSites,
                 prompts: PROMPTS
             });
@@ -526,7 +524,7 @@ export class GatewayManager {
 
         // 5. 桥接页面 (Bridge Page)
         this.app.get('/bridge', (req, res) => {
-            const target = req.query.target as string || 'https://chatgpt.com';
+            const target = req.query.target as string || getDefaultBridgeTarget();
             const token = req.query.token as string;
             const port = this.server.address().port;
 

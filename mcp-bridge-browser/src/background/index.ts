@@ -29,6 +29,15 @@ function getBaseUrl(url: string): string {
   }
 }
 
+function getOrigin(url: string | undefined): string | null {
+  if (!url) {return null;}
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}
+
 // === 保持连接逻辑 & 安全熔断 ===
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   // Use URL from changeInfo if available, otherwise fallback to tab.url
@@ -38,34 +47,29 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
   const isBridgePage = currentUrl.startsWith('http://127.0.0.1:') || currentUrl.startsWith('http://localhost:');
 
-  const checkUrlSafety = async (url: string) => {
+  const checkUrlSafety = async (url: string, session?: Session) => {
     if (isBridgePage) {return true;}
+
+    const currentOrigin = getOrigin(url);
+    if (currentOrigin && session?.allowedOrigins?.includes(currentOrigin)) {
+      return true;
+    }
 
     // Check against dynamic sites configuration
     const localItems = await chrome.storage.local.get(["syncedAiSites"]);
     const sites = localItems.syncedAiSites || [];
 
-    // Fallback static whitelist to prevent immediate disconnection right after update or during boot
-    const fallbackWhitelist = [
-      "https://chatgpt.com",
-      "https://gemini.google.com",
-      "https://aistudio.google.com",
-      "https://chat.deepseek.com",
-      "https://chat.openai.com"
-    ];
-
     // Allow if the URL starts with any configured address or fallback address
     const baseUrl = getBaseUrl(url);
     const inDynamic = sites.some((site: any) => baseUrl.startsWith(site.address));
-    const inFallback = fallbackWhitelist.some(fb => baseUrl.startsWith(fb));
 
-    return inDynamic || inFallback;
+    return inDynamic;
   };
 
   if (changeInfo.url) {
-    const isSafe = await checkUrlSafety(changeInfo.url);
+    const session = await getSession(tabId);
+    const isSafe = await checkUrlSafety(changeInfo.url, session);
     if (!isSafe) {
-      const session = await getSession(tabId);
       if (session) {
         console.log(`[WebMCP] Security Fuse: Url changed to ${changeInfo.url}, revoking session.`);
         await removeSession(tabId);
@@ -79,7 +83,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     const session = await getSession(tabId);
     if (!session) {return;}
 
-    const isSafe = await checkUrlSafety(currentUrl);
+    const isSafe = await checkUrlSafety(currentUrl, session);
 
     if (isSafe) {
       updateBadge(tabId, true);
@@ -164,7 +168,7 @@ chrome.runtime.onMessage.addListener((request: MessageRequest, sender, sendRespo
     if (request.port && request.token) {
         // Fallback workspaceId if not provided during manual connect
         const workspaceId = request.workspaceId || 'global';
-        bindSession(targetTabId, request.port, request.token, workspaceId)
+        bindSession(targetTabId, request.port, request.token, workspaceId, request.targetOrigin)
         .then(() => sendResponse({ success: true }))
         .catch((err) => sendResponse({ success: false, error: err.message }));
     }
@@ -202,7 +206,7 @@ async function removeSession(tabId: number) {
 
 // === 逻辑实现 ===
 async function handleHandshake(request: any, tabId: number | null | undefined): Promise<HandshakeResponse> {
-  const { port, token, force, workspaceId = 'global' } = request;
+  const { port, token, force, workspaceId = 'global', targetOrigin } = request;
 
   if (!tabId) {return { success: false, error: "No Tab ID" };}
 
@@ -230,12 +234,13 @@ async function handleHandshake(request: any, tabId: number | null | undefined): 
       }
     }
   }
-  await bindSession(tabId, port, token, workspaceId);
+  await bindSession(tabId, port, token, workspaceId, targetOrigin);
   return { success: true };
 }
 
-async function bindSession(tabId: number, port: number, token: string, workspaceId: string) {
-  await saveSession(tabId, { port, token, showLog: false, workspaceId });
+async function bindSession(tabId: number, port: number, token: string, workspaceId: string, targetOrigin?: string) {
+  const allowedOrigins = targetOrigin ? [targetOrigin] : [];
+  await saveSession(tabId, { port, token, showLog: false, workspaceId, allowedOrigins });
   console.log(`[WebMCP] Tab ${tabId} bound to Port ${port} [Workspace: ${workspaceId}]`);
   updateBadge(tabId, true);
   // [Sync] Notify Content Script
@@ -257,12 +262,10 @@ async function fetchInitDataFromGateway(port: number, token: string) {
     }
     const data = await resp.json();
 
-    if (data.selectors && data.prompts) {
+    if (data.prompts) {
       console.log("[WebMCP] Overwriting local rules with Gateway Defaults.");
 
-      // Save pure defaults for Read-Only access in options or merging in content
       await chrome.storage.local.set({
-        defaultSelectors: data.selectors,
         syncedAiSites: data.syncedAiSites || [], // Save dynamically injected AI sites & selectors
         ...data.prompts // prompt_en, prompt_zh, train_en... etc.
       });
