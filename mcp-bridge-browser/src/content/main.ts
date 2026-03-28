@@ -32,14 +32,16 @@ const promptKey = lang === "zh" ? "prompt_zh" : "prompt_en";
 const trainKey = lang === "zh" ? "train_zh" : "train_en";
 const errorKey = lang === "zh" ? "error_hint_zh" : "error_hint_en";
 const initKey = lang === "zh" ? "init_zh" : "init_en";
+const oversizeKey = lang === "zh" ? "oversize_zh" : "oversize_en";
 
 function loadPromptsFromStorage(): Promise<void> {
   return new Promise((resolve) => {
-    chrome.storage.local.get([promptKey, trainKey, errorKey, initKey], (items) => {
+    chrome.storage.local.get([promptKey, trainKey, errorKey, initKey, oversizeKey], (items) => {
       if (items[promptKey]) { i18n.resources.prompt = items[promptKey]; }
       if (items[trainKey]) { i18n.resources.train = items[trainKey]; }
       if (items[errorKey]) { i18n.resources.error = items[errorKey]; }
       if (items[initKey]) { i18n.resources.init = items[initKey]; }
+      if (items[oversizeKey]) { i18n.resources.oversize = items[oversizeKey]; }
       resolve();
     });
   });
@@ -187,7 +189,7 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
       initDOMConfig();
       Logger.log(t("config_updated"), "action");
     }
-    if (changes[promptKey] || changes[trainKey] || changes[errorKey] || changes[initKey]) {
+    if (changes[promptKey] || changes[trainKey] || changes[errorKey] || changes[initKey] || changes[oversizeKey]) {
       loadPromptsFromStorage();
     }
   }
@@ -357,18 +359,20 @@ function runMainLoop() {
       });
 
       if (hasUnflushedContent && DOM) {
+        const selectors = DOM;
         Logger.log(
           `Batch finished: ${orderedResults.length} tools. Writing...`,
           "success"
         );
         // 回填
-        UI.writeToInputBox(orderedResults.join("\n\n"), DOM.inputArea);
+        const finalOutput = orderedResults.join("\n\n");
         actionableIds.forEach((id) => {
           resultBuffer.delete(id);
           flushedRequests.add(id);
         });
-        // 自动发送
-        UI.triggerAutoSend(CONFIG, DOM);
+        void UI.deliverResult(finalOutput, selectors).then(() => {
+          UI.triggerAutoSend(CONFIG, selectors);
+        });
       } else {
         // 纯虚拟工具（无输出）
         const anyVirtual = actionableIds.some((id) => resultBuffer.has(id));

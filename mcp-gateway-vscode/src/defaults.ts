@@ -6,6 +6,8 @@ import errorHintEn from '../prompts/error_hint_en.md';
 import errorHintZh from '../prompts/error_hint_zh.md';
 import initEn from '../prompts/init_en.md';
 import initZh from '../prompts/init_zh.md';
+import oversizeEn from '../prompts/oversize_en.md';
+import oversizeZh from '../prompts/oversize_zh.md';
 
 export const DEFAULT_SELECTORS = {
   deepseek: {
@@ -47,5 +49,7 @@ export const PROMPTS = {
   error_hint_en: errorHintEn,
   error_hint_zh: errorHintZh,
   init_en: initEn,
-  init_zh: initZh
+  init_zh: initZh,
+  oversize_en: oversizeEn,
+  oversize_zh: oversizeZh
 };

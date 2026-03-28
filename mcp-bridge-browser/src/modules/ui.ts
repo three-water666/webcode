@@ -1,10 +1,14 @@
-import { Logger, t } from './utils';
+import { Logger, t, i18n } from './utils';
 import { ToolExecutionPayload } from '../types';
 import { SiteSelectors } from './config';
 
 let autoSendTimer: NodeJS.Timeout | null = null;
 export type CommandApprovalScope = false | 'exact' | 'executable' | 'prefix';
 
+/**
+ * 终止当前正在进行的自动发送轮询机制
+ * @description 如果定时器存在，清除它并输出取消日志。主要用于当监听到用户手动输入或页面有新活动时，打断之前的自动发送操作。
+ */
 export function cancelAutoSend() {
   if (autoSendTimer) {
     clearTimeout(autoSendTimer);
@@ -16,6 +20,11 @@ export function cancelAutoSend() {
 // === 视觉标记 ===
 
 // 状态 1: 处理中 (蓝色)
+/**
+ * 视觉标记：将页面上的工具调用代码块标记为“处理中”状态
+ * @param element 要标记的 HTML 元素
+ * @description 修改元素的边框为蓝色，表示该 MCP 工具请求已被捕获并正在排队或执行中。
+ */
 export function markVisualProcessing(element: HTMLElement) {
   if (element.dataset.mcpState === "processing") {return;}
   element.dataset.mcpState = "processing";
@@ -26,6 +35,11 @@ export function markVisualProcessing(element: HTMLElement) {
 }
 
 // 状态 2: 成功 (绿色)
+/**
+ * 视觉标记：将页面上的工具调用代码块标记为“执行成功”状态
+ * @param element 要标记的 HTML 元素
+ * @description 修改元素的边框为绿色，表示 MCP 工具已经执行完毕且结果已写回给大模型。
+ */
 export function markVisualSuccess(element: HTMLElement) {
   if (element.dataset.mcpState === "success") {return;}
   element.dataset.mcpState = "success";
@@ -35,6 +49,11 @@ export function markVisualSuccess(element: HTMLElement) {
 }
 
 // 状态 3: 错误 (红色)
+/**
+ * 视觉标记：将页面上的工具调用代码块标记为“执行失败/错误”状态
+ * @param element 要标记的 HTML 元素
+ * @description 修改元素的边框为红色，表示该工具调用在执行或 JSON 解析阶段发生错误，或被用户人工拒绝。
+ */
 export function markVisualError(element: HTMLElement) {
   if (element.dataset.mcpState === "error") {return;}
   element.dataset.mcpState = "error";
@@ -44,6 +63,15 @@ export function markVisualError(element: HTMLElement) {
 }
 
 // === 回填输入框 ===
+/**
+ * 将工具执行的结果回填到网页内的主要输入框（聊天框）中
+ * @param text 要回填的文本字符串
+ * @param inputSelector 网页对应输入框的 DOM 选择器
+ * @description
+ * - 寻找目标输入区域，读取已有内容并按需附加空行进行拼接。
+ * - 尝试使用 `document.execCommand("insertText")` 安全地将文字插入到输入框，这能最好地触发 React/Vue 的变更检测。
+ * - 作为备选（Fail-safe），如果 `execCommand` 失败，则回退直接赋值，并手动 dispatch `input` 事件触发框架数据更新。
+ */
 export function writeToInputBox(text: string, inputSelector: string) {
   const inputEl = document.querySelector(inputSelector) as HTMLElement | HTMLInputElement | HTMLTextAreaElement;
   if (!inputEl) {
@@ -75,8 +103,63 @@ export function writeToInputBox(text: string, inputSelector: string) {
   Logger.log(t("result_written"), "action");
 }
 
+/**
+ * 将工具执行的结果分发交付给聊天页面输入框
+ * @param text 要发送的内容
+ * @param domSelectors 网页对应选择器配置对象 (从 settings/init 下发)
+ * @returns 包含 `{ uploaded: boolean }` 的 Promise 对象，表示内容是否已被当作附件上传了
+ * @description
+ * - 这是一个关键的分发函数，它会自动判断内容是否超过了内联文本的最大限制(`maxInlineChars`)。
+ * - 如果超过了限制且平台支持作为附件上传，它将尝试调用对应的上传函数 (`paste` 模式)。
+ * - 如果附件模式上传成功，它会将内容提取到文本文件里，并在输入框中写下简短的提示语引导 AI 读取附件。
+ * - 如果附件上传失败，或者内容未超长，它将安全地回退，把全部结果拼接到输入框里。
+ */
+export async function deliverResult(text: string, domSelectors: SiteSelectors): Promise<{ uploaded: boolean }> {
+  const maxInlineChars = typeof domSelectors.maxInlineChars === "number"
+    ? domSelectors.maxInlineChars
+    : 0;
+
+  if (!maxInlineChars || text.length <= maxInlineChars) {
+    writeToInputBox(text, domSelectors.inputArea);
+    return { uploaded: false };
+  }
+
+  const uploaded = await pasteTextAsAttachment(text, domSelectors);
+
+  if (!uploaded) {
+    Logger.log("Attachment upload failed. Falling back to inline result.", "warn");
+    writeToInputBox(text, domSelectors.inputArea);
+    return { uploaded: false };
+  }
+
+  Logger.log(`Attached oversized result as TXT (${text.length} chars)`, "action");
+
+  // Also provide a textual indication inside the input box to the LLM
+  const oversizePrompt = i18n.resources.oversize || `The result exceeds the character limit. It has been attached as a text file. Please read the attached file for the full details.`;
+  writeToInputBox(oversizePrompt, domSelectors.inputArea);
+
+  return { uploaded: true };
+}
+
 // === 自动发送逻辑 ===
-export function triggerAutoSend(config: { autoSend: boolean }, domSelectors: SiteSelectors) {
+/**
+ * 触发智能自动发送（轮询重试机制）
+ * @param config 用户插件配置 (如 autoSend: boolean)
+ * @param domSelectors 网页对应选择器配置对象 (从 settings/init 下发)
+ * @description
+ * - 这是发送消息的核心自动机制，它会尝试使用各种可用的方法让当前网页端把回复消息“按出去”。
+ * - 初始化时它将清理掉上一次的回车尝试，保证只留一个定时器运作。
+ * - 每过 `1000~2000ms`，尝试寻找和触发当前网页的发送方式：
+ * - 1. 分发一次基于回车键的 `KeyboardEvent`（一次使用 Ctrl，下一次不使用 Ctrl 切换尝试）。
+ * - 2. 等待 `200ms` 让目标网页的 JavaScript （React/Vue 等）响应和重新渲染 DOM 界面。
+ * - 3. 检查：当前输入框是被清空了（说明已发送），还是出现了代表模型思考中的“停止”按钮？如果检测到任何发送成功的特征，马上停止定时器。
+ * - 4. 否则，继续寻找真正的“发送”按钮并发送鼠标 `click` 等事件强行点击。
+ * - 5. 如果重试 5 次还是失败，系统会弹出通知警告用户。
+ */
+export function triggerAutoSend(
+  config: { autoSend: boolean },
+  domSelectors: SiteSelectors
+) {
   if (!config.autoSend) {return;}
   if (autoSendTimer) {
     clearTimeout(autoSendTimer);
@@ -87,14 +170,13 @@ export function triggerAutoSend(config: { autoSend: boolean }, domSelectors: Sit
   const maxRetries = 5;
 
   const trySend = () => {
-    const btn = document.querySelector(domSelectors.sendButton) as HTMLButtonElement;
     const inputEl = document.querySelector(domSelectors.inputArea) as HTMLElement;
     if (inputEl) {inputEl.focus();}
 
     const currentVal = inputEl
       ? (inputEl as any).value || inputEl.innerText || ""
       : "";
-      
+
     if (currentVal.trim().length === 0) {
       Logger.log(t("send_success_cleared"), "success");
       return;
@@ -105,35 +187,212 @@ export function triggerAutoSend(config: { autoSend: boolean }, domSelectors: Sit
       inputEl.dispatchEvent(new Event("change", { bubbles: true }));
     }
 
-    if (btn && !btn.disabled) {
-      btn.focus();
-      btn.click();
-      Logger.log(
-        `${t("auto_send_attempt")} (${retryCount + 1})`,
-        "action"
-      );
-    } else if (!btn) {
-      Logger.log(t("send_btn_missing"), "warn");
-    } else {
-      Logger.log(t("send_btn_disabled"), "warn");
+    // 优先尝试回车发送
+    if (inputEl) {
+      if (retryCount % 2 === 0) {
+        // First try Ctrl+Enter
+        triggerSingleEnter(inputEl, true);
+        Logger.log(`Auto-send fallback: Ctrl+Enter (${retryCount + 1})`, "action");
+      } else {
+        // Then try normal Enter
+        triggerSingleEnter(inputEl, false);
+        Logger.log(`Auto-send fallback: Enter (${retryCount + 1})`, "action");
+      }
     }
 
-    retryCount++;
-    if (retryCount < maxRetries) {
-      autoSendTimer = setTimeout(trySend, 2000);
-    } else {
-      Logger.log(t("auto_send_timeout"), "error");
-      chrome.runtime.sendMessage({
-        type: "SHOW_NOTIFICATION",
-        title: "Auto-Send Failed",
-        message: "Could not click send button.",
-      });
-    }
+    // 使用 RequestAnimationFrame 或短定时器等待 DOM 渲染更新
+    setTimeout(() => {
+      let isSending = false;
+
+      // 再次检查输入框是否已经被网页清空，这说明确切发出去了
+      const currentValCheck = inputEl ? ((inputEl as any).value || inputEl.innerText || "") : "";
+      if (currentValCheck.trim().length === 0) {
+        isSending = true;
+      }
+
+      // 如果成功发出去
+      if (isSending) {
+         Logger.log(t("send_success_cleared"), "success");
+         return; // 不再进入下一次 retry，也不再点按钮
+      }
+
+      // 尝试寻找停止按钮，如果刚按了回车页面出现了停止按钮，说明发送成功了且已进入生成状态
+      const stopBtn = domSelectors.stopButton ? document.querySelector(domSelectors.stopButton) : null;
+      if (stopBtn && isElementVisible(stopBtn as HTMLElement)) {
+        Logger.log(t("send_success_cleared"), "success");
+        return; // 不再进入下一次 retry，也不再点发送/停止按钮
+      }
+
+      // 此时既没有清空输入框，也没有变成生成状态，说明回车失效了。可以尝试点发送按钮。
+      let triggered = false;
+      const btnNow = document.querySelector(domSelectors.sendButton) as HTMLButtonElement | null;
+      if (isSendButtonReady(btnNow)) {
+        // 再次确认一下，我们要点的真的是发送按钮，不是由于选择器重叠导致的停止按钮
+        const isActuallyStopBtn = domSelectors.stopButton && document.querySelector(domSelectors.stopButton) === btnNow;
+        if (!isActuallyStopBtn) {
+            triggered = triggerButtonSend(btnNow!);
+            if (triggered) {
+              Logger.log(
+                `${t("auto_send_attempt")} (${retryCount + 1})`,
+                "action"
+              );
+            }
+        }
+      } else if (!btnNow) {
+        Logger.log(t("send_btn_missing"), "warn");
+      } else {
+        Logger.log(t("send_btn_disabled"), "warn");
+      }
+
+      retryCount++;
+      if (retryCount < maxRetries) {
+        autoSendTimer = setTimeout(trySend, 2000);
+      } else {
+        Logger.log(t("auto_send_timeout"), "error");
+        chrome.runtime.sendMessage({
+          type: "SHOW_NOTIFICATION",
+          title: "Auto-Send Failed",
+          message: "Could not click send button.",
+        });
+      }
+    }, 200); // 留出 200ms 的窗口给 React/Vue 渲染
   };
   autoSendTimer = setTimeout(trySend, 1000);
 }
 
+/**
+ * 模拟 `pasteFile` (粘贴文件) 模式上传文本内容为附件
+ * @param text 要作为附件的纯文本内容
+ * @param domSelectors 网页对应选择器配置对象 (从 settings/init 下发)
+ * @returns 成功返回 `true`，失败返回 `false`
+ * @description
+ * - 寻找页面上的文本输入区域。
+ * - 使用 `DataTransfer` 创造一个虚拟剪贴板，把带有时间戳名字的 TXT 文本文件放入剪贴板内。
+ * - 构造并在这个输入区域上主动派发一个 `ClipboardEvent`（即“粘贴”事件）。
+ * - 绝大多数先进的 AI 网页平台会立刻读取这个事件并自动把它当作一个图片或者文本文件上传。
+ */
+async function pasteTextAsAttachment(text: string, domSelectors: SiteSelectors): Promise<boolean> {
+  const inputEl = document.querySelector(domSelectors.inputArea) as HTMLElement | null;
+  if (!inputEl) {return false;}
+
+  const filename = `webmcp-result-${Date.now()}.txt`;
+  const file = new File([text], filename, { type: "text/plain" });
+  const clipboardData = new DataTransfer();
+  clipboardData.items.add(file);
+
+  inputEl.focus();
+  const pasteEvent = new ClipboardEvent("paste", {
+    bubbles: true,
+    cancelable: true,
+    clipboardData,
+  });
+  inputEl.dispatchEvent(pasteEvent);
+
+  await delay(800);
+  return true;
+}
+
+
+/**
+ * 检测一个 HTML 元素在网页中是否是实际可见的
+ * @param el 待测试的 HTMLElement
+ * @returns 元素未被 display:none、未被隐藏并且它的实际大小宽/高等于大于 0 时返回 `true`
+ */
+function isElementVisible(el: HTMLElement): boolean {
+  const style = window.getComputedStyle(el);
+  if (style.display === "none" || style.visibility === "hidden" || style.pointerEvents === "none") {
+    return false;
+  }
+
+  const rect = el.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
+/**
+ * 简单的异步等待函数
+ * @param ms 毫秒
+ * @returns 包装了一个 `setTimeout` 的 `Promise` 对象
+ */
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * 确认当前发现的发送按钮是不是真的“激活”
+ * @param btn 发现的发送 HTMLButtonElement
+ * @returns 它是有效的按钮则返回 `true`，如果是 `disabled`，`aria-disabled` 或者不可见的则返回 `false`
+ */
+function isSendButtonReady(btn: HTMLButtonElement | null): btn is HTMLButtonElement {
+  if (!btn) {return false;}
+  if (btn.disabled) {return false;}
+  if (btn.getAttribute("aria-disabled") === "true") {return false;}
+
+  return isElementVisible(btn);
+}
+
+/**
+ * 发送一组真实的鼠标交互事件来强行触发按钮被点击的效果
+ * @param btn 待点击的网页发送按钮
+ * @returns 始终返回 `true` 代表动作执行结束。但不能保证网页侧逻辑正确发了。
+ * @description
+ * - 针对许多采用 `React/Vue/Svelte` 单页面应用的特性，单独的 `click()` 可能无法触发业务上的响应，甚至被拦截或者需要搭配 mouseDown。
+ * - 为了更高的兼容率，派发一系列从按下鼠标到松开的完整 `MouseEvent` 组合： `pointerdown`, `mousedown`, `pointerup`, `mouseup`, 接着执行最后点击。
+ */
+function triggerButtonSend(btn: HTMLElement): boolean {
+  btn.focus();
+  const mouseEventTypes: Array<"pointerdown" | "mousedown" | "pointerup" | "mouseup" | "click"> = [
+    "pointerdown",
+    "mousedown",
+    "pointerup",
+    "mouseup",
+    "click",
+  ];
+
+  for (const type of mouseEventTypes) {
+    btn.dispatchEvent(new MouseEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+    }));
+  }
+
+  btn.click();
+  return true;
+}
+
+/**
+ * 主动抛出单独的 “回车键” 或 “Ctrl+回车键” 以尝试发送
+ * @param inputEl 需要被回车事件触发的网页聊天输入框
+ * @param withCtrl 若是 `true` 抛出带 Ctrl 的 Enter，否则是不带修饰键的 Enter
+ * @description
+ * - 针对许多采用 `React/Vue/Svelte` 的 AI 平台由于不支持普通的按钮点击（或无法选中按钮）导致发送失败。
+ * - 该机制直接把 `keydown`, `keypress` 和 `keyup` 的事件连击强塞给聊天输入框，以此模拟人类“按下回车”。
+ */
+function triggerSingleEnter(inputEl: HTMLElement, withCtrl: boolean) {
+  inputEl.focus();
+  const init: KeyboardEventInit = {
+    key: "Enter",
+    code: "Enter",
+    bubbles: true,
+    cancelable: true,
+    ctrlKey: withCtrl,
+    shiftKey: false
+  };
+  inputEl.dispatchEvent(new KeyboardEvent("keydown", init));
+  inputEl.dispatchEvent(new KeyboardEvent("keypress", init));
+  inputEl.dispatchEvent(new KeyboardEvent("keyup", init));
+}
+
 // === HITL 弹窗 (Shadow DOM) ===
+/**
+ * 生成并显示供人类操作员决定是否通过（Approval / Rejection）危险操作的安全授权遮罩弹窗（Human-In-The-Loop 机制）
+ * @param payload 将要执行的工具的参数 (`ToolExecutionPayload` 对象，如 name, arguments, purpose)
+ * @param onConfirm 用户同意执行所选定授权范围后的回调函数，范围有 `exact`（精确匹配），`executable`（命令主程序）等，如果是只通过一次则是 `false`。
+ * @param onReject 用户明确拒绝时的回调函数，带有驳回原因(字符串)。
+ * @description
+ * - 该弹窗被隔离封装在网页内的 `Shadow DOM`，完全脱离并免疫网页原有任何样式的干扰与污染。
+ * - 该弹窗不仅可以展示调用风险详情，也提供了为该工作空间永久放行特定类型操作的逻辑面板（一键通过，不再反复弹窗）。
+ */
 export function showConfirmationModal(
   payload: ToolExecutionPayload,
   onConfirm: (scope: CommandApprovalScope) => void,
@@ -153,6 +412,8 @@ export function showConfirmationModal(
 
   const style = document.createElement("style");
   style.textContent = `
+          :host { all: initial; color-scheme: light; }
+          *, *::before, *::after { box-sizing: border-box; }
           .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; padding: 24px; overflow-y: auto; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
           .card { background: #fff; padding: 24px; border-radius: 12px; width: 450px; max-width: min(90vw, 450px); max-height: calc(100vh - 48px); overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.4); border: 1px solid #e0e0e0; color: #333; animation: fadeIn 0.2s ease-out; box-sizing: border-box; }
           @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -162,6 +423,7 @@ export function showConfirmationModal(
           .label { font-weight: 600; font-size: 12px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; display: block; }
           .value { background: #f8f9fa; padding: 10px; border-radius: 6px; font-family: "Menlo", "Consolas", monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; max-height: 250px; overflow-y: auto; border: 1px solid #e9ecef; color: #212529; }
           .buttons { display: flex; gap: 12px; margin-top: 24px; justify-content: flex-end; align-items: center; }
+          button, input { font: inherit; }
           button { padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.2s; }
           button:hover { transform: translateY(-1px); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
           .btn-reject { background: #fff; color: #dc3545; border: 1px solid #dc3545; }
@@ -390,11 +652,21 @@ export function showConfirmationModal(
   shadow.appendChild(overlay);
 }
 
+/**
+ * 从一行待审批执行的命令中获取它的第一段程序名称
+ * @param command 带有参数的执行命令
+ * @returns 基础可执行文件名称
+ */
 function getCommandExecutable(command: string): string {
   const tokens = tokenizeCommandLine(command);
   return tokens[0] || command;
 }
 
+/**
+ * 从一行待审批执行的命令中获取命令的主体及其第一个参数的前缀模式
+ * @param command 带有参数的执行命令
+ * @returns 基础可执行文件名称+第一项参数的前两截，例如：`git commit` 或者 `npm install`
+ */
 function getCommandPrefix(command: string): string {
   const tokens = tokenizeCommandLine(command);
   if (tokens.length <= 1) {
@@ -404,6 +676,11 @@ function getCommandPrefix(command: string): string {
   return tokens.slice(0, 2).join(" ");
 }
 
+/**
+ * 提供将长段带有各种空格与引号的命令行文字转为单词数组
+ * @param command 将被切分的命令行语句
+ * @returns 参数字符串切片的 Token 数组
+ */
 function tokenizeCommandLine(command: string): string[] {
   const tokens: string[] = [];
   let current = "";

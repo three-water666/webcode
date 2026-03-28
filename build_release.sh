@@ -27,6 +27,11 @@ pnpm --filter @webmcp/shared run build
 echo -e "${CYAN}Building VS Code Extension...${NC}"
 cd mcp-gateway-vscode
 
+if [ ! -x "node_modules/.bin/vsce" ] && ! command -v vsce >/dev/null 2>&1; then
+  echo "[ERROR] VS Code packaging tool not found. Run 'pnpm install' to install workspace dependencies, including @vscode/vsce."
+  exit 1
+fi
+
 # Get version
 VS_VERSION=$(node -p "require('./package.json').version")
 VS_NAME="WebMCP-Gateway-VSCode-${VS_VERSION}.vsix"
