@@ -32,14 +32,16 @@ const promptKey = lang === "zh" ? "prompt_zh" : "prompt_en";
 const trainKey = lang === "zh" ? "train_zh" : "train_en";
 const errorKey = lang === "zh" ? "error_hint_zh" : "error_hint_en";
 const initKey = lang === "zh" ? "init_zh" : "init_en";
+const oversizeKey = lang === "zh" ? "oversize_zh" : "oversize_en";
 
 function loadPromptsFromStorage(): Promise<void> {
   return new Promise((resolve) => {
-    chrome.storage.local.get([promptKey, trainKey, errorKey, initKey], (items) => {
+    chrome.storage.local.get([promptKey, trainKey, errorKey, initKey, oversizeKey], (items) => {
       if (items[promptKey]) { i18n.resources.prompt = items[promptKey]; }
       if (items[trainKey]) { i18n.resources.train = items[trainKey]; }
       if (items[errorKey]) { i18n.resources.error = items[errorKey]; }
       if (items[initKey]) { i18n.resources.init = items[initKey]; }
+      if (items[oversizeKey]) { i18n.resources.oversize = items[oversizeKey]; }
       resolve();
     });
   });
@@ -187,7 +189,7 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
       initDOMConfig();
       Logger.log(t("config_updated"), "action");
     }
-    if (changes[promptKey] || changes[trainKey] || changes[errorKey] || changes[initKey]) {
+    if (changes[promptKey] || changes[trainKey] || changes[errorKey] || changes[initKey] || changes[oversizeKey]) {
       loadPromptsFromStorage();
     }
   }
@@ -368,8 +370,8 @@ function runMainLoop() {
           resultBuffer.delete(id);
           flushedRequests.add(id);
         });
-        void UI.deliverResult(finalOutput, selectors).then((delivery) => {
-          UI.triggerAutoSend(CONFIG, selectors, { allowEmptyInput: delivery.uploaded });
+        void UI.deliverResult(finalOutput, selectors).then(() => {
+          UI.triggerAutoSend(CONFIG, selectors);
         });
       } else {
         // 纯虚拟工具（无输出）

@@ -1,4 +1,4 @@
-import { Logger, t } from './utils';
+import { Logger, t, i18n } from './utils';
 import { ToolExecutionPayload } from '../types';
 import { SiteSelectors } from './config';
 
@@ -97,14 +97,18 @@ export async function deliverResult(text: string, domSelectors: SiteSelectors): 
   }
 
   Logger.log(`Attached oversized result as TXT (${text.length} chars)`, "action");
+
+  // Also provide a textual indication inside the input box to the LLM
+  const oversizePrompt = i18n.resources.oversize || `The result exceeds the character limit. It has been attached as a text file. Please read the attached file for the full details.`;
+  writeToInputBox(oversizePrompt, domSelectors.inputArea);
+
   return { uploaded: true };
 }
 
 // === 自动发送逻辑 ===
 export function triggerAutoSend(
   config: { autoSend: boolean },
-  domSelectors: SiteSelectors,
-  options: { allowEmptyInput?: boolean } = {}
+  domSelectors: SiteSelectors
 ) {
   if (!config.autoSend) {return;}
   if (autoSendTimer) {
@@ -116,15 +120,14 @@ export function triggerAutoSend(
   const maxRetries = 5;
 
   const trySend = () => {
-    const btn = document.querySelector(domSelectors.sendButton) as HTMLButtonElement;
     const inputEl = document.querySelector(domSelectors.inputArea) as HTMLElement;
     if (inputEl) {inputEl.focus();}
 
     const currentVal = inputEl
       ? (inputEl as any).value || inputEl.innerText || ""
       : "";
-      
-    if (currentVal.trim().length === 0 && !options.allowEmptyInput) {
+
+    if (currentVal.trim().length === 0) {
       Logger.log(t("send_success_cleared"), "success");
       return;
     }
@@ -134,37 +137,75 @@ export function triggerAutoSend(
       inputEl.dispatchEvent(new Event("change", { bubbles: true }));
     }
 
-    let triggered = false;
-    if (isSendButtonReady(btn)) {
-      triggered = triggerButtonSend(btn);
-      if (triggered) {
-        Logger.log(
-          `${t("auto_send_attempt")} (${retryCount + 1})`,
-          "action"
-        );
+    // 优先尝试回车发送
+    if (inputEl) {
+      if (retryCount % 2 === 0) {
+        // First try Ctrl+Enter
+        triggerSingleEnter(inputEl, true);
+        Logger.log(`Auto-send fallback: Ctrl+Enter (${retryCount + 1})`, "action");
+      } else {
+        // Then try normal Enter
+        triggerSingleEnter(inputEl, false);
+        Logger.log(`Auto-send fallback: Enter (${retryCount + 1})`, "action");
       }
-    } else if (!btn) {
-      Logger.log(t("send_btn_missing"), "warn");
-    } else {
-      Logger.log(t("send_btn_disabled"), "warn");
     }
 
-    if (!triggered && inputEl) {
-      triggerCtrlEnterSend(inputEl);
-      Logger.log(`Auto-send fallback: Ctrl+Enter (${retryCount + 1})`, "action");
-    }
+    // 使用 RequestAnimationFrame 或短定时器等待 DOM 渲染更新
+    setTimeout(() => {
+      let isSending = false;
 
-    retryCount++;
-    if (retryCount < maxRetries) {
-      autoSendTimer = setTimeout(trySend, 2000);
-    } else {
-      Logger.log(t("auto_send_timeout"), "error");
-      chrome.runtime.sendMessage({
-        type: "SHOW_NOTIFICATION",
-        title: "Auto-Send Failed",
-        message: "Could not click send button.",
-      });
-    }
+      // 再次检查输入框是否已经被网页清空，这说明确切发出去了
+      const currentValCheck = inputEl ? ((inputEl as any).value || inputEl.innerText || "") : "";
+      if (currentValCheck.trim().length === 0) {
+        isSending = true;
+      }
+
+      // 如果成功发出去
+      if (isSending) {
+         Logger.log(t("send_success_cleared"), "success");
+         return; // 不再进入下一次 retry，也不再点按钮
+      }
+
+      // 尝试寻找停止按钮，如果刚按了回车页面出现了停止按钮，说明发送成功了且已进入生成状态
+      const stopBtn = domSelectors.stopButton ? document.querySelector(domSelectors.stopButton) : null;
+      if (stopBtn && isElementVisible(stopBtn as HTMLElement)) {
+        Logger.log(t("send_success_cleared"), "success");
+        return; // 不再进入下一次 retry，也不再点发送/停止按钮
+      }
+
+      // 此时既没有清空输入框，也没有变成生成状态，说明回车失效了。可以尝试点发送按钮。
+      let triggered = false;
+      const btnNow = document.querySelector(domSelectors.sendButton) as HTMLButtonElement | null;
+      if (isSendButtonReady(btnNow)) {
+        // 再次确认一下，我们要点的真的是发送按钮，不是由于选择器重叠导致的停止按钮
+        const isActuallyStopBtn = domSelectors.stopButton && document.querySelector(domSelectors.stopButton) === btnNow;
+        if (!isActuallyStopBtn) {
+            triggered = triggerButtonSend(btnNow!);
+            if (triggered) {
+              Logger.log(
+                `${t("auto_send_attempt")} (${retryCount + 1})`,
+                "action"
+              );
+            }
+        }
+      } else if (!btnNow) {
+        Logger.log(t("send_btn_missing"), "warn");
+      } else {
+        Logger.log(t("send_btn_disabled"), "warn");
+      }
+
+      retryCount++;
+      if (retryCount < maxRetries) {
+        autoSendTimer = setTimeout(trySend, 2000);
+      } else {
+        Logger.log(t("auto_send_timeout"), "error");
+        chrome.runtime.sendMessage({
+          type: "SHOW_NOTIFICATION",
+          title: "Auto-Send Failed",
+          message: "Could not click send button.",
+        });
+      }
+    }, 200); // 留出 200ms 的窗口给 React/Vue 渲染
   };
   autoSendTimer = setTimeout(trySend, 1000);
 }
@@ -292,19 +333,19 @@ function triggerButtonSend(btn: HTMLElement): boolean {
   return true;
 }
 
-function triggerCtrlEnterSend(inputEl: HTMLElement) {
+function triggerSingleEnter(inputEl: HTMLElement, withCtrl: boolean) {
   inputEl.focus();
-  const keyboardEventInit: KeyboardEventInit = {
+  const init: KeyboardEventInit = {
     key: "Enter",
     code: "Enter",
     bubbles: true,
     cancelable: true,
-    ctrlKey: true,
+    ctrlKey: withCtrl,
+    shiftKey: false
   };
-
-  inputEl.dispatchEvent(new KeyboardEvent("keydown", keyboardEventInit));
-  inputEl.dispatchEvent(new KeyboardEvent("keypress", keyboardEventInit));
-  inputEl.dispatchEvent(new KeyboardEvent("keyup", keyboardEventInit));
+  inputEl.dispatchEvent(new KeyboardEvent("keydown", init));
+  inputEl.dispatchEvent(new KeyboardEvent("keypress", init));
+  inputEl.dispatchEvent(new KeyboardEvent("keyup", init));
 }
 
 // === HITL 弹窗 (Shadow DOM) ===

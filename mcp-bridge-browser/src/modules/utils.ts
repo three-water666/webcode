@@ -5,13 +5,14 @@ interface I18nState {
     train: string | null;
     error: string | null;
     init: string | null;
+    oversize: string | null;
   };
 }
 
 // === 国际化资源 ===
 export const i18n: I18nState = {
   lang: navigator.language.startsWith("zh") ? "zh" : "en",
-  resources: { prompt: null, train: null, error: null, init: null },
+  resources: { prompt: null, train: null, error: null, init: null, oversize: null },
 };
 
 // === 日志字典 ===
