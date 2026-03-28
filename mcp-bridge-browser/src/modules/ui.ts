@@ -110,7 +110,7 @@ export function writeToInputBox(text: string, inputSelector: string) {
  * @returns 包含 `{ uploaded: boolean }` 的 Promise 对象，表示内容是否已被当作附件上传了
  * @description
  * - 这是一个关键的分发函数，它会自动判断内容是否超过了内联文本的最大限制(`maxInlineChars`)。
- * - 如果超过了限制且平台支持作为附件上传，它将尝试调用对应的上传函数 (`fileInput` 模式或 `paste` 模式)。
+ * - 如果超过了限制且平台支持作为附件上传，它将尝试调用对应的上传函数 (`paste` 模式)。
  * - 如果附件模式上传成功，它会将内容提取到文本文件里，并在输入框中写下简短的提示语引导 AI 读取附件。
  * - 如果附件上传失败，或者内容未超长，它将安全地回退，把全部结果拼接到输入框里。
  */
@@ -124,10 +124,7 @@ export async function deliverResult(text: string, domSelectors: SiteSelectors): 
     return { uploaded: false };
   }
 
-  const attachmentMode = domSelectors.attachmentMode || "pasteFile";
-  const uploaded = attachmentMode === "fileInput"
-    ? await uploadTextAsAttachment(text, domSelectors)
-    : await pasteTextAsAttachment(text, domSelectors);
+  const uploaded = await pasteTextAsAttachment(text, domSelectors);
 
   if (!uploaded) {
     Logger.log("Attachment upload failed. Falling back to inline result.", "warn");
@@ -264,54 +261,6 @@ export function triggerAutoSend(
 }
 
 /**
- * 模拟 `fileInput` 模式上传文本内容为附件
- * @param text 要作为附件的纯文本内容
- * @param domSelectors 网页对应选择器配置对象 (从 settings/init 下发)
- * @returns 成功返回 `true`，失败返回 `false`
- * @description
- * - 尝试找到页面上的 `<input type="file">` 元素。
- * - 如果找不到，尝试点击一次预设的 `attachButton` 弹出选择文件的对话框，并等待 DOM 显示该 fileInput。
- * - 成功找到 fileInput 后，使用 `DataTransfer` 模拟创建并附加一个新的文本文件 (TXT) 并赋予其带有时间戳的文件名。
- * - 将 `DataTransfer` 里的文件集合赋予 input，并发射 `change` 等事件以触发上传逻辑。
- * - 如果网页有预设的 `attachmentReadyIndicator` (附件预览完成的标识选择器)，会进一步等待该指示器显现。
- */
-async function uploadTextAsAttachment(text: string, domSelectors: SiteSelectors): Promise<boolean> {
-  let fileInput = queryFileInput(domSelectors.fileInput);
-
-  if (!fileInput && domSelectors.attachButton) {
-    const attachButton = document.querySelector(domSelectors.attachButton) as HTMLElement | null;
-    if (attachButton) {
-      triggerButtonSend(attachButton);
-      await delay(300);
-      fileInput = queryFileInput(domSelectors.fileInput);
-    }
-  }
-
-  if (!fileInput) {return false;}
-
-  const filename = `webmcp-result-${Date.now()}.txt`;
-  const file = new File([text], filename, { type: "text/plain" });
-  const transfer = new DataTransfer();
-  transfer.items.add(file);
-
-  try {
-    fileInput.files = transfer.files;
-  } catch {
-    return false;
-  }
-
-  fileInput.dispatchEvent(new Event("input", { bubbles: true }));
-  fileInput.dispatchEvent(new Event("change", { bubbles: true }));
-
-  if (domSelectors.attachmentReadyIndicator) {
-    return waitForAttachmentReady(domSelectors.attachmentReadyIndicator, 8000);
-  }
-
-  await delay(800);
-  return true;
-}
-
-/**
  * 模拟 `pasteFile` (粘贴文件) 模式上传文本内容为附件
  * @param text 要作为附件的纯文本内容
  * @param domSelectors 网页对应选择器配置对象 (从 settings/init 下发)
@@ -321,7 +270,6 @@ async function uploadTextAsAttachment(text: string, domSelectors: SiteSelectors)
  * - 使用 `DataTransfer` 创造一个虚拟剪贴板，把带有时间戳名字的 TXT 文本文件放入剪贴板内。
  * - 构造并在这个输入区域上主动派发一个 `ClipboardEvent`（即“粘贴”事件）。
  * - 绝大多数先进的 AI 网页平台会立刻读取这个事件并自动把它当作一个图片或者文本文件上传。
- * - 如果网页有预设的 `attachmentReadyIndicator` (附件预览完成的标识选择器)，会进一步等待该指示器显现。
  */
 async function pasteTextAsAttachment(text: string, domSelectors: SiteSelectors): Promise<boolean> {
   const inputEl = document.querySelector(domSelectors.inputArea) as HTMLElement | null;
@@ -340,44 +288,10 @@ async function pasteTextAsAttachment(text: string, domSelectors: SiteSelectors):
   });
   inputEl.dispatchEvent(pasteEvent);
 
-  if (domSelectors.attachmentReadyIndicator) {
-    return waitForAttachmentReady(domSelectors.attachmentReadyIndicator, 8000);
-  }
-
   await delay(800);
   return true;
 }
 
-/**
- * 在页面 DOM 中寻找能够接收文件上传的 `<input type="file">` 元素
- * @param selector 可选，用户自定义的精确文件输入框选择器
- * @returns 找到的 HTMLInputElement 对象，如果没找到则返回 `null`
- */
-function queryFileInput(selector?: string): HTMLInputElement | null {
-  if (selector) {
-    return document.querySelector(selector) as HTMLInputElement | null;
-  }
-
-  return document.querySelector('input[type="file"]') as HTMLInputElement | null;
-}
-
-/**
- * 等待网页显示给定的 DOM 附件准备指示器
- * @param selector (如 CSS 选择器) 指示器
- * @param timeoutMs 最大超时毫秒
- * @returns 成功展示返回 `true`，失败超时返回 `false`
- * @description
- * - 这是一个 `Promise`，用 `isElementVisible` 检测 DOM。每 200ms 重试一次。如果在超时前找到，说明附件上传处理完毕。
- */
-async function waitForAttachmentReady(selector: string, timeoutMs: number): Promise<boolean> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    const el = document.querySelector(selector) as HTMLElement | null;
-    if (el && isElementVisible(el)) {return true;}
-    await delay(200);
-  }
-  return false;
-}
 
 /**
  * 检测一个 HTML 元素在网页中是否是实际可见的

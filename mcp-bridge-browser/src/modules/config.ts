@@ -4,10 +4,6 @@ export interface SiteSelectors {
   inputArea: string;
   sendButton: string;
   stopButton: string;
-  attachmentMode?: "pasteFile" | "fileInput";
-  attachButton?: string;
-  fileInput?: string;
-  attachmentReadyIndicator?: string;
   maxInlineChars?: number;
 }
 

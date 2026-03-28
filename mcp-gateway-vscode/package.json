@@ -113,23 +113,6 @@
                   "stopButton": {
                     "type": "string"
                   },
-                  "attachmentMode": {
-                    "type": "string",
-                    "enum": [
-                      "pasteFile",
-                      "fileInput"
-                    ],
-                    "description": "How oversized results should be attached when maxInlineChars is exceeded."
-                  },
-                  "attachButton": {
-                    "type": "string"
-                  },
-                  "fileInput": {
-                    "type": "string"
-                  },
-                  "attachmentReadyIndicator": {
-                    "type": "string"
-                  },
                   "maxInlineChars": {
                     "type": "number",
                     "minimum": 1
