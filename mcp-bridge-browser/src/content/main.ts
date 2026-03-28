@@ -1,6 +1,6 @@
 import { Logger, i18n, t } from "../modules/utils";
 import * as UI from "../modules/ui";
-import { DEFAULT_SELECTORS, SiteSelectors } from "../modules/config";
+import { SiteSelectors } from "../modules/config";
 import { ToolExecutionPayload } from "../types";
 import type { CommandApprovalScope } from "../modules/ui";
 
@@ -138,25 +138,7 @@ function initDOMConfig() {
           currentPlatform = matchedSite.name;
           startObserver();
         } else {
-          // Fallback logic for built-in sites if gateway hasn't synced yet (or old version)
-          const host = location.host;
-          const legacyPlatform = host.includes("deepseek") ? "deepseek"
-            : host.includes("gemini") ? "gemini"
-            : host.includes("aistudio") ? "aistudio"
-            : (host.includes("chatgpt") || host.includes("openai")) ? "chatgpt"
-            : null;
-
-          if (legacyPlatform) {
-            // Read from defaultSelectors (from VS Code init sync) or fallback to hardcoded
-            chrome.storage.local.get(["defaultSelectors"], (defItems) => {
-               const defaults = defItems.defaultSelectors || DEFAULT_SELECTORS;
-               DOM = defaults[legacyPlatform];
-               currentPlatform = legacyPlatform;
-               startObserver();
-            });
-          } else {
-            console.log("WebMCP: Current site is not configured in VS Code. Idle.");
-          }
+          console.log("WebMCP: Current site is not configured in VS Code. Idle.");
         }
       });
     }

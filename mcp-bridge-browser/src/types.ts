@@ -10,6 +10,7 @@ export interface MessageRequest {
   tabId?: number;
   port?: number;
   token?: string;
+  targetOrigin?: string;
   workspaceId?: string;
   force?: boolean;
   show?: boolean;

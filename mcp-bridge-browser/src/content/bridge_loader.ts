@@ -55,6 +55,12 @@ import { HandshakeResponse } from '../types';
     }
 
     const port = parseInt(portStr);
+    let targetOrigin: string | undefined;
+    try {
+      targetOrigin = new URL(target).origin;
+    } catch {
+      targetOrigin = undefined;
+    }
 
     function attemptHandshake(force = false) {
       // 发送握手请求给 Background
@@ -63,6 +69,7 @@ import { HandshakeResponse } from '../types';
           type: "HANDSHAKE",
           port: port,
           token: token,
+          targetOrigin: targetOrigin || undefined,
           workspaceId: workspaceId,
           force: force,
         },
