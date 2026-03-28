@@ -5,6 +5,10 @@ import { SiteSelectors } from './config';
 let autoSendTimer: NodeJS.Timeout | null = null;
 export type CommandApprovalScope = false | 'exact' | 'executable' | 'prefix';
 
+/**
+ * 终止当前正在进行的自动发送轮询机制
+ * @description 如果定时器存在，清除它并输出取消日志。主要用于当监听到用户手动输入或页面有新活动时，打断之前的自动发送操作。
+ */
 export function cancelAutoSend() {
   if (autoSendTimer) {
     clearTimeout(autoSendTimer);
@@ -16,6 +20,11 @@ export function cancelAutoSend() {
 // === 视觉标记 ===
 
 // 状态 1: 处理中 (蓝色)
+/**
+ * 视觉标记：将页面上的工具调用代码块标记为“处理中”状态
+ * @param element 要标记的 HTML 元素
+ * @description 修改元素的边框为蓝色，表示该 MCP 工具请求已被捕获并正在排队或执行中。
+ */
 export function markVisualProcessing(element: HTMLElement) {
   if (element.dataset.mcpState === "processing") {return;}
   element.dataset.mcpState = "processing";
@@ -26,6 +35,11 @@ export function markVisualProcessing(element: HTMLElement) {
 }
 
 // 状态 2: 成功 (绿色)
+/**
+ * 视觉标记：将页面上的工具调用代码块标记为“执行成功”状态
+ * @param element 要标记的 HTML 元素
+ * @description 修改元素的边框为绿色，表示 MCP 工具已经执行完毕且结果已写回给大模型。
+ */
 export function markVisualSuccess(element: HTMLElement) {
   if (element.dataset.mcpState === "success") {return;}
   element.dataset.mcpState = "success";
@@ -35,6 +49,11 @@ export function markVisualSuccess(element: HTMLElement) {
 }
 
 // 状态 3: 错误 (红色)
+/**
+ * 视觉标记：将页面上的工具调用代码块标记为“执行失败/错误”状态
+ * @param element 要标记的 HTML 元素
+ * @description 修改元素的边框为红色，表示该工具调用在执行或 JSON 解析阶段发生错误，或被用户人工拒绝。
+ */
 export function markVisualError(element: HTMLElement) {
   if (element.dataset.mcpState === "error") {return;}
   element.dataset.mcpState = "error";
@@ -44,6 +63,15 @@ export function markVisualError(element: HTMLElement) {
 }
 
 // === 回填输入框 ===
+/**
+ * 将工具执行的结果回填到网页内的主要输入框（聊天框）中
+ * @param text 要回填的文本字符串
+ * @param inputSelector 网页对应输入框的 DOM 选择器
+ * @description
+ * - 寻找目标输入区域，读取已有内容并按需附加空行进行拼接。
+ * - 尝试使用 `document.execCommand("insertText")` 安全地将文字插入到输入框，这能最好地触发 React/Vue 的变更检测。
+ * - 作为备选（Fail-safe），如果 `execCommand` 失败，则回退直接赋值，并手动 dispatch `input` 事件触发框架数据更新。
+ */
 export function writeToInputBox(text: string, inputSelector: string) {
   const inputEl = document.querySelector(inputSelector) as HTMLElement | HTMLInputElement | HTMLTextAreaElement;
   if (!inputEl) {
@@ -75,6 +103,17 @@ export function writeToInputBox(text: string, inputSelector: string) {
   Logger.log(t("result_written"), "action");
 }
 
+/**
+ * 将工具执行的结果分发交付给聊天页面输入框
+ * @param text 要发送的内容
+ * @param domSelectors 网页对应选择器配置对象 (从 settings/init 下发)
+ * @returns 包含 `{ uploaded: boolean }` 的 Promise 对象，表示内容是否已被当作附件上传了
+ * @description
+ * - 这是一个关键的分发函数，它会自动判断内容是否超过了内联文本的最大限制(`maxInlineChars`)。
+ * - 如果超过了限制且平台支持作为附件上传，它将尝试调用对应的上传函数 (`fileInput` 模式或 `paste` 模式)。
+ * - 如果附件模式上传成功，它会将内容提取到文本文件里，并在输入框中写下简短的提示语引导 AI 读取附件。
+ * - 如果附件上传失败，或者内容未超长，它将安全地回退，把全部结果拼接到输入框里。
+ */
 export async function deliverResult(text: string, domSelectors: SiteSelectors): Promise<{ uploaded: boolean }> {
   const maxInlineChars = typeof domSelectors.maxInlineChars === "number"
     ? domSelectors.maxInlineChars
@@ -106,6 +145,20 @@ export async function deliverResult(text: string, domSelectors: SiteSelectors): 
 }
 
 // === 自动发送逻辑 ===
+/**
+ * 触发智能自动发送（轮询重试机制）
+ * @param config 用户插件配置 (如 autoSend: boolean)
+ * @param domSelectors 网页对应选择器配置对象 (从 settings/init 下发)
+ * @description
+ * - 这是发送消息的核心自动机制，它会尝试使用各种可用的方法让当前网页端把回复消息“按出去”。
+ * - 初始化时它将清理掉上一次的回车尝试，保证只留一个定时器运作。
+ * - 每过 `1000~2000ms`，尝试寻找和触发当前网页的发送方式：
+ * - 1. 分发一次基于回车键的 `KeyboardEvent`（一次使用 Ctrl，下一次不使用 Ctrl 切换尝试）。
+ * - 2. 等待 `200ms` 让目标网页的 JavaScript （React/Vue 等）响应和重新渲染 DOM 界面。
+ * - 3. 检查：当前输入框是被清空了（说明已发送），还是出现了代表模型思考中的“停止”按钮？如果检测到任何发送成功的特征，马上停止定时器。
+ * - 4. 否则，继续寻找真正的“发送”按钮并发送鼠标 `click` 等事件强行点击。
+ * - 5. 如果重试 5 次还是失败，系统会弹出通知警告用户。
+ */
 export function triggerAutoSend(
   config: { autoSend: boolean },
   domSelectors: SiteSelectors
@@ -210,6 +263,18 @@ export function triggerAutoSend(
   autoSendTimer = setTimeout(trySend, 1000);
 }
 
+/**
+ * 模拟 `fileInput` 模式上传文本内容为附件
+ * @param text 要作为附件的纯文本内容
+ * @param domSelectors 网页对应选择器配置对象 (从 settings/init 下发)
+ * @returns 成功返回 `true`，失败返回 `false`
+ * @description
+ * - 尝试找到页面上的 `<input type="file">` 元素。
+ * - 如果找不到，尝试点击一次预设的 `attachButton` 弹出选择文件的对话框，并等待 DOM 显示该 fileInput。
+ * - 成功找到 fileInput 后，使用 `DataTransfer` 模拟创建并附加一个新的文本文件 (TXT) 并赋予其带有时间戳的文件名。
+ * - 将 `DataTransfer` 里的文件集合赋予 input，并发射 `change` 等事件以触发上传逻辑。
+ * - 如果网页有预设的 `attachmentReadyIndicator` (附件预览完成的标识选择器)，会进一步等待该指示器显现。
+ */
 async function uploadTextAsAttachment(text: string, domSelectors: SiteSelectors): Promise<boolean> {
   let fileInput = queryFileInput(domSelectors.fileInput);
 
@@ -246,6 +311,18 @@ async function uploadTextAsAttachment(text: string, domSelectors: SiteSelectors)
   return true;
 }
 
+/**
+ * 模拟 `pasteFile` (粘贴文件) 模式上传文本内容为附件
+ * @param text 要作为附件的纯文本内容
+ * @param domSelectors 网页对应选择器配置对象 (从 settings/init 下发)
+ * @returns 成功返回 `true`，失败返回 `false`
+ * @description
+ * - 寻找页面上的文本输入区域。
+ * - 使用 `DataTransfer` 创造一个虚拟剪贴板，把带有时间戳名字的 TXT 文本文件放入剪贴板内。
+ * - 构造并在这个输入区域上主动派发一个 `ClipboardEvent`（即“粘贴”事件）。
+ * - 绝大多数先进的 AI 网页平台会立刻读取这个事件并自动把它当作一个图片或者文本文件上传。
+ * - 如果网页有预设的 `attachmentReadyIndicator` (附件预览完成的标识选择器)，会进一步等待该指示器显现。
+ */
 async function pasteTextAsAttachment(text: string, domSelectors: SiteSelectors): Promise<boolean> {
   const inputEl = document.querySelector(domSelectors.inputArea) as HTMLElement | null;
   if (!inputEl) {return false;}
@@ -271,6 +348,11 @@ async function pasteTextAsAttachment(text: string, domSelectors: SiteSelectors):
   return true;
 }
 
+/**
+ * 在页面 DOM 中寻找能够接收文件上传的 `<input type="file">` 元素
+ * @param selector 可选，用户自定义的精确文件输入框选择器
+ * @returns 找到的 HTMLInputElement 对象，如果没找到则返回 `null`
+ */
 function queryFileInput(selector?: string): HTMLInputElement | null {
   if (selector) {
     return document.querySelector(selector) as HTMLInputElement | null;
@@ -279,6 +361,14 @@ function queryFileInput(selector?: string): HTMLInputElement | null {
   return document.querySelector('input[type="file"]') as HTMLInputElement | null;
 }
 
+/**
+ * 等待网页显示给定的 DOM 附件准备指示器
+ * @param selector (如 CSS 选择器) 指示器
+ * @param timeoutMs 最大超时毫秒
+ * @returns 成功展示返回 `true`，失败超时返回 `false`
+ * @description
+ * - 这是一个 `Promise`，用 `isElementVisible` 检测 DOM。每 200ms 重试一次。如果在超时前找到，说明附件上传处理完毕。
+ */
 async function waitForAttachmentReady(selector: string, timeoutMs: number): Promise<boolean> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
@@ -289,6 +379,11 @@ async function waitForAttachmentReady(selector: string, timeoutMs: number): Prom
   return false;
 }
 
+/**
+ * 检测一个 HTML 元素在网页中是否是实际可见的
+ * @param el 待测试的 HTMLElement
+ * @returns 元素未被 display:none、未被隐藏并且它的实际大小宽/高等于大于 0 时返回 `true`
+ */
 function isElementVisible(el: HTMLElement): boolean {
   const style = window.getComputedStyle(el);
   if (style.display === "none" || style.visibility === "hidden" || style.pointerEvents === "none") {
@@ -299,10 +394,20 @@ function isElementVisible(el: HTMLElement): boolean {
   return rect.width > 0 && rect.height > 0;
 }
 
+/**
+ * 简单的异步等待函数
+ * @param ms 毫秒
+ * @returns 包装了一个 `setTimeout` 的 `Promise` 对象
+ */
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * 确认当前发现的发送按钮是不是真的“激活”
+ * @param btn 发现的发送 HTMLButtonElement
+ * @returns 它是有效的按钮则返回 `true`，如果是 `disabled`，`aria-disabled` 或者不可见的则返回 `false`
+ */
 function isSendButtonReady(btn: HTMLButtonElement | null): btn is HTMLButtonElement {
   if (!btn) {return false;}
   if (btn.disabled) {return false;}
@@ -311,6 +416,14 @@ function isSendButtonReady(btn: HTMLButtonElement | null): btn is HTMLButtonElem
   return isElementVisible(btn);
 }
 
+/**
+ * 发送一组真实的鼠标交互事件来强行触发按钮被点击的效果
+ * @param btn 待点击的网页发送按钮
+ * @returns 始终返回 `true` 代表动作执行结束。但不能保证网页侧逻辑正确发了。
+ * @description
+ * - 针对许多采用 `React/Vue/Svelte` 单页面应用的特性，单独的 `click()` 可能无法触发业务上的响应，甚至被拦截或者需要搭配 mouseDown。
+ * - 为了更高的兼容率，派发一系列从按下鼠标到松开的完整 `MouseEvent` 组合： `pointerdown`, `mousedown`, `pointerup`, `mouseup`, 接着执行最后点击。
+ */
 function triggerButtonSend(btn: HTMLElement): boolean {
   btn.focus();
   const mouseEventTypes: Array<"pointerdown" | "mousedown" | "pointerup" | "mouseup" | "click"> = [
@@ -333,6 +446,14 @@ function triggerButtonSend(btn: HTMLElement): boolean {
   return true;
 }
 
+/**
+ * 主动抛出单独的 “回车键” 或 “Ctrl+回车键” 以尝试发送
+ * @param inputEl 需要被回车事件触发的网页聊天输入框
+ * @param withCtrl 若是 `true` 抛出带 Ctrl 的 Enter，否则是不带修饰键的 Enter
+ * @description
+ * - 针对许多采用 `React/Vue/Svelte` 的 AI 平台由于不支持普通的按钮点击（或无法选中按钮）导致发送失败。
+ * - 该机制直接把 `keydown`, `keypress` 和 `keyup` 的事件连击强塞给聊天输入框，以此模拟人类“按下回车”。
+ */
 function triggerSingleEnter(inputEl: HTMLElement, withCtrl: boolean) {
   inputEl.focus();
   const init: KeyboardEventInit = {
@@ -349,6 +470,15 @@ function triggerSingleEnter(inputEl: HTMLElement, withCtrl: boolean) {
 }
 
 // === HITL 弹窗 (Shadow DOM) ===
+/**
+ * 生成并显示供人类操作员决定是否通过（Approval / Rejection）危险操作的安全授权遮罩弹窗（Human-In-The-Loop 机制）
+ * @param payload 将要执行的工具的参数 (`ToolExecutionPayload` 对象，如 name, arguments, purpose)
+ * @param onConfirm 用户同意执行所选定授权范围后的回调函数，范围有 `exact`（精确匹配），`executable`（命令主程序）等，如果是只通过一次则是 `false`。
+ * @param onReject 用户明确拒绝时的回调函数，带有驳回原因(字符串)。
+ * @description
+ * - 该弹窗被隔离封装在网页内的 `Shadow DOM`，完全脱离并免疫网页原有任何样式的干扰与污染。
+ * - 该弹窗不仅可以展示调用风险详情，也提供了为该工作空间永久放行特定类型操作的逻辑面板（一键通过，不再反复弹窗）。
+ */
 export function showConfirmationModal(
   payload: ToolExecutionPayload,
   onConfirm: (scope: CommandApprovalScope) => void,
@@ -608,11 +738,21 @@ export function showConfirmationModal(
   shadow.appendChild(overlay);
 }
 
+/**
+ * 从一行待审批执行的命令中获取它的第一段程序名称
+ * @param command 带有参数的执行命令
+ * @returns 基础可执行文件名称
+ */
 function getCommandExecutable(command: string): string {
   const tokens = tokenizeCommandLine(command);
   return tokens[0] || command;
 }
 
+/**
+ * 从一行待审批执行的命令中获取命令的主体及其第一个参数的前缀模式
+ * @param command 带有参数的执行命令
+ * @returns 基础可执行文件名称+第一项参数的前两截，例如：`git commit` 或者 `npm install`
+ */
 function getCommandPrefix(command: string): string {
   const tokens = tokenizeCommandLine(command);
   if (tokens.length <= 1) {
@@ -622,6 +762,11 @@ function getCommandPrefix(command: string): string {
   return tokens.slice(0, 2).join(" ");
 }
 
+/**
+ * 提供将长段带有各种空格与引号的命令行文字转为单词数组
+ * @param command 将被切分的命令行语句
+ * @returns 参数字符串切片的 Token 数组
+ */
 function tokenizeCommandLine(command: string): string[] {
   const tokens: string[] = [];
   let current = "";
