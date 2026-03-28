@@ -30,6 +30,11 @@ cmd /c "pnpm --filter @webmcp/shared run build"
 Write-Host "[*] Building VS Code Extension..." -ForegroundColor Cyan
 Set-Location "mcp-gateway-vscode"
 
+if (!(Test-Path "node_modules\.bin\vsce.cmd") -and !(Get-Command "vsce" -ErrorAction SilentlyContinue)) {
+    Write-Error "VS Code packaging tool not found. Run 'pnpm install' to install workspace dependencies, including @vscode/vsce."
+    exit 1
+}
+
 # Get version
 $json = Get-Content "package.json" -Raw | ConvertFrom-Json
 $vsVersion = $json.version
