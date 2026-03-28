@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.6.1 (2026-03-28)
+### Features
+- **Oversized Result Fallback**: Added attachment-based delivery for oversized results so output can still be sent when regular message delivery hits limits.
+- **Platform Support**: Refactored the site registry and added default GLM platform configuration so browser-side and VS Code Gateway integrations can recognize and connect to supported sites consistently.
+- **Platform Docs**: Added `PLATFORM_GUIDE` and its Chinese counterpart to document platform configuration and default behavior in one place.
+
+### Improvements
+- **Send Flow**: Improved auto-send behavior for oversized results to reduce interruptions and repeated actions during fallback delivery.
+- **Style Isolation**: Further isolated browser overlay styles to reduce interference with the target page's existing styles.
+
+### Fixes
+- **Release Packaging**: Fixed missing dependencies in the VS Code release artifacts to improve build and distribution stability for 0.6.1.
+
+### Engineering
+- **Maintainability**: Added JSDoc comments for core functions in `ui.ts` to make ongoing maintenance and extension work easier.
+
+---
+
 ## v0.6.0 (2026-03-27)
 ### Features
 - **Initialization Flow**: Added the `/webmcp init` setup flow for generating custom instructions; later simplified the onboarding flow and inlined tool and skill summaries to reduce first-run friction.
