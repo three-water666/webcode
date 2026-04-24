@@ -1,0 +1,32 @@
+import promptEn from '../prompts/prompt_en.md';
+import promptZh from '../prompts/prompt_zh.md';
+import trainEn from '../prompts/train_en.md';
+import trainZh from '../prompts/train_zh.md';
+import errorHintEn from '../prompts/error_hint_en.md';
+import errorHintZh from '../prompts/error_hint_zh.md';
+import initEn from '../prompts/init_en.md';
+import initZh from '../prompts/init_zh.md';
+import oversizeEn from '../prompts/oversize_en.md';
+import oversizeZh from '../prompts/oversize_zh.md';
+import { BRANDING, PROTOCOL } from '@webcode/shared';
+
+function applyBranding(content: string): string {
+  return content
+    .replaceAll('{{PRODUCT_NAME}}', BRANDING.productName)
+    .replaceAll('{{SLASH_COMMAND}}', BRANDING.slashCommand)
+    .replaceAll('{{MENTION_COMMAND}}', BRANDING.mentionCommand)
+    .replaceAll('{{INIT_TOOL_NAME}}', PROTOCOL.initToolName);
+}
+
+export const PROMPTS = {
+  prompt_en: applyBranding(promptEn),
+  prompt_zh: applyBranding(promptZh),
+  train_en: applyBranding(trainEn),
+  train_zh: applyBranding(trainZh),
+  error_hint_en: applyBranding(errorHintEn),
+  error_hint_zh: applyBranding(errorHintZh),
+  init_en: applyBranding(initEn),
+  init_zh: applyBranding(initZh),
+  oversize_en: applyBranding(oversizeEn),
+  oversize_zh: applyBranding(oversizeZh)
+};

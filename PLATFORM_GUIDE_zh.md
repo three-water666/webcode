@@ -1,6 +1,6 @@
-# WebMCP 站点支持扩展指南
+# webcode 站点支持扩展指南
 
-本文说明 WebMCP 支持一个新 AI 站点的两种方式：
+本文说明 webcode 支持一个新 AI 站点的两种方式：
 
 1. 在代码里新增内置支持
 2. 只通过 VS Code 配置新增站点
@@ -11,20 +11,20 @@
 
 现在平台相关的信息主要集中在 VS Code 扩展里。
 
-- 内置站点注册表和内置 selectors 都在 [mcp-gateway-vscode/src/platforms.ts](mcp-gateway-vscode/src/platforms.ts)
-- Prompt 资源在 [mcp-gateway-vscode/src/defaults.ts](mcp-gateway-vscode/src/defaults.ts)
-- Gateway 在 [mcp-gateway-vscode/src/gateway.ts](mcp-gateway-vscode/src/gateway.ts) 中把内置 selectors 与配置项合并
+- 内置站点注册表和内置 selectors 都在 [gateway-vscode/src/platforms.ts](gateway-vscode/src/platforms.ts)
+- Prompt 资源在 [gateway-vscode/src/defaults.ts](gateway-vscode/src/defaults.ts)
+- Gateway 在 [gateway-vscode/src/gateway.ts](gateway-vscode/src/gateway.ts) 中把内置 selectors 与配置项合并
 - 浏览器扩展不再硬编码支持的平台，而是使用 VS Code Gateway 下发的站点列表和合并后的 selectors
 
 这意味着：
 
 - 新增一个内置默认平台，通常只需要改一个 VS Code 文件
-- 快速试一个新站点，通常只配 `mcpGateway.aiSites` 就够了
+- 快速试一个新站点，通常只配 `webcodeGateway.aiSites` 就够了
 - 浏览器扩展原则上不应该为了每个新平台频繁修改
 
 ## 内置站点与用户覆盖规则
 
-现在的 `mcpGateway.aiSites` 不再是“整份替换默认站点列表”的语义。
+现在的 `webcodeGateway.aiSites` 不再是“整份替换默认站点列表”的语义。
 
 当前行为是：
 
@@ -51,7 +51,7 @@
 
 ### 通常需要改的文件
 
-1. [mcp-gateway-vscode/src/platforms.ts](mcp-gateway-vscode/src/platforms.ts)
+1. [gateway-vscode/src/platforms.ts](gateway-vscode/src/platforms.ts)
 
 这个文件现在包含：
 
@@ -62,14 +62,14 @@
 
 ### 第一步：把平台加入内置注册表
 
-打开 [mcp-gateway-vscode/src/platforms.ts](mcp-gateway-vscode/src/platforms.ts)。
+打开 [gateway-vscode/src/platforms.ts](gateway-vscode/src/platforms.ts)。
 
 这个文件控制的是：
 
 - 哪些站点是 VS Code 扩展内置支持的
 - 哪些 URL 片段会映射到哪个内置平台 id
 - 当桥接页没传 target 时默认打开哪个站点
-- 当 `mcpGateway.aiSites` 为空时默认使用哪些站点
+- 当 `webcodeGateway.aiSites` 为空时默认使用哪些站点
 - 每个内置平台对应的默认 selectors
 
 通常需要改两个地方：
@@ -134,13 +134,13 @@ const BUILTIN_PLATFORMS: BuiltinPlatformDefinition[] = [
 
 ### 第二步：定义内置 selectors
 
-仍然在 [mcp-gateway-vscode/src/platforms.ts](mcp-gateway-vscode/src/platforms.ts) 里，为平台填写 `selectors`。
+仍然在 [gateway-vscode/src/platforms.ts](gateway-vscode/src/platforms.ts) 里，为平台填写 `selectors`。
 
 各字段含义：
 
 - `messageBlocks`
   - 模型或助手消息块
-  - WebMCP 会在这些块中扫描工具调用 JSON 和结果输出
+  - webcode 会在这些块中扫描工具调用 JSON 和结果输出
 
 - `codeBlocks`
   - 模型输出中的代码块
@@ -148,7 +148,7 @@ const BUILTIN_PLATFORMS: BuiltinPlatformDefinition[] = [
 
 - `inputArea`
   - 输入框元素
-  - WebMCP 回填工具结果时会写入这里
+  - webcode 回填工具结果时会写入这里
 
 - `sendButton`
   - 发送按钮
@@ -156,12 +156,12 @@ const BUILTIN_PLATFORMS: BuiltinPlatformDefinition[] = [
 
 - `stopButton`
   - 停止生成按钮
-  - WebMCP 用它判断模型是否仍在输出
+  - webcode 用它判断模型是否仍在输出
 
 - `maxInlineChars`
   - 可选
   - 用于处理平台输入框有最大字符限制的情况
-  - 如果最终要写入输入框的内容长度超过这个值，WebMCP 可以不再直接内联回填，而是切换到兜底路径，比如生成并上传 `.txt` 文件
+  - 如果最终要写入输入框的内容长度超过这个值，webcode 可以不再直接内联回填，而是切换到兜底路径，比如生成并上传 `.txt` 文件
 
 selectors 的建议：
 
@@ -172,11 +172,11 @@ selectors 的建议：
 
 ### 第三步：确认合并链路
 
-Gateway 在 [mcp-gateway-vscode/src/gateway.ts](mcp-gateway-vscode/src/gateway.ts) 中会自动完成匹配和合并。
+Gateway 在 [gateway-vscode/src/gateway.ts](gateway-vscode/src/gateway.ts) 中会自动完成匹配和合并。
 
 当前链路是：
 
-1. VS Code 读取 `mcpGateway.aiSites`
+1. VS Code 读取 `webcodeGateway.aiSites`
 2. 如果设置为空，则回退到 `getBuiltinAiSites()`
 3. Gateway 对每个站点调用 `getPlatformIdByAddress()`
 4. 如果匹配到内置平台，则自动合并对应默认 selectors
@@ -189,9 +189,9 @@ Gateway 在 [mcp-gateway-vscode/src/gateway.ts](mcp-gateway-vscode/src/gateway.t
 建议执行：
 
 ```powershell
-pnpm --filter @webmcp/shared build
-pnpm --filter mcp-gateway-vscode build
-pnpm --filter mcp-bridge-browser exec tsc -p . --noEmit
+pnpm --filter @webcode/shared build
+pnpm --filter gateway-vscode build
+pnpm --filter bridge-browser exec tsc -p . --noEmit
 ```
 
 手工验证建议：
@@ -227,7 +227,7 @@ pnpm --filter mcp-bridge-browser exec tsc -p . --noEmit
 
 ### 配置位置
 
-使用 VS Code 设置项 `mcpGateway.aiSites`。
+使用 VS Code 设置项 `webcodeGateway.aiSites`。
 
 可以通过以下方式配置：
 
@@ -239,7 +239,7 @@ pnpm --filter mcp-bridge-browser exec tsc -p . --noEmit
 
 ```json
 {
-  "mcpGateway.aiSites": [
+  "webcodeGateway.aiSites": [
     {
       "name": "GLM",
       "address": "https://chatglm.cn/",
@@ -258,7 +258,7 @@ pnpm --filter mcp-bridge-browser exec tsc -p . --noEmit
 }
 ```
 
-### `mcpGateway.aiSites` 配置项说明
+### `webcodeGateway.aiSites` 配置项说明
 
 每个站点对象支持以下字段：
 
@@ -315,7 +315,7 @@ pnpm --filter mcp-bridge-browser exec tsc -p . --noEmit
 
 ```json
 {
-  "mcpGateway.aiSites": [
+  "webcodeGateway.aiSites": [
     {
       "name": "DeepSeek",
       "showQuickLaunch": false,
@@ -364,7 +364,7 @@ pnpm --filter mcp-bridge-browser exec tsc -p . --noEmit
 
 - `maxInlineChars`
   - 可选的最大内联字符阈值
-  - 如果最终要写入输入框的内容超过该值，WebMCP 可以避免直接粘贴完整内容，转而使用文件回传兜底，比如生成并上传 `.txt` 文件
+  - 如果最终要写入输入框的内容超过该值，webcode 可以避免直接粘贴完整内容，转而使用文件回传兜底，比如生成并上传 `.txt` 文件
 
 ### 仅配置接入的操作步骤
 
@@ -376,9 +376,9 @@ pnpm --filter mcp-bridge-browser exec tsc -p . --noEmit
    - 输入框
    - 发送按钮
    - 停止按钮
-4. 把站点配置到 `mcpGateway.aiSites`
+4. 把站点配置到 `webcodeGateway.aiSites`
 5. 从 VS Code 状态栏重启 Gateway
-6. 通过 WebMCP 重新打开该站点
+6. 通过 webcode 重新打开该站点
 7. 确认浏览器扩展拿到了最新配置
 8. 测试工具调用捕获和结果回填
 
@@ -405,7 +405,7 @@ pnpm --filter mcp-bridge-browser exec tsc -p . --noEmit
   - 如果实际跳转后的 URL 与配置地址前缀不一致，站点匹配会失败
 
 - `messageBlocks` 过宽
-  - 如果把用户消息也匹配进去了，WebMCP 可能会扫描到错误内容
+  - 如果把用户消息也匹配进去了，webcode 可能会扫描到错误内容
 
 - `stopButton` 不准确
   - 会导致结果发送过早，或者一直卡在等待状态
@@ -420,7 +420,7 @@ pnpm --filter mcp-bridge-browser exec tsc -p . --noEmit
 
 可以按这个原则选择：
 
-- 做实验、验证可行性：优先使用 `mcpGateway.aiSites`
+- 做实验、验证可行性：优先使用 `webcodeGateway.aiSites`
 - 做稳定的默认支持：修改 `platforms.ts`
 
 这样可以把后续新增平台的主要工作稳定在 VS Code 扩展里，尽量避免浏览器扩展频繁发版。

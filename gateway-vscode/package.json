@@ -1,0 +1,222 @@
+{
+  "name": "gateway-vscode",
+  "publisher": "three-water666",
+  "displayName": "webcode gateway",
+  "description": "Connect Web AI to Local VS Code via Model Context Protocol (Zero-Config)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/three-water666/webcode.git"
+  },
+  "license": "MIT",
+  "icon": "images/icon.png",
+  "version": "0.6.1",
+  "engines": {
+    "vscode": "^1.106.1"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "menus": {
+      "editor/context": [
+        {
+          "command": "webcode-gateway.copyContext",
+          "when": "editorHasSelection",
+          "group": "9_cutcopypaste@100"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "gateway-vscode.restart",
+        "title": "MCP: Restart Gateway Server"
+      },
+      {
+        "command": "webcode-gateway.copyContext",
+        "title": "webcode: Copy Context"
+      }
+    ],
+    "configuration": {
+      "title": "MCP Gateway",
+      "properties": {
+        "webcodeGateway.aiSites": {
+          "type": "array",
+          "default": [],
+          "description": "User-defined list of AI platforms. Leave empty to use the built-in platform registry managed by the VS Code extension.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Display name"
+              },
+              "address": {
+                "type": "string",
+                "description": "URL of the AI service"
+              },
+              "showQuickLaunch": {
+                "type": "boolean",
+                "default": true,
+                "description": "Show in the main quick pick menu"
+              },
+              "browser": {
+                "type": "string",
+                "enum": [
+                  "default",
+                  "chrome",
+                  "edge"
+                ],
+                "default": "default",
+                "description": "Specific browser for this site (overrides global setting)"
+              },
+              "selectors": {
+                "type": "object",
+                "description": "DOM selectors for this AI site. Leave empty to use defaults for known sites.",
+                "properties": {
+                  "messageBlocks": {
+                    "type": "string"
+                  },
+                  "codeBlocks": {
+                    "type": "string"
+                  },
+                  "inputArea": {
+                    "type": "string"
+                  },
+                  "sendButton": {
+                    "type": "string"
+                  },
+                  "stopButton": {
+                    "type": "string"
+                  },
+                  "maxInlineChars": {
+                    "type": "number",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "webcodeGateway.port": {
+          "type": "number",
+          "default": 34567,
+          "description": "The port the local gateway server will listen on."
+        },
+        "webcodeGateway.browser": {
+          "type": "string",
+          "default": "default",
+          "enum": [
+            "default",
+            "chrome",
+            "edge"
+          ],
+          "description": "Global default browser. Used if no site-specific browser is configured."
+        },
+        "webcodeGateway.skillDirectories": {
+          "type": "array",
+          "default": [
+            ".agents/skills",
+            ".codex/skills",
+            "skills"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Workspace-relative directories to scan for skill folders that contain SKILL.md."
+        },
+        "webcodeGateway.servers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string",
+                "description": "Command to execute"
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Arguments"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "stdio",
+                  "sse",
+                  "http"
+                ],
+                "description": "Connection type",
+                "default": "stdio"
+              },
+              "url": {
+                "type": "string",
+                "description": "URL for SSE/HTTP"
+              },
+              "headers": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "HTTP Headers"
+              },
+              "env": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Environment variables"
+              },
+              "disabled": {
+                "type": "boolean",
+                "default": false,
+                "description": "Disable this server. If true, the server will not be started."
+              }
+            }
+          },
+          "default": {},
+          "description": "Additional third-party MCP servers. Built-in filesystem and command capabilities are managed automatically by webcode."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "pnpm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "build": "pnpm run package",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "pnpm run compile-tests && pnpm run compile && pnpm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.1",
+    "@modelcontextprotocol/server-filesystem": "^2026.1.14",
+    "@webcode/shared": "workspace:*",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "@types/vscode": "^1.106.1",
+    "@vscode/vsce": "^3.6.0",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
+    "ts-loader": "^9.5.4",
+    "typescript": "^5.9.3",
+    "webpack": "^5.102.1",
+    "webpack-cli": "^6.0.1"
+  }
+}

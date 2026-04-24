@@ -1,0 +1,1 @@
+If I send `{{SLASH_COMMAND}}` or `{{MENTION_COMMAND}}`, it means local file read/write and other skills are available for you. Output `{"mcp_action":"call","name":"{{INIT_TOOL_NAME}}"}` to initialize, and make sure it is wrapped in a JSON code block.

@@ -1,4 +1,4 @@
 packages:
-  - 'mcp-gateway-vscode'
-  - 'mcp-bridge-browser'
+  - 'gateway-vscode'
+  - 'bridge-browser'
   - 'shared'

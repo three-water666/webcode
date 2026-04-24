@@ -37,10 +37,10 @@ Execute in a PowerShell terminal:
 
 After a successful build, a `release/` folder will be generated in the root directory containing:
 
-- **WebMCP-Gateway-VSCode-x.x.x.vsix**
+- **webcode-gateway-vscode-x.x.x.vsix**
   - VS Code extension installer.
   - Installation: VS Code Extensions sidebar -> Click `...` at top right -> **Install from VSIX...**
 
-- **WebMCP-Bridge-Browser-x.x.x.zip**
+- **webcode-bridge-browser-x.x.x.zip**
   - Browser extension archive.
   - Installation: Unzip -> Chrome/Edge Extensions page -> Enable "Developer mode" -> **Load unpacked**.

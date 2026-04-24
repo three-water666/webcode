@@ -1,7 +1,21 @@
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $ErrorActionPreference = "Stop"
+$brand = Get-Content "shared/src/branding.json" -Raw | ConvertFrom-Json
+$productName = $brand.productName
 
-Write-Host "[START] Starting WebMCP Release Build (Monorepo Edition)..." -ForegroundColor Green
+function Invoke-CheckedCommand {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Command
+    )
+
+    cmd /c $Command
+    if ($LASTEXITCODE -ne 0) {
+        throw "Command failed with exit code ${LASTEXITCODE}: $Command"
+    }
+}
+
+Write-Host "[START] Starting $productName Release Build (Monorepo Edition)..." -ForegroundColor Green
 
 # 1. Check Requirements
 if (!(Get-Command "pnpm" -ErrorAction SilentlyContinue)) {
@@ -14,21 +28,20 @@ if (!(Get-Command "tar" -ErrorAction SilentlyContinue)) {
 }
 
 # 2. Create/Clean release directory
-if (Test-Path "release") {
-    Remove-Item "release" -Recurse -Force
-}
-New-Item -ItemType Directory -Force -Path "release" | Out-Null
+$releaseDir = Join-Path (Get-Location) "release"
+New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
+Get-ChildItem -LiteralPath $releaseDir -Force | Remove-Item -Recurse -Force
 
 # 3. Install & Build Shared
 Write-Host "[*] Installing dependencies & Building Shared..." -ForegroundColor Cyan
-cmd /c "pnpm install"
-cmd /c "pnpm --filter @webmcp/shared run build"
+Invoke-CheckedCommand "pnpm install"
+Invoke-CheckedCommand "pnpm --filter @webcode/shared run build"
 
 # ==========================================
 # 4. Package VS Code Extension (Server)
 # ==========================================
 Write-Host "[*] Building VS Code Extension..." -ForegroundColor Cyan
-Set-Location "mcp-gateway-vscode"
+Set-Location "gateway-vscode"
 
 if (!(Test-Path "node_modules\.bin\vsce.cmd") -and !(Get-Command "vsce" -ErrorAction SilentlyContinue)) {
     Write-Error "VS Code packaging tool not found. Run 'pnpm install' to install workspace dependencies, including @vscode/vsce."
@@ -38,27 +51,22 @@ if (!(Test-Path "node_modules\.bin\vsce.cmd") -and !(Get-Command "vsce" -ErrorAc
 # Get version
 $json = Get-Content "package.json" -Raw | ConvertFrom-Json
 $vsVersion = $json.version
-$vsName = "WebMCP-Gateway-VSCode-$vsVersion.vsix"
+$vsName = "$productName-gateway-vscode-$vsVersion.vsix"
 $vsReleasePath = Join-Path (Get-Location) "..\release\$vsName"
-$vsTempName = "WebMCP-Gateway-VSCode-$vsVersion.tmp.vsix"
+$vsTempName = "$productName-gateway-vscode-$vsVersion.tmp.vsix"
 $vsTempPath = Join-Path (Get-Location) $vsTempName
 
 # Package to a temp file inside the extension folder first, then move into release.
 if (Test-Path $vsTempPath) {
     Remove-Item $vsTempPath -Force
 }
-cmd /c "pnpm exec vsce package --out $vsTempName --no-dependencies"
+Invoke-CheckedCommand "pnpm exec vsce package --out $vsTempName --no-dependencies"
 
-if ($LASTEXITCODE -eq 0) {
-    if (Test-Path $vsReleasePath) {
-        Remove-Item $vsReleasePath -Force
-    }
-    Move-Item $vsTempPath $vsReleasePath -Force
-    Write-Host "[OK] VS Code Extension built: release\$vsName" -ForegroundColor Green
-} else {
-    Write-Host "[ERROR] VS Code Extension build failed" -ForegroundColor Red
-    exit 1
+if (Test-Path $vsReleasePath) {
+    Remove-Item $vsReleasePath -Force
 }
+Move-Item $vsTempPath $vsReleasePath -Force
+Write-Host "[OK] VS Code Extension built: release\$vsName" -ForegroundColor Green
 
 Set-Location ".."
 
@@ -66,19 +74,15 @@ Set-Location ".."
 # 5. Package Browser Extension (Client)
 # ==========================================
 Write-Host "[*] Building Browser Extension (Vite)..." -ForegroundColor Cyan
-Set-Location "mcp-bridge-browser"
+Set-Location "bridge-browser"
 
 # Get version
 $pkg = Get-Content "package.json" -Raw | ConvertFrom-Json
 $browserVersion = $pkg.version
-$browserName = "WebMCP-Bridge-Browser-$browserVersion.zip"
+$browserName = "$productName-bridge-browser-$browserVersion.zip"
 
 # Vite Build
-cmd /c "pnpm run build"
-
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "Vite build failed"
-}
+Invoke-CheckedCommand "pnpm run build"
 
 # Zip 'dist' folder content
 $distPath = Join-Path (Get-Location) "dist"

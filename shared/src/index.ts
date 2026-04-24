@@ -1,5 +1,41 @@
 // 通用通信协议定义
 
+import brandConfig from './branding.json';
+
+function toHeaderToken(value: string): string {
+  return value
+    .split(/[^a-zA-Z0-9]+/)
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join('');
+}
+
+export const BRANDING = {
+  productName: brandConfig.productName,
+  slug: brandConfig.slug,
+  gatewayName: `${brandConfig.productName} gateway`,
+  bridgeName: `${brandConfig.productName} bridge`,
+  settingsName: `${brandConfig.productName} Settings`,
+  managerName: `${brandConfig.productName} Manager`,
+  serverName: `${brandConfig.productName} Server`,
+  notificationName: `${brandConfig.productName} Notification`,
+  terminalPrefix: brandConfig.productName,
+  resultFilePrefix: `${brandConfig.slug}-result`,
+  logPrefix: `[${brandConfig.productName}]`,
+  slashCommand: `/${brandConfig.slug}`,
+  mentionCommand: `@${brandConfig.slug}`,
+  repositoryUrl: brandConfig.repositoryUrl,
+} as const;
+
+const headerToken = toHeaderToken(brandConfig.productName);
+
+export const PROTOCOL = {
+  initToolName: `${brandConfig.slug}_init`,
+  authHeaderName: `X-${headerToken}-Token`,
+  authHeaderLowerName: `x-${headerToken.toLowerCase()}-token`,
+  observerStartedFlag: `_${brandConfig.slug}_observer_started`,
+} as const;
+
 /**
  * 工具执行请求载荷
  * 用于 Browser -> Extension -> Gateway 的链路

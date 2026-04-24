@@ -1,14 +1,14 @@
-# WebMCP
+# webcode
 
-WebMCP connects web-based AI products such as ChatGPT, Gemini, and DeepSeek to local development tools exposed through MCP in VS Code.
+webcode connects web-based AI products such as ChatGPT, Gemini, and DeepSeek to local development tools exposed through MCP in VS Code.
 
 [中文说明](README_zh.md)
 
 ## Disclaimer
 
-Please read this before using WebMCP:
+Please read this before using webcode:
 
-1. Use at your own risk. WebMCP bridges remote AI systems with local tools and files. You are responsible for what those tools are allowed to do.
+1. Use at your own risk. webcode bridges remote AI systems with local tools and files. You are responsible for what those tools are allowed to do.
 2. Check the terms of service of the AI products you use. Automated interaction may not be allowed on some platforms.
 3. Do not send secrets or sensitive code unless you are comfortable sharing that data with the AI provider you are using.
 
@@ -30,23 +30,23 @@ Please read this before using WebMCP:
 
 ## Security Model
 
-WebMCP is designed to keep the user in control:
+webcode is designed to keep the user in control:
 
 - Sensitive operations such as file writes or command execution can be blocked until you approve them.
 - The gateway runs locally. There is no hosted relay service in the middle.
 - Commands are executed relative to the current workspace and can be restricted by the gateway.
 
-That said, WebMCP is still a bridge between a remote model and local tools. Review your tool permissions carefully.
+That said, webcode is still a bridge between a remote model and local tools. Review your tool permissions carefully.
 
 ## Installation
 
 ### VS Code Extension
 
-Install `WebMCP Gateway` from the VS Code Marketplace.
+Install `webcode gateway` from the VS Code Marketplace.
 
 ### Browser Extension
 
-1. Download the latest `mcp-bridge-browser.zip` from [Releases](https://github.com/three-water666/WebMCP/releases).
+1. Download the latest `webcode-bridge-browser-x.x.x.zip` from [Releases](https://github.com/three-water666/webcode/releases).
 2. Extract the archive.
 3. Open the browser extensions page:
    - Chrome: `chrome://extensions`
@@ -59,17 +59,17 @@ Install `WebMCP Gateway` from the VS Code Marketplace.
 ### 1. Start the Gateway
 
 1. Open VS Code.
-2. Click `WebMCP: OFF` in the bottom-right status bar.
-3. In the menu that opens, click `Start WebMCP`.
-4. Wait for the status bar item to change to `WebMCP: <port>`.
+2. Click `webcode: OFF` in the bottom-right status bar.
+3. In the menu that opens, click `Start webcode`.
+4. Wait for the status bar item to change to `webcode: <port>`.
 
 When the status bar shows a port number, the local gateway is running.
 
 ### 2. Open a Supported AI Product
 
-1. Click `WebMCP: <port>` in the status bar.
+1. Click `webcode: <port>` in the status bar.
 2. Choose the target site you want to open, such as `Open Gemini`, `Open ChatGPT`, or another supported entry.
-3. WebMCP opens the bridge page in the configured browser.
+3. webcode opens the bridge page in the configured browser.
 4. The bridge page completes the handshake with the local gateway automatically.
 5. After the handshake succeeds, the browser redirects to the target AI site.
 
@@ -77,9 +77,9 @@ When the browser extension shows `ON`, the connection is ready to use.
 
 ### 3. Add the Initialization Prompt
 
-Before first use, add the WebMCP initialization prompt to the AI product you use.
+Before first use, add the webcode initialization prompt to the AI product you use.
 
-1. Click the WebMCP browser extension icon in the browser toolbar.
+1. Click the webcode browser extension icon in the browser toolbar.
 2. Click `Copy Initialization Prompt`.
 3. Open the settings page of the AI product you are using.
 4. Find the area for memory, preferences, profile instructions, or custom instructions.
@@ -90,7 +90,7 @@ You usually only need to do this once per product/account.
 ### 4. Use It in Chat
 
 1. Open a new chat or an existing chat on the target AI site.
-2. Enter `/webmcp` or `@webmcp`.
+2. Enter `/webcode` or `@webcode`.
 3. Add your actual task in the same message.
 4. Send the message.
 
@@ -102,7 +102,7 @@ For example:
 
 ## Workspace Skills
 
-WebMCP can expose local skills from the current VS Code workspace.
+webcode can expose local skills from the current VS Code workspace.
 
 Default scan directories:
 
@@ -129,7 +129,7 @@ Example:
         examples.md
 ```
 
-You can customize scan paths with the VS Code setting `mcpGateway.skillDirectories`.
+You can customize scan paths with the VS Code setting `webcodeGateway.skillDirectories`.
 
 ## Build From Source
 
@@ -141,8 +141,8 @@ You can customize scan paths with the VS Code setting `mcpGateway.skillDirectori
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/three-water666/WebMCP.git
-cd WebMCP
+git clone git@github.com:three-water666/webcode.git
+cd webcode
 ```
 
 ### 2. Build
@@ -167,7 +167,7 @@ Build artifacts are written to the `release/` directory.
 ### 3. Install for Debugging
 
 - VS Code: open Extensions, choose `...`, then `Install from VSIX...`
-- Browser: open the extensions page, enable Developer Mode, click `Load unpacked`, and select the extracted extension folder from `release/` or `mcp-bridge-browser`
+- Browser: open the extensions page, enable Developer Mode, click `Load unpacked`, and select the extracted extension folder from `release/` or `bridge-browser`
 
 ## Contributing
 

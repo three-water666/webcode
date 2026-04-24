@@ -1,1 +1,0 @@
-如果我输入了/webmcp或@webmcp，说明为你准备了本地文件读写和其他技能的能力，请输出{"mcp_action":"call","name":"webmcp_init"}来初始化，输出一定放在JSON块中。

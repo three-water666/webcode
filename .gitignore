@@ -3,7 +3,7 @@ dist
 .pnpm-debug.log
 dist
 *.vsix
-mcp-bridge-browser.zip
+bridge-browser.zip
 .DS_Store
 release
 .claude

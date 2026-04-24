@@ -6,8 +6,9 @@ set -e
 GREEN='\033[0;32m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
+PRODUCT_NAME="$(node -p "require('./shared/src/branding.json').productName")"
 
-echo -e "${GREEN}Starting WebMCP Release Build (Monorepo Edition)...${NC}"
+echo -e "${GREEN}Starting ${PRODUCT_NAME} Release Build (Monorepo Edition)...${NC}"
 
 # 1. Create output directory
 mkdir -p release
@@ -19,13 +20,13 @@ pnpm install
 
 # 3. Build Shared Module
 echo -e "${CYAN}Building Shared Module...${NC}"
-pnpm --filter @webmcp/shared run build
+pnpm --filter @webcode/shared run build
 
 # ==========================================
 # 4. Package VS Code Extension (Server)
 # ==========================================
 echo -e "${CYAN}Building VS Code Extension...${NC}"
-cd mcp-gateway-vscode
+cd gateway-vscode
 
 if [ ! -x "node_modules/.bin/vsce" ] && ! command -v vsce >/dev/null 2>&1; then
   echo "[ERROR] VS Code packaging tool not found. Run 'pnpm install' to install workspace dependencies, including @vscode/vsce."
@@ -34,8 +35,8 @@ fi
 
 # Get version
 VS_VERSION=$(node -p "require('./package.json').version")
-VS_NAME="WebMCP-Gateway-VSCode-${VS_VERSION}.vsix"
-VS_TEMP_NAME="WebMCP-Gateway-VSCode-${VS_VERSION}.tmp.vsix"
+VS_NAME="${PRODUCT_NAME}-gateway-vscode-${VS_VERSION}.vsix"
+VS_TEMP_NAME="${PRODUCT_NAME}-gateway-vscode-${VS_VERSION}.tmp.vsix"
 
 # Package to a temp file inside the extension folder first, then move into release.
 rm -f "${VS_TEMP_NAME}"
@@ -51,11 +52,11 @@ cd ..
 # 5. Package Browser Extension (Client)
 # ==========================================
 echo -e "${CYAN}Building Browser Extension (Vite)...${NC}"
-cd mcp-bridge-browser
+cd bridge-browser
 
 # Get version
 BROWSER_VERSION=$(node -p "require('./package.json').version")
-BROWSER_NAME="WebMCP-Bridge-Browser-${BROWSER_VERSION}.zip"
+BROWSER_NAME="${PRODUCT_NAME}-bridge-browser-${BROWSER_VERSION}.zip"
 BROWSER_TEMP_PATH="$(pwd)/${BROWSER_NAME}"
 
 # Build Vite Project

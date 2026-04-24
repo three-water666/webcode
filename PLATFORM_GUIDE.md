@@ -1,6 +1,6 @@
-# Adding Site Support in WebMCP
+# Adding Site Support in webcode
 
-This guide explains two ways to support a new AI site in WebMCP:
+This guide explains two ways to support a new AI site in webcode:
 
 1. Add built-in support in code
 2. Add support only through VS Code configuration
@@ -11,20 +11,20 @@ Use the configuration-only path first when possible. It is faster, safer, and do
 
 Platform knowledge is now centered in the VS Code extension.
 
-- Built-in site registry and built-in selectors both live in [mcp-gateway-vscode/src/platforms.ts](mcp-gateway-vscode/src/platforms.ts)
-- Prompt resources live in [mcp-gateway-vscode/src/defaults.ts](mcp-gateway-vscode/src/defaults.ts)
-- The gateway merges built-in selectors into configured sites in [mcp-gateway-vscode/src/gateway.ts](mcp-gateway-vscode/src/gateway.ts)
+- Built-in site registry and built-in selectors both live in [gateway-vscode/src/platforms.ts](gateway-vscode/src/platforms.ts)
+- Prompt resources live in [gateway-vscode/src/defaults.ts](gateway-vscode/src/defaults.ts)
+- The gateway merges built-in selectors into configured sites in [gateway-vscode/src/gateway.ts](gateway-vscode/src/gateway.ts)
 - The browser extension no longer hardcodes supported platforms. It consumes the site list and merged selectors sent by the VS Code gateway
 
 This means:
 
 - To add a new built-in platform, you usually only change one VS Code file
-- To test a new site quickly, you can often use `mcpGateway.aiSites` without changing code
+- To test a new site quickly, you can often use `webcodeGateway.aiSites` without changing code
 - Browser extension changes should be rare and should not be required for each new platform
 
 ## Built-In Sites and User Overrides
 
-`mcpGateway.aiSites` is not a full replacement list anymore.
+`webcodeGateway.aiSites` is not a full replacement list anymore.
 
 The current behavior is:
 
@@ -51,7 +51,7 @@ Choose this when:
 
 ### Files You Usually Need to Change
 
-1. [mcp-gateway-vscode/src/platforms.ts](mcp-gateway-vscode/src/platforms.ts)
+1. [gateway-vscode/src/platforms.ts](gateway-vscode/src/platforms.ts)
 
 That file now contains:
 
@@ -62,14 +62,14 @@ That file now contains:
 
 ### Step 1: Add the Platform to the Built-In Registry
 
-Open [mcp-gateway-vscode/src/platforms.ts](mcp-gateway-vscode/src/platforms.ts).
+Open [gateway-vscode/src/platforms.ts](gateway-vscode/src/platforms.ts).
 
 This file controls:
 
 - Which sites are built into the VS Code extension
 - Which URL fragments map to which built-in platform id
 - Which site is used as the default bridge target
-- Which sites are used when `mcpGateway.aiSites` is empty
+- Which sites are used when `webcodeGateway.aiSites` is empty
 - Which default selectors are used for each built-in platform
 
 You usually need to update:
@@ -133,32 +133,32 @@ const BUILTIN_PLATFORMS: BuiltinPlatformDefinition[] = [
 
 ### Step 2: Define Built-In Selectors
 
-Still in [mcp-gateway-vscode/src/platforms.ts](mcp-gateway-vscode/src/platforms.ts), add the selector fields under `selectors`.
+Still in [gateway-vscode/src/platforms.ts](gateway-vscode/src/platforms.ts), add the selector fields under `selectors`.
 
 Selector meanings:
 
 - `messageBlocks`
   - Container nodes for assistant or model messages
-  - WebMCP scans these blocks to detect tool call JSON and collect output
+  - webcode scans these blocks to detect tool call JSON and collect output
 
 - `codeBlocks`
   - Code elements inside the latest assistant message
   - This should match the rendered code block content where tool-call JSON appears
 
 - `inputArea`
-  - The editable prompt input element used when WebMCP writes tool results back into the page
+  - The editable prompt input element used when webcode writes tool results back into the page
 
 - `sendButton`
   - Button clicked for auto-send after results are inserted
 
 - `stopButton`
   - Button used to detect whether the model is still generating
-  - If this selector matches, WebMCP waits before sending more content
+  - If this selector matches, webcode waits before sending more content
 
 - `maxInlineChars`
   - Optional
   - Use this when the site has a maximum input length
-  - If the final content to be written into the input box exceeds this threshold, WebMCP can switch from inline insertion to a fallback flow such as generating and uploading a `.txt` file
+  - If the final content to be written into the input box exceeds this threshold, webcode can switch from inline insertion to a fallback flow such as generating and uploading a `.txt` file
 
 Selector rules:
 
@@ -169,11 +169,11 @@ Selector rules:
 
 ### Step 3: Validate the Merge Flow
 
-The gateway uses [mcp-gateway-vscode/src/gateway.ts](mcp-gateway-vscode/src/gateway.ts) to merge configured sites with built-in selectors.
+The gateway uses [gateway-vscode/src/gateway.ts](gateway-vscode/src/gateway.ts) to merge configured sites with built-in selectors.
 
 The flow is:
 
-1. VS Code loads `mcpGateway.aiSites`
+1. VS Code loads `webcodeGateway.aiSites`
 2. If the setting is empty, it falls back to `getBuiltinAiSites()`
 3. The gateway maps each site address through `getPlatformIdByAddress()`
 4. Matching built-in selectors are merged into the site entry
@@ -186,9 +186,9 @@ You usually do not need to change `gateway.ts` when adding a new built-in platfo
 Recommended commands:
 
 ```powershell
-pnpm --filter @webmcp/shared build
-pnpm --filter mcp-gateway-vscode build
-pnpm --filter mcp-bridge-browser exec tsc -p . --noEmit
+pnpm --filter @webcode/shared build
+pnpm --filter gateway-vscode build
+pnpm --filter bridge-browser exec tsc -p . --noEmit
 ```
 
 Manual checks:
@@ -224,7 +224,7 @@ This path does not require changing `platforms.ts`.
 
 ### Where to Configure It
 
-Use the `mcpGateway.aiSites` setting in VS Code.
+Use the `webcodeGateway.aiSites` setting in VS Code.
 
 You can set it through:
 
@@ -236,7 +236,7 @@ Example:
 
 ```json
 {
-  "mcpGateway.aiSites": [
+  "webcodeGateway.aiSites": [
     {
       "name": "GLM",
       "address": "https://chatglm.cn/",
@@ -255,9 +255,9 @@ Example:
 }
 ```
 
-### `mcpGateway.aiSites` Field Reference
+### `webcodeGateway.aiSites` Field Reference
 
-Each item in `mcpGateway.aiSites` supports these fields:
+Each item in `webcodeGateway.aiSites` supports these fields:
 
 - `name`
   - Type: `string`
@@ -312,7 +312,7 @@ Example:
 
 ```json
 {
-  "mcpGateway.aiSites": [
+  "webcodeGateway.aiSites": [
     {
       "name": "DeepSeek",
       "showQuickLaunch": false,
@@ -361,7 +361,7 @@ Inside `selectors`, these keys are supported:
 
 - `maxInlineChars`
   - Optional numeric threshold for maximum inline input size
-  - If the final content to be written into the input box exceeds this value, WebMCP can avoid direct paste and instead use a fallback such as generating and uploading a `.txt` file
+  - If the final content to be written into the input box exceeds this value, webcode can avoid direct paste and instead use a fallback such as generating and uploading a `.txt` file
 
 ### Configuration-Only Workflow
 
@@ -373,9 +373,9 @@ Inside `selectors`, these keys are supported:
    - input area
    - send button
    - stop button
-4. Add the site to `mcpGateway.aiSites`
+4. Add the site to `webcodeGateway.aiSites`
 5. Restart the gateway from the VS Code status bar
-6. Reopen the target site through WebMCP
+6. Reopen the target site through webcode
 7. Verify the browser extension receives the updated config
 8. Test tool capture and result delivery
 
@@ -402,7 +402,7 @@ Move to built-in code support if:
   - If the browser ends up on a different origin or path prefix than your configured `address`, matching may fail
 
 - Overly broad `messageBlocks`
-  - If user messages are included, WebMCP may scan the wrong content
+  - If user messages are included, webcode may scan the wrong content
 
 - Wrong `stopButton`
   - Results may send too early or stay stuck waiting
@@ -417,7 +417,7 @@ Move to built-in code support if:
 
 Use this rule:
 
-- For experimentation: use `mcpGateway.aiSites`
+- For experimentation: use `webcodeGateway.aiSites`
 - For stable built-in support: update `platforms.ts`
 
 That keeps almost all platform work inside the VS Code extension and minimizes browser extension churn.

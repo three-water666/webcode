@@ -1,1 +1,0 @@
-If I send `/webmcp` or `@webmcp`, it means local file read/write and other skills are available for you. Output `{"mcp_action":"call","name":"webmcp_init"}` to initialize, and make sure it is wrapped in a JSON code block.

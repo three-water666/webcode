@@ -22,7 +22,7 @@ All notable changes to this project will be documented in this file.
 
 ## v0.6.0 (2026-03-27)
 ### Features
-- **Initialization Flow**: Added the `/webmcp init` setup flow for generating custom instructions; later simplified the onboarding flow and inlined tool and skill summaries to reduce first-run friction.
+- **Initialization Flow**: Added the `/webcode init` setup flow for generating custom instructions; later simplified the onboarding flow and inlined tool and skill summaries to reduce first-run friction.
 - **Skills System**: Added workspace skill discovery and lazy loading so available skills can be exposed dynamically based on the current workspace.
 - **Localization**: Added localization for the browser extension popup, the Bridge Loader page, and the Gateway control panel.
 - **Browser Integration**: Switched browser-side site injection to read dynamic configuration from VS Code so extension behavior stays aligned with gateway configuration.
@@ -37,7 +37,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixes
 - **Browser Extension**: Fixed incorrect URL validation that could drop connections and prevent the popup from showing available gateways correctly.
-- **Browser Extension**: Fixed storage loading, error message keys, and `webmcp_init` capture/output writing logic.
+- **Browser Extension**: Fixed storage loading, error message keys, and `webcode_init` capture/output writing logic.
 - **Bridge**: Fixed connection hangs on the Bridge page.
 - **Build Compatibility**: Fixed CRX/Vite build compatibility issues, including output chunk naming, manifest typing, and compatibility fallout from the plugin rollback.
 - **Scripts**: Switched Windows extension packaging to `tar.exe` for more reliable archive generation.
@@ -63,7 +63,7 @@ All notable changes to this project will be documented in this file.
 
 ## v0.5.1 (2025-12-13)
 ### Features
-- **VSCode**: Added the editor context menu action `WebMCP: Copy Context` to copy the file path and selected code with one click.
+- **VSCode**: Added the editor context menu action `webcode: Copy Context` to copy the file path and selected code with one click.
 
 ---
 

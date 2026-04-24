@@ -37,10 +37,10 @@ chmod +x build_release.sh
 
 打包成功后，根目录下会自动生成 `release/` 文件夹，包含：
 
-- **WebMCP-Gateway-VSCode-x.x.x.vsix**
+- **webcode-gateway-vscode-x.x.x.vsix**
   - VS Code 插件安装包。
   - 安装方法：VS Code 扩展侧边栏 -> 点击右上角 `...` -> **Install from VSIX...**
 
-- **WebMCP-Bridge-Browser-x.x.x.zip**
+- **webcode-bridge-browser-x.x.x.zip**
   - 浏览器插件压缩包。
   - 安装方法：解压后 -> Chrome/Edge 扩展管理页 -> 打开“开发者模式” -> **加载已解压的扩展程序**。
