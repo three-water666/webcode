@@ -42,7 +42,55 @@ jobs:
         run: ./build_release.sh
 
       - name: Extract release notes
-        run: node .github/scripts/extract-release-notes.mjs "${RELEASE_TAG}" release-notes.md
+        run: |
+          node --input-type=module <<'EOF'
+          import { readFileSync, writeFileSync } from "node:fs";
+
+          const version = process.env.RELEASE_TAG.replace(/^refs\/tags\//, "").replace(/^v/, "");
+
+          function escapeRegExp(value) {
+            return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          }
+
+          function extractSection(filePath) {
+            const lines = readFileSync(filePath, "utf8").split(/\r?\n/);
+            const headerPattern = new RegExp(`^##\\s+v?${escapeRegExp(version)}(?:\\s|$)`);
+            const startIndex = lines.findIndex((line) => headerPattern.test(line));
+
+            if (startIndex === -1) {
+              throw new Error(`Could not find v${version} in ${filePath}`);
+            }
+
+            const sectionLines = [];
+            for (let i = startIndex + 1; i < lines.length; i += 1) {
+              const line = lines[i];
+              if (line.trim() === "---" || /^##\s+v?\d/.test(line)) {
+                break;
+              }
+              sectionLines.push(line);
+            }
+
+            const section = sectionLines.join("\n").trim();
+            if (!section) {
+              throw new Error(`Found v${version} in ${filePath}, but the section is empty`);
+            }
+
+            return section;
+          }
+
+          const englishNotes = extractSection("CHANGELOG.md");
+          const chineseNotes = extractSection("CHANGELOG_zh.md");
+          const releaseNotes = `# webcode ${version}
+
+          ## English
+          ${englishNotes}
+
+          ## 中文
+          ${chineseNotes}
+          `;
+
+          writeFileSync("release-notes.md", releaseNotes);
+          EOF
 
       - name: Publish GitHub Release
         env:
