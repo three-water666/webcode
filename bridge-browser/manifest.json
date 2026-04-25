@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "webcode bridge",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Connect Web AI to local MCP Gateway (Zero-Config)",
   "icons": {
     "16": "icons/icon16.png",
@@ -38,6 +38,13 @@
         "icons/*"
       ],
       "matches": ["<all_urls>"]
+    },
+    {
+      "resources": [
+        "assets/*.js"
+      ],
+      "matches": ["<all_urls>"],
+      "use_dynamic_url": false
     }
   ],
   "content_scripts": [
