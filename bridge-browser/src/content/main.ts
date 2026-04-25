@@ -701,6 +701,16 @@ function saveToBuffer(requestId: string, content: string, isError = false) {
 // === 审批队列处理 ===
 function processConfirmationQueue() {
   if (isPopupOpen || confirmationQueue.length === 0) { return; }
+
+  while (confirmationQueue.length > 0 && isPayloadApproved(confirmationQueue[0])) {
+    const approvedPayload = confirmationQueue.shift();
+    if (!approvedPayload) { return; }
+    Logger.log(`Approval already saved for '${getApprovalLabel(approvedPayload)}'; skipping confirmation`, "action");
+    performExecution(approvedPayload);
+  }
+
+  if (confirmationQueue.length === 0) { return; }
+
   const payload = confirmationQueue[0] as any;
   isPopupOpen = true;
   chrome.runtime.sendMessage({
