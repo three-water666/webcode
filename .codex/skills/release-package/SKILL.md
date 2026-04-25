@@ -1,0 +1,55 @@
+---
+name: release-package
+description: Automate the webcode release workflow. Use when the user asks to publish or release a new webcode package/version, says "发新的包", "发布新版本", "打版本", "发版", "release a new package", or asks to bump versions, generate changelog entries, commit, tag, and push so the tag-triggered GitHub Actions release workflow can publish artifacts.
+---
+
+# Release Package
+
+## Workflow
+
+Follow this sequence end-to-end unless the user explicitly asks to stop earlier.
+
+1. Resolve the target version.
+   - If the user provides a version, use it.
+   - If not, infer the next patch version from the highest local semver tag or current release package version, then state the assumption before editing.
+   - Use bare semver tags like `0.6.3`, matching this repository's existing tag convention. Do not use `v0.6.3` unless the user explicitly requests it.
+
+2. Run preflight checks.
+   - Check `git status --short`; stop and ask if unrelated changes are present.
+   - Check whether the target tag already exists with `git tag --list <version>`; never overwrite or move an existing release tag.
+   - Identify the previous release tag with `git tag --list --sort=-v:refname`.
+
+3. Update release versions.
+   - Update `gateway-vscode/package.json`.
+   - Update `bridge-browser/package.json`.
+   - Update `bridge-browser/manifest.json`.
+   - Do not change the root `package.json` or `shared/package.json` versions unless the user explicitly asks; those are not release artifact versions in this repo.
+
+4. Generate changelog entries.
+   - Summarize `git log --oneline <previous-tag>..HEAD`, plus any current release-version edits if relevant.
+   - Add a new top section to both `CHANGELOG.md` and `CHANGELOG_zh.md`.
+   - Use the format already present in each file: `## v<version> (YYYY-MM-DD)`.
+   - Keep English and Chinese content semantically aligned.
+   - Group entries by user-facing categories such as Features, Improvements, Fixes, and Engineering. Do not paste raw commit logs.
+
+5. Validate before tagging.
+   - Run `pnpm lint`.
+   - Run `pnpm --filter bridge-browser run build`.
+   - When feasible for a release, run `./build_release.sh` to verify both `.vsix` and browser `.zip` artifacts are produced.
+   - If any validation fails, fix it or report the blocker. Do not commit, tag, or push a failed release.
+
+6. Commit the release changes.
+   - Confirm the diff contains only intended version and changelog changes.
+   - Commit with `chore: release <version>`.
+
+7. Tag and push.
+   - Create the tag on the release commit: `git tag <version>`.
+   - Push the branch and tag: `git push origin main` and `git push origin <version>`.
+   - The tag push triggers `.github/workflows/release.yml`, which builds release artifacts and creates or updates the GitHub Release using bilingual notes extracted from the changelogs.
+
+## Safety Rules
+
+- Do not create or push a tag if the changelog section for that version is missing.
+- Do not push if the working tree is dirty after the release commit.
+- Do not amend or force-push release commits or tags unless the user explicitly instructs it.
+- If a tag was pushed before the release workflow existed, use the `Release` workflow's manual dispatch with the existing tag instead of recreating the tag.

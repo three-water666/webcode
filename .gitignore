@@ -10,6 +10,10 @@ release
 out/
 .agents
 skills
+!.codex/
+!.codex/skills/
+!.codex/skills/release-package/
+!.codex/skills/release-package/**
 skills-lock.json
 .qoder
 .trae
