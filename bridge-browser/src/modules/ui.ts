@@ -5,6 +5,9 @@ import { BRANDING } from '@webcode/shared';
 
 let autoSendTimer: NodeJS.Timeout | null = null;
 export type CommandApprovalScope = false | 'exact' | 'executable' | 'prefix';
+type VisualState = "processing" | "success" | "error";
+
+const VISUAL_STATUS_STYLE_ID = `${BRANDING.slug}-mcp-visual-status-style`;
 
 /**
  * 终止当前正在进行的自动发送轮询机制
@@ -20,6 +23,66 @@ export function cancelAutoSend() {
 
 // === 视觉标记 ===
 
+function ensureVisualStatusStyle() {
+  if (document.getElementById(VISUAL_STATUS_STYLE_ID)) {return;}
+
+  const style = document.createElement("style");
+  style.id = VISUAL_STATUS_STYLE_ID;
+  style.textContent = `
+    [data-mcp-visual="true"] {
+      position: relative !important;
+    }
+    [data-mcp-visual="true"]::after {
+      content: attr(data-mcp-status-label);
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      z-index: 1;
+      padding: 2px 8px;
+      border-radius: 999px;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 16px;
+      letter-spacing: 0.02em;
+      pointer-events: none;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
+      white-space: nowrap;
+    }
+    [data-mcp-state="processing"]::after {
+      background: #1565C0;
+    }
+    [data-mcp-state="success"]::after {
+      background: #008C45;
+    }
+    [data-mcp-state="error"]::after {
+      background: #C62828;
+    }
+  `;
+  (document.head || document.documentElement).appendChild(style);
+}
+
+function markVisualState(
+  element: HTMLElement,
+  state: VisualState,
+  labelKey: string,
+  borderColor: string,
+  shadowColor: string
+) {
+  const label = t(labelKey);
+  if (element.dataset.mcpState === state && element.dataset.mcpStatusLabel === label) {return;}
+
+  ensureVisualStatusStyle();
+  element.dataset.mcpState = state;
+  element.dataset.mcpVisual = "true";
+  element.dataset.mcpStatusLabel = label;
+  element.style.border = `2px solid ${borderColor}`;
+  element.style.borderRadius = "6px";
+  element.style.transition = "border-color 0.3s ease, box-shadow 0.3s ease";
+  element.style.boxShadow = `0 0 0 3px ${shadowColor}`;
+}
+
 // 状态 1: 处理中 (蓝色)
 /**
  * 视觉标记：将页面上的工具调用代码块标记为“处理中”状态
@@ -27,12 +90,7 @@ export function cancelAutoSend() {
  * @description 修改元素的边框为蓝色，表示该 MCP 工具请求已被捕获并正在排队或执行中。
  */
 export function markVisualProcessing(element: HTMLElement) {
-  if (element.dataset.mcpState === "processing") {return;}
-  element.dataset.mcpState = "processing";
-  element.dataset.mcpVisual = "true";
-  element.style.border = "2px solid #2196F3"; // Blue
-  element.style.borderRadius = "4px";
-  element.style.transition = "border-color 0.3s ease";
+  markVisualState(element, "processing", "visual_processing", "#2196F3", "rgba(33, 150, 243, 0.24)");
 }
 
 // 状态 2: 成功 (绿色)
@@ -42,11 +100,7 @@ export function markVisualProcessing(element: HTMLElement) {
  * @description 修改元素的边框为绿色，表示 MCP 工具已经执行完毕且结果已写回给大模型。
  */
 export function markVisualSuccess(element: HTMLElement) {
-  if (element.dataset.mcpState === "success") {return;}
-  element.dataset.mcpState = "success";
-  element.dataset.mcpVisual = "true";
-  element.style.border = "2px solid #00E676"; // Green
-  element.style.borderRadius = "4px";
+  markVisualState(element, "success", "visual_success", "#00E676", "rgba(0, 230, 118, 0.22)");
 }
 
 // 状态 3: 错误 (红色)
@@ -56,11 +110,7 @@ export function markVisualSuccess(element: HTMLElement) {
  * @description 修改元素的边框为红色，表示该工具调用在执行或 JSON 解析阶段发生错误，或被用户人工拒绝。
  */
 export function markVisualError(element: HTMLElement) {
-  if (element.dataset.mcpState === "error") {return;}
-  element.dataset.mcpState = "error";
-  element.dataset.mcpVisual = "true";
-  element.style.border = "2px solid #F44336"; // Red
-  element.style.borderRadius = "4px";
+  markVisualState(element, "error", "visual_error", "#F44336", "rgba(244, 67, 54, 0.24)");
 }
 
 // === 回填输入框 ===

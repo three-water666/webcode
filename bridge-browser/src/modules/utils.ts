@@ -57,6 +57,9 @@ const LOG_MSGS: Record<string, { en: string; zh: string }> = {
   waiting_tools: { en: "Waiting for tools...", zh: "等待工具执行..." },
   hitl_intercept: { en: "Intercepted for approval", zh: "拦截等待审批" },
   hitl_rejected: { en: "User rejected execution", zh: "用户拒绝执行" },
+  visual_processing: { en: "Running", zh: "执行中" },
+  visual_success: { en: "Completed", zh: "执行完成" },
+  visual_error: { en: "Error", zh: "错误" },
 
   // HITL Modal UI
   hitl_title: { en: "Approval Required", zh: "请求执行工具" },
