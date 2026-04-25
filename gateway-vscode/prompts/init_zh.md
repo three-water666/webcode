@@ -1,1 +1,5 @@
-如果我输入了{{SLASH_COMMAND}}或{{MENTION_COMMAND}}，说明为你准备了本地文件读写和其他技能的能力，请输出{"mcp_action":"call","name":"{{INIT_TOOL_NAME}}"}来初始化，输出一定放在JSON块中。
+请先输出以下 JSON 代码块来初始化 {{PRODUCT_NAME}}，不要解释，不要添加其他内容。初始化完成后，再继续处理我的请求。
+
+```json
+{"mcp_action":"call","name":"{{INIT_TOOL_NAME}}"}
+```

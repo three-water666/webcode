@@ -119,6 +119,11 @@ chrome.runtime.onMessage.addListener((request) => {
 // === DOM 选择器与配置 ===
 let DOM: SiteSelectors | null = null;
 let currentPlatform: string | null = null;
+let autoInitListenerStarted = false;
+let autoInitModalOpen = false;
+let lastAutoInitPromptedText = "";
+
+const AUTO_INIT_TRIGGER_RE = /(^|[\s\n])(?:\/webcode|@webcode)(?=$|[\s\n.,，。!?！？:：;；])/i;
 
 function initDOMConfig() {
   chrome.storage.sync.get(
@@ -137,6 +142,7 @@ function initDOMConfig() {
         if (matchedSite && matchedSite.selectors) {
           DOM = matchedSite.selectors;
           currentPlatform = matchedSite.name;
+          setupAutoInitTrigger();
           startObserver();
         } else {
           console.log(`${BRANDING.productName}: Current site is not configured in VS Code. Idle.`);
@@ -144,6 +150,69 @@ function initDOMConfig() {
       });
     }
   );
+}
+
+function setupAutoInitTrigger() {
+  if (autoInitListenerStarted) {return;}
+  autoInitListenerStarted = true;
+
+  const scheduleCheck = () => {
+    setTimeout(() => {
+      void maybePromptAutoInit();
+    }, 0);
+  };
+
+  document.addEventListener("input", scheduleCheck, true);
+  document.addEventListener("keyup", scheduleCheck, true);
+  document.addEventListener("paste", scheduleCheck, true);
+}
+
+async function maybePromptAutoInit() {
+  if (!DOM || !isClientConnected || autoInitModalOpen) {return;}
+
+  const inputEl = document.querySelector(DOM.inputArea) as HTMLElement | HTMLInputElement | HTMLTextAreaElement | null;
+  if (!inputEl || !isActiveInput(inputEl)) {return;}
+
+  const currentText = getInputText(inputEl);
+  if (!AUTO_INIT_TRIGGER_RE.test(currentText)) {return;}
+  if (currentText === lastAutoInitPromptedText) {return;}
+
+  if (!i18n.resources.init) {
+    await loadPromptsFromStorage();
+  }
+  const initPrompt = i18n.resources.init;
+  if (!initPrompt) {return;}
+
+  lastAutoInitPromptedText = currentText;
+  autoInitModalOpen = true;
+  const confirmed = await UI.showAutoInitConfirm();
+  autoInitModalOpen = false;
+
+  if (!confirmed || !DOM) {return;}
+
+  const latestInput = document.querySelector(DOM.inputArea) as HTMLElement | HTMLInputElement | HTMLTextAreaElement | null;
+  if (!latestInput) {return;}
+
+  const latestText = getInputText(latestInput);
+  if (!AUTO_INIT_TRIGGER_RE.test(latestText)) {return;}
+
+  const replacement = latestText.replace(AUTO_INIT_TRIGGER_RE, (_match, prefix) => {
+    return `${prefix ? "\n\n" : ""}${initPrompt.trim()}\n\n`;
+  });
+
+  if (UI.replaceInputBoxText(replacement, DOM.inputArea)) {
+    lastAutoInitPromptedText = replacement;
+    Logger.log("Inserted webcode initialization prompt", "action");
+  }
+}
+
+function isActiveInput(inputEl: HTMLElement): boolean {
+  const activeEl = document.activeElement;
+  return activeEl === inputEl || !!activeEl && inputEl.contains(activeEl);
+}
+
+function getInputText(inputEl: HTMLElement | HTMLInputElement | HTMLTextAreaElement): string {
+  return (inputEl as HTMLInputElement).value ?? inputEl.innerText ?? "";
 }
 
 chrome.storage.onChanged.addListener((changes, namespace) => {

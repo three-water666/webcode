@@ -1,6 +1,6 @@
 # webcode
 
-webcode connects web-based AI products such as ChatGPT, Gemini, and DeepSeek to local development tools exposed through MCP in VS Code.
+webcode connects web-based AI products such as ChatGPT, Gemini, and DeepSeek to VS Code with support for MCP and Skills.
 
 [中文说明](README_zh.md)
 
@@ -11,13 +11,6 @@ Please read this before using webcode:
 1. Use at your own risk. webcode bridges remote AI systems with local tools and files. You are responsible for what those tools are allowed to do.
 2. Check the terms of service of the AI products you use. Automated interaction may not be allowed on some platforms.
 3. Do not send secrets or sensitive code unless you are comfortable sharing that data with the AI provider you are using.
-
-## What It Does
-
-- Starts a local MCP gateway in VS Code.
-- Opens a supported web AI product through a bridge page.
-- Lets the web model call local MCP tools after connection is established.
-- Supports multiple browsers, multiple VS Code windows, and browser routing rules.
 
 ## Key Features
 
@@ -75,30 +68,18 @@ When the status bar shows a port number, the local gateway is running.
 
 When the browser extension shows `ON`, the connection is ready to use.
 
-### 3. Add the Initialization Prompt
+### 3. Use It in Chat
 
-Before first use, add the webcode initialization prompt to the AI product you use.
-
-1. Click the webcode browser extension icon in the browser toolbar.
-2. Click `Copy Initialization Prompt`.
-3. Open the settings page of the AI product you are using.
-4. Find the area for memory, preferences, profile instructions, or custom instructions.
-5. Paste the copied prompt there and save it.
-
-You usually only need to do this once per product/account.
-
-### 4. Use It in Chat
-
-1. Open a new chat or an existing chat on the target AI site.
-2. Enter `/webcode` or `@webcode`.
-3. Add your actual task in the same message.
-4. Send the message.
+1. Open a new chat on the target AI site.
+2. Enter your actual task first, then add `/webcode` or `@webcode` at the end of the same message.
+3. When webcode asks whether to add the initialization prompt, choose `Add` or press Enter.
+4. webcode replaces the trigger word with the initialization prompt. Review the message, then send it yourself.
 
 For example:
 
-- `Read src/utils.ts and write a unit test for it.`
-- `List the files in the current workspace.`
-- `Create project docs under the docs directory.`
+- `Read src/utils.ts and write a unit test for it. /webcode`
+- `List the files in the current workspace. @webcode`
+- `Create project docs under the docs directory. /webcode`
 
 ## Workspace Skills
 

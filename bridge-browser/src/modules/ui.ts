@@ -82,23 +82,41 @@ export function writeToInputBox(text: string, inputSelector: string) {
 
   const final = buildFinalInputText(inputEl, text);
 
+  setInputBoxText(final, inputEl);
+  Logger.log(t("result_written"), "action");
+}
+
+export function replaceInputBoxText(text: string, inputSelector: string): boolean {
+  const inputEl = document.querySelector(inputSelector) as HTMLElement | HTMLInputElement | HTMLTextAreaElement | null;
+  if (!inputEl) {
+    Logger.log(t("input_not_found"), "error");
+    return false;
+  }
+
+  setInputBoxText(text, inputEl);
+  return true;
+}
+
+function setInputBoxText(
+  text: string,
+  inputEl: HTMLElement | HTMLInputElement | HTMLTextAreaElement
+) {
   inputEl.focus();
   let success = false;
   try {
     document.execCommand("selectAll", false);
-    success = document.execCommand("insertText", false, final);
+    success = document.execCommand("insertText", false, text);
   } catch {
   }
 
   if (!success) {
     if (inputEl.tagName === "TEXTAREA" || inputEl.tagName === "INPUT") {
-        (inputEl as HTMLInputElement).value = final;
+        (inputEl as HTMLInputElement).value = text;
     } else {
-        inputEl.innerText = final;
+        inputEl.innerText = text;
     }
     inputEl.dispatchEvent(new Event("input", { bubbles: true }));
   }
-  Logger.log(t("result_written"), "action");
 }
 
 /**
@@ -392,6 +410,82 @@ function triggerSingleEnter(inputEl: HTMLElement, withCtrl: boolean) {
   inputEl.dispatchEvent(new KeyboardEvent("keydown", init));
   inputEl.dispatchEvent(new KeyboardEvent("keypress", init));
   inputEl.dispatchEvent(new KeyboardEvent("keyup", init));
+}
+
+export function showAutoInitConfirm(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const isZh = i18n.lang === "zh";
+    const host = document.createElement("div");
+    Object.assign(host.style, {
+      position: "fixed",
+      zIndex: 999999,
+      top: 0,
+      left: 0,
+      width: "0",
+      height: "0",
+    });
+    document.body.appendChild(host);
+    const shadow = host.attachShadow({ mode: "open" });
+
+    const style = document.createElement("style");
+    style.textContent = `
+      :host { all: initial; color-scheme: light; }
+      *, *::before, *::after { box-sizing: border-box; }
+      .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; justify-content: center; align-items: center; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+      .card { width: min(420px, calc(100vw - 40px)); background: #fff; color: #202124; border: 1px solid #dadce0; border-radius: 8px; box-shadow: 0 12px 34px rgba(0,0,0,0.28); padding: 20px; }
+      h2 { margin: 0 0 10px 0; font-size: 18px; font-weight: 650; line-height: 1.3; color: #202124; }
+      p { margin: 0; color: #5f6368; font-size: 14px; line-height: 1.5; }
+      .buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+      button { font: inherit; font-size: 14px; font-weight: 600; border-radius: 6px; padding: 8px 14px; cursor: pointer; border: 1px solid #dadce0; background: #fff; color: #3c4043; }
+      button:hover { background: #f8fafd; }
+      .primary { border-color: #1a73e8; background: #1a73e8; color: #fff; }
+      .primary:hover { background: #1765cc; }
+    `;
+
+    const overlay = document.createElement("div");
+    overlay.className = "overlay";
+    overlay.innerHTML = `
+      <div class="card" role="dialog" aria-modal="true">
+        <h2>${isZh ? "添加 webcode 初始化提示词？" : "Add webcode initialization prompt?"}</h2>
+        <p>${isZh ? "将输入框中的 /webcode 或 @webcode 替换为初始化提示词。不会自动发送。" : "Replace /webcode or @webcode in the input with the initialization prompt. This will not send automatically."}</p>
+        <div class="buttons">
+          <button class="cancel" type="button">${isZh ? "取消" : "Cancel"}</button>
+          <button class="primary" type="button">${isZh ? "添加" : "Add"}</button>
+        </div>
+      </div>
+    `;
+
+    shadow.appendChild(style);
+    shadow.appendChild(overlay);
+
+    const cleanup = (result: boolean) => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      host.remove();
+      resolve(result);
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        event.stopPropagation();
+        cleanup(true);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        cleanup(false);
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown, true);
+    shadow.querySelector(".primary")?.addEventListener("click", () => cleanup(true));
+    shadow.querySelector(".cancel")?.addEventListener("click", () => cleanup(false));
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) {
+        cleanup(false);
+      }
+    });
+    (shadow.querySelector(".primary") as HTMLButtonElement | null)?.focus();
+  });
 }
 
 // === HITL 弹窗 (Shadow DOM) ===

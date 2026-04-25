@@ -1,1 +1,5 @@
-If I send `{{SLASH_COMMAND}}` or `{{MENTION_COMMAND}}`, it means local file read/write and other skills are available for you. Output `{"mcp_action":"call","name":"{{INIT_TOOL_NAME}}"}` to initialize, and make sure it is wrapped in a JSON code block.
+First output the following JSON code block to initialize {{PRODUCT_NAME}}. Do not explain it or add any other content. After initialization completes, continue with my request.
+
+```json
+{"mcp_action":"call","name":"{{INIT_TOOL_NAME}}"}
+```

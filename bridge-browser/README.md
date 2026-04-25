@@ -15,13 +15,8 @@ Project: https://github.com/three-water666/webcode
 
 1. **Preparation**: Open VS Code, ensure **webcode gateway** is installed, and click the status bar to start the service.
 2. **Auto Connect**: Open Gemini or other supported AI pages. The extension will automatically detect and connect to the local service (the icon will turn green).
-3. **Save the Initialization Prompt (Critical Step)**:
-    * Click the extension icon in the browser toolbar.
-    * Click the **Copy Initialization Prompt** button.
-    * Add the copied content to the AI's memory, user preferences, or custom instructions.
-    * *You only need to do this once.*
-4. **Start Chatting**: In the chat, send `/webcode` or `@webcode` together with your actual request. The AI will initialize webcode first, then continue with your task.
-5. **Troubleshooting**: If the icon is red or gray, click the icon to view detailed troubleshooting steps.
+3. **Start Chatting**: Open a new chat, type your actual request first, then add `/webcode` or `@webcode` at the end of the same message. When webcode asks whether to add the initialization prompt, choose **Add** or press Enter. webcode replaces the trigger word with the initialization prompt, then you can review and send the message yourself.
+4. **Troubleshooting**: If the icon is red or gray, click the icon to view detailed troubleshooting steps.
 
 ## 📥 Get VS Code Extension
 Search in VS Code Marketplace: `webcode gateway`
