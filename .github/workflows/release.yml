@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to publish, for example 0.6.2"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build And Publish Release
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.25.0 --activate
+          pnpm --version
+
+      - name: Build release artifacts
+        run: ./build_release.sh
+
+      - name: Extract release notes
+        run: node .github/scripts/extract-release-notes.mjs "${RELEASE_TAG}" release-notes.md
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ env.RELEASE_TAG }}
+        run: |
+          VERSION="${TAG_NAME#v}"
+          if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
+            gh release upload "${TAG_NAME}" release/* --clobber
+            gh release edit "${TAG_NAME}" --title "webcode ${VERSION}" --notes-file release-notes.md
+          else
+            gh release create "${TAG_NAME}" release/* --title "webcode ${VERSION}" --notes-file release-notes.md --verify-tag
+          fi

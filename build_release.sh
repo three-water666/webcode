@@ -16,7 +16,11 @@ rm -rf release/*
 
 # 2. Install Dependencies (Root)
 echo -e "${CYAN}Installing dependencies...${NC}"
-pnpm install
+if [ "${CI:-}" = "true" ]; then
+  pnpm install --frozen-lockfile
+else
+  pnpm install
+fi
 
 # 3. Build Shared Module
 echo -e "${CYAN}Building Shared Module...${NC}"
