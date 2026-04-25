@@ -525,7 +525,10 @@ function executeTool(payload: ToolExecutionPayload) {
 
 async function initializeWebcode(payload: ToolExecutionPayload) {
   const requestId = payload.request_id!;
-  let finalPrompt = i18n.resources.prompt || "";
+  let finalPrompt = i18n.lang === "zh"
+    ? `以下是 ${PROTOCOL.initToolName} 的返回结果，请不要再次发送 ${PROTOCOL.initToolName} 初始化命令。\n\n`
+    : `The following is the result returned by ${PROTOCOL.initToolName}. Do not send the ${PROTOCOL.initToolName} initialization command again.\n\n`;
+  finalPrompt += i18n.resources.prompt || "";
   if (userRules) { finalPrompt += `\n\n=== User Rules ===\n${userRules}`; }
 
   Logger.log(`Initializing ${BRANDING.productName} with prompt, tool list, and skill list`, "action");

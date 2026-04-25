@@ -3,5 +3,8 @@ First output the following initialization command to initialize {{PRODUCT_NAME}}
 The initialization command must be placed inside a JSON code block. Do not use plain text or inline JSON.
 
 ```json
-{"mcp_action":"call","name":"{{INIT_TOOL_NAME}}"}
+{
+  "mcp_action": "call",
+  "name": "{{INIT_TOOL_NAME}}"
+}
 ```

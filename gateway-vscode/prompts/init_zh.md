@@ -3,5 +3,8 @@
 初始化命令一定要放在 JSON 代码块中，不能使用普通文本或行内 JSON。
 
 ```json
-{"mcp_action":"call","name":"{{INIT_TOOL_NAME}}"}
+{
+  "mcp_action": "call",
+  "name": "{{INIT_TOOL_NAME}}"
+}
 ```
