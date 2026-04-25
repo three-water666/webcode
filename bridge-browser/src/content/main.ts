@@ -123,7 +123,35 @@ let autoInitListenerStarted = false;
 let autoInitModalOpen = false;
 let lastAutoInitPromptedText = "";
 
-const AUTO_INIT_TRIGGER_RE = /(^|[\s\n])(?:\/webcode|@webcode)(?=$|[\s\n.,，。!?！？:：;；])/i;
+const AUTO_INIT_TRIGGER_TOKEN_RE = /(?:\/webcode|@webcode)(?=$|[\s\n.,，。!?！？:：;；])/gi;
+const AUTO_INIT_INVALID_PREFIX_RE = /[A-Za-z0-9_/@.]/;
+const AUTO_INIT_IGNORABLE_PREFIX_RE = /[\s\u00a0\uFEFF\u200B]/;
+
+function findAutoInitTrigger(text: string): { replacementStart: number; end: number } | null {
+  AUTO_INIT_TRIGGER_TOKEN_RE.lastIndex = 0;
+
+  let match: RegExpExecArray | null;
+  while ((match = AUTO_INIT_TRIGGER_TOKEN_RE.exec(text)) !== null) {
+    const tokenStart = match.index;
+    const previousChar = tokenStart > 0 ? text[tokenStart - 1] : "";
+
+    if (AUTO_INIT_INVALID_PREFIX_RE.test(previousChar)) {
+      continue;
+    }
+
+    let replacementStart = tokenStart;
+    while (replacementStart > 0 && AUTO_INIT_IGNORABLE_PREFIX_RE.test(text[replacementStart - 1])) {
+      replacementStart--;
+    }
+
+    return {
+      replacementStart,
+      end: tokenStart + match[0].length,
+    };
+  }
+
+  return null;
+}
 
 function initDOMConfig() {
   chrome.storage.sync.get(
@@ -174,7 +202,8 @@ async function maybePromptAutoInit() {
   if (!inputEl || !isActiveInput(inputEl)) {return;}
 
   const currentText = getInputText(inputEl);
-  if (!AUTO_INIT_TRIGGER_RE.test(currentText)) {return;}
+  const currentTrigger = findAutoInitTrigger(currentText);
+  if (!currentTrigger) {return;}
   if (currentText === lastAutoInitPromptedText) {return;}
 
   if (!i18n.resources.init) {
@@ -194,11 +223,13 @@ async function maybePromptAutoInit() {
   if (!latestInput) {return;}
 
   const latestText = getInputText(latestInput);
-  if (!AUTO_INIT_TRIGGER_RE.test(latestText)) {return;}
+  const latestTrigger = findAutoInitTrigger(latestText);
+  if (!latestTrigger) {return;}
 
-  const replacement = latestText.replace(AUTO_INIT_TRIGGER_RE, (_match, prefix) => {
-    return `${prefix ? "\n\n" : ""}${initPrompt.trim()}\n\n`;
-  });
+  const beforeTrigger = latestText.slice(0, latestTrigger.replacementStart);
+  const afterTrigger = latestText.slice(latestTrigger.end);
+  const prefix = beforeTrigger.trim() ? "\n\n" : "";
+  const replacement = `${beforeTrigger}${prefix}${initPrompt.trim()}\n\n${afterTrigger}`;
 
   if (UI.replaceInputBoxText(replacement, DOM.inputArea)) {
     lastAutoInitPromptedText = replacement;
