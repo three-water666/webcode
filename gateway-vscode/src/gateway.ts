@@ -3,13 +3,12 @@ import cors from 'cors';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-// @ts-ignore: We intentionally import the deprecated SSE transport for backward compatibility
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import * as fs from 'fs/promises';
-import { BRANDING, PROTOCOL, ToolExecutionPayload } from '@webcode/shared';
+import { BRANDING, PROTOCOL, type ToolExecutionPayload } from '@webcode/shared';
 import { PROMPTS } from './defaults';
 import { getDefaultBridgeTarget, getDefaultSelectors, getPlatformIdByAddress } from './platforms';
 import { SkillManager } from './skillManager';
@@ -292,11 +291,15 @@ export class GatewayManager {
         }
 
         const root = vscode.workspace.workspaceFolders[0].uri.fsPath;
-        if (!requestedCwd) {
+        if (requestedCwd == null || requestedCwd === '') {
             return root;
         }
 
-        const cwd = String(requestedCwd);
+        if (typeof requestedCwd !== 'string') {
+            throw new Error('cwd must be a string.');
+        }
+
+        const cwd = requestedCwd;
         const resolved = path.isAbsolute(cwd) ? path.normalize(cwd) : path.resolve(root, cwd);
         const relative = path.relative(root, resolved);
         const isSubPath = relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
@@ -309,7 +312,15 @@ export class GatewayManager {
     }
 
     private validateTerminalCommand(command: unknown, cwd: string) {
-        const commandLine = String(command || '').trim();
+        if (typeof command !== 'string') {
+            throw new Error('command must be a string.');
+        }
+
+        const commandLine = command.trim();
+        if (!commandLine) {
+            throw new Error('command must not be empty.');
+        }
+
         const parsed = parseCommandLine(commandLine);
 
         if (!parsed.ok) {
@@ -433,7 +444,7 @@ export class GatewayManager {
                     // SSE 传输 (旧版，向后兼容)
                     const transport = new SSEClientTransport(new URL(config.url), {
                         requestInit: { headers: config.headers } as any, // 强制类型转换以应对弃用API的严格类型
-                        // @ts-ignore
+                        // @ts-expect-error: Deprecated SSE EventSource typings do not expose custom headers.
                         eventSourceInit: { headers: config.headers },
                     });
                     client = new Client({ name: "gateway-vscode", version: "1.0.0" }, { capabilities: {} });
@@ -549,9 +560,10 @@ export class GatewayManager {
                 return next();
             }
 
-            const clientToken = req.headers[PROTOCOL.authHeaderLowerName];
+            const rawClientToken = req.headers[PROTOCOL.authHeaderLowerName];
+            const clientToken = Array.isArray(rawClientToken) ? rawClientToken[0] : rawClientToken;
             if (!clientToken || clientToken !== this.authToken) {
-                this.log(`⛔ Unauthorized access attempt. Token: ${clientToken}`);
+                this.log(`⛔ Unauthorized access attempt. Token: ${clientToken ?? '<missing>'}`);
                 return res.status(403).json({
                     isError: true,
                     content: [{ type: 'text', text: "⛔ Forbidden: Invalid Security Token. Please launch from VS Code." }]
@@ -695,7 +707,7 @@ export class GatewayManager {
 
         this.app.post('/v1/tools/call', async (req, res) => {
             const payload = req.body as ToolExecutionPayload;
-            let { name, arguments: args } = payload;
+            const { name, arguments: args } = payload;
             const toolStart = Date.now();
 
             // Auto-resolve relative paths for local filesystem tools
