@@ -16,6 +16,7 @@
 * **Zero-Config Connection**: Automatically finds available ports, no manual setup required.
 * **Secure Bridging**: Uses a one-time Token mechanism to ensure secure communication between the browser and the editor.
 * **Built-in Local Tools**: Filesystem access and command execution are provided by the extension out of the box, without extra server setup in settings.
+* **Project Rules**: Reads `USER_RULES.md` and the highest-priority `AGENTS.md` / `CLAUDE.md` rule file from the workspace root during initialization.
 * **Workspace Skills**: Discovers local `SKILL.md` workflows in the current workspace and exposes them through progressive-loading tools.
 
 ## ⚙️ Installation & Usage
@@ -23,6 +24,15 @@
 1. **Install**: Search for `webcode gateway` in the VS Code Marketplace and install it.
 2. **Start Service**: After installation, click the `webcode: OFF` button in the status bar (bottom right), then select "Turn On". When it changes to `webcode: <Port>` (e.g., `34567`), the service is running successfully.
 3. **Browser Companion**: Ensure you have the **webcode bridge** extension installed in your browser.
+
+### Project Rules
+
+During initialization, the extension reads rule files from the root of the primary VS Code workspace and sends them to the web AI:
+
+- `USER_RULES.md`
+- `AGENTS.md` or `CLAUDE.md`
+
+If both `AGENTS.md` and `CLAUDE.md` exist, only `AGENTS.md` is sent.
 
 ### Workspace Skills
 

@@ -6,7 +6,7 @@ import { BRANDING, PROTOCOL } from '@webcode/shared';
 // 初始化：设置默认状态
 chrome.runtime.onInstalled.addListener(async () => {
   // 初始化用户配置 (storage.sync)
-  const syncKeys = ["autoSend", "user_rules"];
+  const syncKeys = ["autoSend"];
   const existingSync = await chrome.storage.sync.get(syncKeys);
   const syncToSet: Record<string, any> = {};
 
@@ -152,8 +152,7 @@ chrome.runtime.onMessage.addListener((request: MessageRequest, sender, sendRespo
     return true;
   }
   if (request.type === "SYNC_CONFIG") {
-    // [Refactor] Config syncing to host is deprecated.
-    // The browser extension is now the single source of truth for user preferences.
+    // Config syncing to host is deprecated. Initialization data now comes from the VS Code gateway.
     sendResponse({ success: true });
     return true;
   }

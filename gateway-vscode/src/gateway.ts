@@ -8,6 +8,7 @@ import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import * as fs from 'fs/promises';
 import { BRANDING, PROTOCOL, ToolExecutionPayload } from '@webcode/shared';
 import { PROMPTS } from './defaults';
 import { getDefaultBridgeTarget, getDefaultSelectors, getPlatformIdByAddress } from './platforms';
@@ -182,6 +183,11 @@ interface StartResult {
     token: string;
 }
 
+interface ProjectRuleDocument {
+    fileName: string;
+    content: string;
+}
+
 export class GatewayManager {
     private app: express.Express | null = null;
     private server: any = null;
@@ -325,6 +331,68 @@ export class GatewayManager {
             execution: resolveExecutionPlan(parsed.value, process.platform, process.env),
             env: { ...process.env } as NodeJS.ProcessEnv
         };
+    }
+
+    private getPrimaryWorkspaceRoot(): string | null {
+        return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || null;
+    }
+
+    private async readProjectRuleFile(root: string, fileName: string): Promise<ProjectRuleDocument | null> {
+        try {
+            const content = await fs.readFile(path.join(root, fileName), 'utf8');
+            return {
+                fileName,
+                content: content.trimEnd()
+            };
+        } catch (error: any) {
+            if (error?.code !== 'ENOENT' && error?.code !== 'EISDIR') {
+                this.error(`Failed to read project rule file ${fileName}`, error);
+            }
+            return null;
+        }
+    }
+
+    private async readProjectRuleDocuments(): Promise<ProjectRuleDocument[]> {
+        const root = this.getPrimaryWorkspaceRoot();
+        if (!root) {
+            return [];
+        }
+
+        const documents: ProjectRuleDocument[] = [];
+        const userRules = await this.readProjectRuleFile(root, 'USER_RULES.md');
+        if (userRules) {
+            documents.push(userRules);
+        }
+
+        const agentsRules = await this.readProjectRuleFile(root, 'AGENTS.md');
+        if (agentsRules) {
+            documents.push(agentsRules);
+            return documents;
+        }
+
+        const claudeRules = await this.readProjectRuleFile(root, 'CLAUDE.md');
+        if (claudeRules) {
+            documents.push(claudeRules);
+        }
+
+        return documents;
+    }
+
+    private formatProjectRulesForPrompt(documents: ProjectRuleDocument[]): string {
+        if (documents.length === 0) {
+            return '';
+        }
+
+        const sections = documents
+            .map(document => `## ${document.fileName}\n${document.content || '(empty)'}`)
+            .join('\n\n');
+
+        return [
+            '# Project Rules',
+            'The following project-specific instructions were read from the VS Code workspace root. Follow them for this session.',
+            '',
+            sections
+        ].join('\n');
     }
 
     async connectToServers(servers: Record<string, ServerConfig>) {
@@ -819,6 +887,25 @@ export class GatewayManager {
                     });
                 } catch (error: any) {
                     this.error('Skill resource load failed', error);
+                    return res.status(500).json({
+                        isError: true,
+                        content: [{ type: 'text', text: `Error: ${error.message}` }]
+                    });
+                }
+            }
+
+            if (name === 'get_project_rules') {
+                try {
+                    const documents = await this.readProjectRuleDocuments();
+                    const prompt = this.formatProjectRulesForPrompt(documents);
+                    this.log(`   🚀 Executing: get_project_rules (Found ${documents.length} files)`);
+                    this.log(`   ✅ Finished: get_project_rules`);
+                    return res.json({
+                        content: [{ type: 'text', text: prompt }],
+                        isError: false
+                    });
+                } catch (error: any) {
+                    this.error('Project rules load failed', error);
                     return res.status(500).json({
                         isError: true,
                         content: [{ type: 'text', text: `Error: ${error.message}` }]

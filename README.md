@@ -81,6 +81,15 @@ For example:
 - `List the files in the current workspace. @webcode`
 - `Create project docs under the docs directory. /webcode`
 
+## Project Rules
+
+During initialization, webcode reads project rule files from the root of the primary VS Code workspace and sends them with the initialization result:
+
+- `USER_RULES.md`
+- `AGENTS.md` or `CLAUDE.md`
+
+If both `AGENTS.md` and `CLAUDE.md` exist, only `AGENTS.md` is sent. The browser extension no longer has a separate custom-instructions settings page.
+
 ## Workspace Skills
 
 webcode can expose local skills from the current VS Code workspace.

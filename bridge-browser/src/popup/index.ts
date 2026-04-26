@@ -9,8 +9,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       connected_text: "✅ Connected to VS Code",
       port_label: "Port",
       copy_init: "Copy Initialization Prompt",
-      copy_init_title: "Add this to your AI memory, preferences, or custom instructions",
-      open_settings: "Open Settings",
+      copy_init_title: "Copy the initialization prompt",
       auto_send: "Auto Send Message",
       show_log: "Show Floating Log",
       available_gateways: "⚡ Available Gateways",
@@ -20,7 +19,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       not_installed_title: "👉 Not Installed?",
       marketplace_hint: "Search in VS Code Marketplace:",
       connect_to: "Connect to",
-      copied_init: "Copied! Add to AI Memory",
+      copied_init: "Initialization prompt copied",
       init_missing: "Init Prompt Not Found",
     },
     zh: {
@@ -28,8 +27,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       connected_text: "✅ 已连接到 VS Code",
       port_label: "端口",
       copy_init: "复制初始化提示词",
-      copy_init_title: "将此内容添加到 AI 的记忆、偏好或自定义指令中",
-      open_settings: "打开设置",
+      copy_init_title: "复制初始化提示词",
       auto_send: "自动发送消息",
       show_log: "显示悬浮日志",
       available_gateways: "⚡ 可用网关",
@@ -39,7 +37,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       not_installed_title: "👉 未安装？",
       marketplace_hint: "在 VS Code 扩展市场中搜索：",
       connect_to: "连接到",
-      copied_init: "已复制，可添加到 AI 偏好",
+      copied_init: "初始化提示词已复制",
       init_missing: "未找到初始化提示词",
     },
   };
@@ -50,7 +48,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   const statusDot = document.getElementById("statusDot") as HTMLElement;
   const portDisplay = document.getElementById("portDisplay") as HTMLElement;
   const copyInitBtn = document.getElementById("copyInitBtn") as HTMLButtonElement;
-  const openOptionsBtn = document.getElementById("openOptionsBtn") as HTMLButtonElement;
   const autoSendInput = document.getElementById("autoSend") as HTMLInputElement;
   const showLogInput = document.getElementById("showLog") as HTMLInputElement;
   const availableView = document.getElementById("availableView") as HTMLElement;
@@ -60,7 +57,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   const title = document.getElementById("title") as HTMLElement;
   const connectedText = document.getElementById("connectedText") as HTMLElement;
   const portLabel = document.getElementById("portLabel") as HTMLElement;
-  const openOptionsText = document.getElementById("openOptionsBtn") as HTMLButtonElement;
   const autoSendLabel = document.getElementById("autoSendLabel") as HTMLElement;
   const showLogLabel = document.getElementById("showLogLabel") as HTMLElement;
   const availableGateways = document.getElementById("availableGateways") as HTMLElement;
@@ -76,7 +72,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     portLabel.textContent = t("port_label");
     copyInitBtn.textContent = t("copy_init");
     copyInitBtn.title = t("copy_init_title");
-    openOptionsText.textContent = t("open_settings");
     autoSendLabel.textContent = t("auto_send");
     showLogLabel.textContent = t("show_log");
     availableGateways.innerHTML = `<span>⚡</span> ${t("available_gateways").replace(/^⚡\s*/, "")}`;
@@ -200,11 +195,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         copyInitBtn.innerText = t("init_missing");
       }
     });
-  });
-
-  // Open Options Page
-  openOptionsBtn?.addEventListener("click", () => {
-    chrome.runtime.openOptionsPage();
   });
 
   // Auto Send (Global Config)

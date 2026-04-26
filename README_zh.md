@@ -81,6 +81,15 @@ webcode 的设计目标是让控制权尽量留在用户手里：
 - `列出当前工作区的文件结构。 @webcode`
 - `把项目文档生成到 docs 目录里。 /webcode`
 
+## 项目规则
+
+初始化时，webcode 会从 VS Code 当前打开的主工作区根目录读取项目规则文件，并随初始化结果发送给网页 AI：
+
+- `USER_RULES.md`
+- `AGENTS.md` 或 `CLAUDE.md`
+
+如果 `AGENTS.md` 和 `CLAUDE.md` 同时存在，只发送 `AGENTS.md`。浏览器扩展不再提供单独的个性化指令设置页。
+
 ## 工作区技能
 
 webcode 可以把当前 VS Code 工作区中的本地技能暴露给网页模型。

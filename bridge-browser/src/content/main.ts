@@ -20,7 +20,6 @@ let CONFIG: ConfigState = {
 let isClientConnected = false;
 let currentWorkspaceId = "global";
 
-let userRules = ""; // [User Rules]
 let allowedTools = new Set<string>();
 let allowedCommandRules = new Set<string>();
 const confirmationQueue: ToolExecutionPayload[] = [];
@@ -70,12 +69,6 @@ function loadWorkspaceData(workspaceId: string): Promise<void> {
     });
   });
 }
-
-// Initially load user rules from sync. Prompts will be loaded from local later.
-chrome.storage.sync.get(["user_rules"], (items) => {
-  userRules = items.user_rules || "";
-  console.log(`[MCP] Loaded User Rules`);
-});
 
 // Initially load prompts from local storage in case we are already connected
 loadPromptsFromStorage();
@@ -155,10 +148,9 @@ function findAutoInitTrigger(text: string): { replacementStart: number; end: num
 
 function initDOMConfig() {
   chrome.storage.sync.get(
-    ["autoSend", "user_rules"],
+    ["autoSend"],
     (items) => {
       CONFIG.autoSend = items.autoSend ?? true;
-      if (items.user_rules) { userRules = items.user_rules; }
 
       chrome.storage.local.get(["syncedAiSites"], (localItems) => {
         const sites = localItems.syncedAiSites || [];
@@ -249,7 +241,6 @@ function getInputText(inputEl: HTMLElement | HTMLInputElement | HTMLTextAreaElem
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === "sync") {
     if (changes.autoSend) { CONFIG.autoSend = changes.autoSend.newValue; }
-    if (changes.user_rules) { userRules = changes.user_rules.newValue; }
   }
   if (namespace === "local") {
     if (changes[`allowed_tools_${currentWorkspaceId}`]) {
@@ -560,9 +551,17 @@ async function initializeWebcode(payload: ToolExecutionPayload) {
     ? `以下是 ${PROTOCOL.initToolName} 的返回结果，请不要再次发送 ${PROTOCOL.initToolName} 初始化命令。\n\n`
     : `The following is the result returned by ${PROTOCOL.initToolName}. Do not send the ${PROTOCOL.initToolName} initialization command again.\n\n`;
   finalPrompt += i18n.resources.prompt || "";
-  if (userRules) { finalPrompt += `\n\n=== User Rules ===\n${userRules}`; }
 
-  Logger.log(`Initializing ${BRANDING.productName} with prompt, tool list, and skill list`, "action");
+  Logger.log(`Initializing ${BRANDING.productName} with prompt, project rules, tool list, and skill list`, "action");
+
+  try {
+    const projectRules = (await executeInitToolCall("get_project_rules")).trim();
+    if (projectRules) {
+      finalPrompt += `\n\n${projectRules}`;
+    }
+  } catch (error: any) {
+    Logger.log(`Project rules fetch failed: ${error.message}`, "error");
+  }
 
   try {
     const [toolsResult, skillsResult] = await Promise.all([
@@ -685,8 +684,7 @@ function saveToBuffer(requestId: string, content: string, isError = false) {
 
   toolCallCount++;
   if (toolCallCount > 0 && toolCallCount % 5 === 0) {
-    let note = i18n.resources.train || `[System] Reminder: Tool calls MUST use this JSON format: {"mcp_action":"call", "name": "tool_name", "arguments": {...}}.`;
-    if (userRules) { note += `\n(User Rules: ${userRules})`; }
+    const note = i18n.resources.train || `[System] Reminder: Tool calls MUST use this JSON format: {"mcp_action":"call", "name": "tool_name", "arguments": {...}}.`;
     responseJson.system_note = note;
   }
 
