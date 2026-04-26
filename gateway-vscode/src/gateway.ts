@@ -214,7 +214,7 @@ export class GatewayManager {
         const groups: Record<string, { tools: any[], hidden_tools: string[] }> = {};
 
         allTools.forEach(tool => {
-            const server = tool._server || 'unknown';
+            const server = tool._server ?? 'unknown';
             if (!groups[server]) {
                 groups[server] = { tools: [], hidden_tools: [] };
             }
@@ -253,7 +253,7 @@ export class GatewayManager {
         this.outputChannel = outputChannel;
         this.extensionPath = extensionPath;
         this.context = context;
-        this.onAutoStop = onAutoStop || null;
+        this.onAutoStop = onAutoStop ?? null;
         this.skillManager = new SkillManager(outputChannel);
         this.terminalSessionManager = new TerminalSessionManager(outputChannel);
         // [Persistence] Generate token once per VS Code session
@@ -278,7 +278,7 @@ export class GatewayManager {
     private error(message: string, err?: any) {
         const now = new Date();
         const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
-        this.outputChannel.appendLine(`[${time}] ❌ ${message} ${err ? (err.message || JSON.stringify(err)) : ''}`);
+        this.outputChannel.appendLine(`[${time}] ❌ ${message} ${err ? (err.message ?? JSON.stringify(err)) : ''}`);
     }
 
     invalidateSkillCache(reason?: string) {
@@ -327,7 +327,7 @@ export class GatewayManager {
             throw new Error(`${formatCommandPolicyError(parsed.reason)} Policy: ${formatAllowedCommands(process.platform)}`);
         }
 
-        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || cwd;
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? cwd;
         const validation = validateParsedCommand(parsed.value, {
             projectRoot: workspaceRoot,
             platform: process.platform
@@ -345,7 +345,7 @@ export class GatewayManager {
     }
 
     private getPrimaryWorkspaceRoot(): string | null {
-        return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || null;
+        return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null;
     }
 
     private async readProjectRuleFile(root: string, fileName: string): Promise<ProjectRuleDocument | null> {
@@ -455,8 +455,8 @@ export class GatewayManager {
                     // [Fix] Resolve variable substitution for ${extensionPath}
                     const replaceVars = (str: string) => str.replace(/\$\{extensionPath\}/g, this.extensionPath);
 
-                    let command = replaceVars(config.command!);
-                    let args = (config.args || []).map(arg => replaceVars(arg));
+                    let command = replaceVars(config.command ?? "");
+                    let args = (config.args ?? []).map(arg => replaceVars(arg));
                     const env = { ...process.env, ...config.env } as Record<string, string>;
 
                     if (process.platform === 'win32') {
@@ -500,7 +500,7 @@ export class GatewayManager {
         if (this.server) {
             await this.stop();
         }
-        this.skillDirectories = config.skillDirectories || [];
+        this.skillDirectories = config.skillDirectories ?? [];
         await this.connectToServers(config.mcpServers);
 
         // 1. 使用持久化 Token (仅首次生成)
@@ -577,13 +577,13 @@ export class GatewayManager {
             this.log('📥 Init Sync: Browser requested default rules and prompts');
 
             // Generate syncedAiSites with merged selectors
-            const syncedAiSites = (config.aiSites || []).map(site => {
+            const syncedAiSites = (config.aiSites ?? []).map(site => {
                 const platformId = getPlatformIdByAddress(site.address);
-                const defaultSelectors = platformId ? BUILTIN_SELECTORS[platformId] || {} : {};
+                const defaultSelectors = platformId ? BUILTIN_SELECTORS[platformId] ?? {} : {};
 
                 return {
                     ...site,
-                    selectors: { ...defaultSelectors, ...(site.selectors || {}) }
+                    selectors: { ...defaultSelectors, ...(site.selectors ?? {}) }
                 };
             });
 
@@ -794,7 +794,8 @@ export class GatewayManager {
                 // 1. Check Tool Router
                 for (const tName of requestedNames) {
                     if (this.toolRouter.has(tName)) {
-                        definitions.push(this.toolRouter.get(tName)!.definition);
+                        const tInfo = this.toolRouter.get(tName);
+                        if (tInfo) {definitions.push(tInfo.definition);}
                     } else if (tName === 'run_in_terminal') {
                         definitions.push(RUN_IN_TERMINAL_TOOL);
                     } else if (tName === 'get_tool_definitions') {
@@ -845,7 +846,7 @@ export class GatewayManager {
 
             if (name === 'search_skills') {
                 try {
-                    const query = String(args?.query || '');
+                    const query = String(args?.query ?? '');
                     const limit = typeof args?.limit === 'number' ? args.limit : 10;
                     this.log(`   🚀 Executing: search_skills "${query}"`);
                     const result = await this.skillManager.searchSkills(query, this.skillDirectories, limit);
@@ -935,7 +936,7 @@ export class GatewayManager {
 
             if (name === 'get_terminal_session') {
                 try {
-                    const session = this.terminalSessionManager.getSession(String(args?.session_id || ''));
+                    const session = this.terminalSessionManager.getSession(String(args?.session_id ?? ''));
                     return res.json({
                         content: [{ type: 'text', text: JSON.stringify(session, null, 2) }],
                         isError: false
@@ -951,7 +952,7 @@ export class GatewayManager {
             if (name === 'read_terminal_output') {
                 try {
                     const tailLines = typeof args?.tail_lines === 'number' ? args.tail_lines : 200;
-                    const result = this.terminalSessionManager.readSessionOutput(String(args?.session_id || ''), tailLines);
+                    const result = this.terminalSessionManager.readSessionOutput(String(args?.session_id ?? ''), tailLines);
                     return res.json({
                         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
                         isError: false
@@ -966,7 +967,7 @@ export class GatewayManager {
 
             if (name === 'stop_terminal_session') {
                 try {
-                    const session = this.terminalSessionManager.stopSession(String(args?.session_id || ''));
+                    const session = this.terminalSessionManager.stopSession(String(args?.session_id ?? ''));
                     return res.json({
                         content: [{ type: 'text', text: JSON.stringify(session, null, 2) }],
                         isError: false
@@ -988,9 +989,9 @@ export class GatewayManager {
             }
 
             try {
-                const argsPreview = JSON.stringify(args || {}).slice(0, 50) + '...';
+                const argsPreview = JSON.stringify(args ?? {}).slice(0, 50) + '...';
                 this.log(`   🚀 Executing: ${name} ${argsPreview}`);
-                const result = await route.client.callTool({ name, arguments: args || {} });
+                const result = await route.client.callTool({ name, arguments: args ?? {} });
                 const toolDuration = Date.now() - toolStart;
                 this.log(`   ✅ Finished: ${name} (${toolDuration}ms)`);
                 res.json(result);
@@ -1012,7 +1013,8 @@ export class GatewayManager {
                     return;
                 }
 
-                this.server = this.app!.listen(currentPort, '127.0.0.1', () => {
+                if (!this.app) {return;}
+                this.server = this.app.listen(currentPort, '127.0.0.1', () => {
                     this.log(`🌐 Gateway running on http://127.0.0.1:${currentPort} (Token: ${this.authToken.slice(0, 8)}...)`);
                     vscode.window.setStatusBarMessage(`MCP Gateway: On (${currentPort})`, 5000);
                     resolve({ port: currentPort, token: this.authToken });
@@ -1041,6 +1043,7 @@ export class GatewayManager {
         });
     }
 
+    // eslint-disable-next-line @typescript-eslint/require-await
     async stop() {
         if (this.watchdogTimer) {
             clearTimeout(this.watchdogTimer);

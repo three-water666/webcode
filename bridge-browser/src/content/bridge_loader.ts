@@ -70,7 +70,7 @@ import { BRANDING } from '@webcode/shared';
           type: "HANDSHAKE",
           port: port,
           token: token,
-          targetOrigin: targetOrigin || undefined,
+          targetOrigin: targetOrigin ?? undefined,
           workspaceId: workspaceId,
           force: force,
         },
@@ -123,7 +123,7 @@ import { BRANDING } from '@webcode/shared';
           } else {
             document.body.dataset.bridgeState = "error";
             statusText.innerText = i18n.connectionFailed(
-              response?.error || i18n.unknownError
+              response?.error ?? i18n.unknownError
             );
             statusText.style.color = "#ff6b6b";
           }

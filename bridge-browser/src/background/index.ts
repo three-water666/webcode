@@ -42,7 +42,7 @@ function getOrigin(url: string | undefined): string | null {
 // === 保持连接逻辑 & 安全熔断 ===
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   // Use URL from changeInfo if available, otherwise fallback to tab.url
-  const currentUrl = changeInfo.url || tab.url;
+  const currentUrl = changeInfo.url ?? tab.url;
 
   if (!currentUrl) {return;}
 
@@ -58,7 +58,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
     // Check against dynamic sites configuration
     const localItems = await chrome.storage.local.get(["syncedAiSites"]);
-    const sites = localItems.syncedAiSites || [];
+    const sites = localItems.syncedAiSites ?? [];
 
     // Allow if the URL starts with any configured address or fallback address
     const baseUrl = getBaseUrl(url);
@@ -110,14 +110,14 @@ chrome.runtime.onMessage.addListener((request: MessageRequest, sender, sendRespo
   }
   if (request.type === "GET_STATUS") {
     // Support both external (Popup) and internal (Content Script) status checks
-    const targetTabId = request.tabId || (sender.tab ? sender.tab.id : null);
+    const targetTabId = request.tabId ?? (sender.tab ? sender.tab.id : null);
     if (targetTabId) {
         getSession(targetTabId).then((session) => {
           sendResponse({
             connected: Boolean(session),
             port: session?.port,
-            showLog: session?.showLog || false,
-            workspaceId: session?.workspaceId || 'global'
+            showLog: session?.showLog ?? false,
+            workspaceId: session?.workspaceId ?? 'global'
           });
         });
     } else {
@@ -145,8 +145,8 @@ chrome.runtime.onMessage.addListener((request: MessageRequest, sender, sendRespo
     chrome.notifications.create({
       type: "basic",
       iconUrl: "icons/icon128.png",
-      title: request.title || BRANDING.notificationName,
-      message: request.message || "Task Completed",
+      title: request.title ?? BRANDING.notificationName,
+      message: request.message ?? "Task Completed",
       priority: 2,
     });
     return true;
@@ -157,7 +157,7 @@ chrome.runtime.onMessage.addListener((request: MessageRequest, sender, sendRespo
     return true;
   }
   if (request.type === "CONNECT_EXISTING") {
-    const targetTabId = request.tabId || currentTabId;
+    const targetTabId = request.tabId ?? currentTabId;
     if (!targetTabId) {
       sendResponse({ success: false, error: "Missing Tab ID" });
       return true;
@@ -167,7 +167,7 @@ chrome.runtime.onMessage.addListener((request: MessageRequest, sender, sendRespo
 
     if (request.port && request.token) {
         // Fallback workspaceId if not provided during manual connect
-        const workspaceId = request.workspaceId || 'global';
+        const workspaceId = request.workspaceId ?? 'global';
         bindSession(targetTabId, request.port, request.token, workspaceId, request.targetOrigin)
         .then(() => sendResponse({ success: true }))
         .catch((err) => sendResponse({ success: false, error: err.message }));
@@ -266,7 +266,7 @@ async function fetchInitDataFromGateway(port: number, token: string) {
       console.log(`${BRANDING.logPrefix} Overwriting local rules with Gateway Defaults.`);
 
       await chrome.storage.local.set({
-        syncedAiSites: data.syncedAiSites || [], // Save dynamically injected AI sites & selectors
+        syncedAiSites: data.syncedAiSites ?? [], // Save dynamically injected AI sites & selectors
         ...data.prompts // prompt_en, prompt_zh, train_en... etc.
       });
     }
@@ -304,7 +304,7 @@ async function executeTool(request: any, tabId: number | null | undefined) {
       },
       body: JSON.stringify({
         name: request.payload.name,
-        arguments: request.payload.arguments || {},
+        arguments: request.payload.arguments ?? {},
       }),
     });
     if (response.ok) {

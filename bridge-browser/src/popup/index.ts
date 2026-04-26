@@ -107,8 +107,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         statusDot.classList.remove("online");
 
         // [Security] Manual attach is only available on normal web pages
-        const currentUrl = tabs[0].url || "";
+        const currentUrl = tabs[0].url ?? "";
 
+        // eslint-disable-next-line @typescript-eslint/require-await
         const checkSafety = async () => {
           if (currentUrl.startsWith('http://127.0.0.1:') || currentUrl.startsWith('http://localhost:')) {
             return true;

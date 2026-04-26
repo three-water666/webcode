@@ -136,7 +136,7 @@ server.registerTool(
             stdout: stdout || '',
             stderr: stderr || execError.message,
             exitCode: typeof execError.code === 'number' ? execError.code : 1,
-            signal: execError.signal || null
+            signal: execError.signal ?? null
           });
         });
       });

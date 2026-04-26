@@ -50,7 +50,7 @@ function loadPromptsFromStorage(): Promise<void> {
 function loadWorkspaceData(workspaceId: string): Promise<void> {
   return new Promise((resolve) => {
     chrome.storage.local.get([`allowed_tools_${workspaceId}`], (localItems) => {
-      const rawEntries = localItems[`allowed_tools_${workspaceId}`] || [];
+      const rawEntries = localItems[`allowed_tools_${workspaceId}`] ?? [];
       allowedTools = new Set<string>();
       allowedCommandRules = new Set<string>();
 
@@ -153,7 +153,7 @@ function initDOMConfig() {
       CONFIG.autoSend = items.autoSend ?? true;
 
       chrome.storage.local.get(["syncedAiSites"], (localItems) => {
-        const sites = localItems.syncedAiSites || [];
+        const sites = localItems.syncedAiSites ?? [];
         const currentUrl = location.href;
 
         // Find matching site by URL prefix
@@ -244,7 +244,7 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
   }
   if (namespace === "local") {
     if (changes[`allowed_tools_${currentWorkspaceId}`]) {
-      const rawEntries = changes[`allowed_tools_${currentWorkspaceId}`].newValue || [];
+      const rawEntries = changes[`allowed_tools_${currentWorkspaceId}`].newValue ?? [];
       allowedTools = new Set<string>();
       allowedCommandRules = new Set<string>();
       for (const entry of rawEntries) {
@@ -310,7 +310,7 @@ function runMainLoop() {
   const currentTurnIds: string[] = [];
 
   codeElements.forEach((codeEl) => {
-    const textContent = (codeEl.textContent || "").trim();
+    const textContent = (codeEl.textContent ?? "").trim();
     if (!/"mcp_action"\s*:\s*"call"/.test(textContent)) { return; }
 
     // 核心修复: 清理非标准空白字符 (如不间断空格 \u00a0)，以防止 JSON.parse 失败。
@@ -329,9 +329,7 @@ function runMainLoop() {
       if (payload.mcp_action === "call") {
         if (!payload.request_id) {
           const el = codeEl as HTMLElement;
-          if (!el.dataset.mcpRequestId) {
-            el.dataset.mcpRequestId = "req_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
-          }
+          el.dataset.mcpRequestId ??= "req_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
           payload.request_id = el.dataset.mcpRequestId;
         }
         currentTurnIds.push(payload.request_id);
@@ -536,7 +534,7 @@ function executeTool(payload: ToolExecutionPayload) {
 
   if (!isPayloadApproved(payload)) {
     Logger.log(`${t("hitl_intercept")}: ${payload.name}`, "warn");
-    (payload as any).request_id = (payload as any).request_id || "unknown_id";
+    (payload as any).request_id = (payload as any).request_id ?? "unknown_id";
     confirmationQueue.push(payload);
     processConfirmationQueue();
     return;
@@ -546,11 +544,11 @@ function executeTool(payload: ToolExecutionPayload) {
 }
 
 async function initializeWebcode(payload: ToolExecutionPayload) {
-  const requestId = payload.request_id!;
+  const requestId = payload.request_id ?? "unknown_id";
   let finalPrompt = i18n.lang === "zh"
     ? `以下是 ${PROTOCOL.initToolName} 的返回结果，请不要再次发送 ${PROTOCOL.initToolName} 初始化命令。\n\n`
     : `The following is the result returned by ${PROTOCOL.initToolName}. Do not send the ${PROTOCOL.initToolName} initialization command again.\n\n`;
-  finalPrompt += i18n.resources.prompt || "";
+  finalPrompt += i18n.resources.prompt ?? "";
 
   Logger.log(`Initializing ${BRANDING.productName} with prompt, project rules, tool list, and skill list`, "action");
 
@@ -599,11 +597,11 @@ function executeInitToolCall(name: string): Promise<string> {
         }
 
         if (!response?.success) {
-          reject(new Error(response?.error || `Failed to execute ${name}`));
+          reject(new Error(response?.error ?? `Failed to execute ${name}`));
           return;
         }
 
-        resolve(String(response.data || "[]"));
+        resolve(String(response.data ?? "[]"));
       }
     );
   });
@@ -659,7 +657,7 @@ function performExecution(payload: any) {
 }
 
 function finishVirtualTool(payload: any) {
-  const msg = payload.arguments?.message || "Task Completed";
+  const msg = payload.arguments?.message ?? "Task Completed";
   Logger.log(`🔔 Notification: ${msg}`, "action");
   chrome.runtime.sendMessage({
     type: "SHOW_NOTIFICATION",
@@ -684,7 +682,7 @@ function saveToBuffer(requestId: string, content: string, isError = false) {
 
   toolCallCount++;
   if (toolCallCount > 0 && toolCallCount % 5 === 0) {
-    const note = i18n.resources.train || `[System] Reminder: Tool calls MUST use this JSON format: {"mcp_action":"call", "name": "tool_name", "arguments": {...}}.`;
+    const note = i18n.resources.train ?? `[System] Reminder: Tool calls MUST use this JSON format: {"mcp_action":"call", "name": "tool_name", "arguments": {...}}.`;
     responseJson.system_note = note;
   }
 
@@ -750,7 +748,7 @@ function processConfirmationQueue() {
       Logger.log(`${t("hitl_rejected")}: ${payload.name}`, "error");
       saveToBuffer(
         payload.request_id,
-        `User rejected execution. Reason: ${reason || "No reason provided."}`,
+        `User rejected execution. Reason: ${reason ?? "No reason provided."}`,
         true
       );
       processConfirmationQueue();

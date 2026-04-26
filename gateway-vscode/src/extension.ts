@@ -46,6 +46,7 @@ let isStarting = false;
 let isRunning = false;
 let skillWatchers: vscode.Disposable[] = [];
 
+// eslint-disable-next-line @typescript-eslint/require-await
 export async function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel(t('output_channel_name'));
     // outputChannel.show(true); // 静默启动，不自动弹出面板
@@ -68,8 +69,8 @@ export async function activate(context: vscode.ExtensionContext) {
         disposeSkillWatchers();
 
         const config = vscode.workspace.getConfiguration('webcodeGateway');
-        const skillDirectories = config.get<string[]>('skillDirectories') || [];
-        const workspaceFolders = vscode.workspace.workspaceFolders || [];
+        const skillDirectories = config.get<string[]>('skillDirectories') ?? [];
+        const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
         const normalizedDirectories = Array.from(new Set(
             ['.agents/skills', '.codex/skills', 'skills', ...skillDirectories]
                 .map(dir => dir.trim())
@@ -112,13 +113,13 @@ export async function activate(context: vscode.ExtensionContext) {
         updateStatusBar(true, undefined, true);
 
         const config = vscode.workspace.getConfiguration('webcodeGateway');
-        const portConfig = config.get<number>('port') || 34567;
-        const customServers = filterCustomServers(config.get<Record<string, BuiltinServerConfig>>('servers') || {}, outputChannel);
+        const portConfig = config.get<number>('port') ?? 34567;
+        const customServers = filterCustomServers(config.get<Record<string, BuiltinServerConfig>>('servers') ?? {}, outputChannel);
         const mcpServers = {
             ...getBuiltinServers(context.extensionPath, outputChannel),
             ...customServers
         };
-        const skillDirectories = config.get<string[]>('skillDirectories') || [];
+        const skillDirectories = config.get<string[]>('skillDirectories') ?? [];
         const lastUsedPort = context.workspaceState.get<number>('mcp.lastPort');
 
         // [Security] Extract Allowed Origins from AI Sites config
@@ -314,7 +315,7 @@ export async function activate(context: vscode.ExtensionContext) {
             });
             if (!browserSelection) { return; }
 
-            launchBridge(aiSelection.target!, browserSelection.value!);
+            launchBridge(aiSelection.target ?? "", browserSelection.value ?? "");
             return;
         }
 
@@ -407,7 +408,7 @@ function launchBridge(targetUrl: string, browserMode: string) {
             finalBrowser = matchedSite.browser;
         } else {
             // 如果没有特定配置，使用全局默认设置
-            finalBrowser = config.get<string>('browser') || 'default';
+            finalBrowser = config.get<string>('browser') ?? 'default';
         }
     } else {
         // 手动指定模式（Custom Launch）

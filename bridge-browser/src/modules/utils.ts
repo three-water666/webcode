@@ -95,7 +95,7 @@ const LOG_MSGS: Record<string, { en: string; zh: string }> = {
 export function t(key: string): string {
   const entry = LOG_MSGS[key];
   if (!entry) {return key;}
-  return (entry as any)[i18n.lang] || entry.en;
+  return (entry as any)[i18n.lang] ?? entry.en;
 }
 
 // === Logger 组件 ===

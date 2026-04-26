@@ -210,7 +210,7 @@ export function resolveExecutionPlan(
   }
 
   return {
-    file: env.comspec || 'cmd.exe',
+    file: env.comspec ?? 'cmd.exe',
     args: ['/d', '/s', '/c', buildWindowsCommandLine(parsed.executable, parsed.args)]
   };
 }

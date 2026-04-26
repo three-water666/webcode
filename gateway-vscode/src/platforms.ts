@@ -143,7 +143,7 @@ export function getPlatformIdByAddress(address: string): BuiltinPlatformId | nul
     const matched = BUILTIN_PLATFORMS.find(platform =>
         platform.addressIncludes.some(fragment => normalizedAddress.includes(fragment))
     );
-    return matched?.id || null;
+    return matched?.id ?? null;
 }
 
 export function getDefaultBridgeTarget(): string {
@@ -158,7 +158,7 @@ export function getDefaultSelectors(): Record<BuiltinPlatformId, SiteSelectors> 
 }
 
 function normalizeSiteName(name: string | undefined): string {
-    return String(name || '').trim().toLowerCase();
+    return String(name ?? '').trim().toLowerCase();
 }
 
 function mergeAiSiteConfig(base: AISiteConfig, override: AISiteConfig): AISiteConfig {
@@ -166,8 +166,8 @@ function mergeAiSiteConfig(base: AISiteConfig, override: AISiteConfig): AISiteCo
         ...base,
         ...override,
         selectors: {
-            ...(base.selectors || {}),
-            ...(override.selectors || {})
+            ...(base.selectors ?? {}),
+            ...(override.selectors ?? {})
         }
     };
 }

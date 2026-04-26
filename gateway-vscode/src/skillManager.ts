@@ -147,7 +147,7 @@ export class SkillManager {
       }
     }
 
-    throw new Error(`Skill not found: ${skillId || skillName}`);
+    throw new Error(`Skill not found: ${skillId ?? skillName}`);
   }
 
   private async scanSkills(customDirectories: string[]): Promise<SkillEntry[]> {
@@ -156,7 +156,7 @@ export class SkillManager {
       return this.cache;
     }
 
-    const workspaceFolders = vscode.workspace.workspaceFolders || [];
+    const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
     if (workspaceFolders.length === 0) {
       this.cache = [];
       this.lastScanAt = now;
@@ -193,7 +193,8 @@ export class SkillManager {
     const stack: Array<{ dir: string; depth: number }> = [{ dir: rootDir, depth: 0 }];
 
     while (stack.length > 0) {
-      const current = stack.pop()!;
+      const current = stack.pop();
+      if (!current) {continue;}
       const skillFile = path.join(current.dir, 'SKILL.md');
       const skillStat = await fs.stat(skillFile).catch(() => null);
 
@@ -234,7 +235,7 @@ export class SkillManager {
 
     return {
       id,
-      name: parsed.name || path.basename(rootPath),
+      name: parsed.name ?? path.basename(rootPath),
       description: parsed.description,
       workspaceFolder: workspaceFolder.name,
       relativePath,
@@ -317,7 +318,8 @@ export class SkillManager {
     const stack = [skillRoot];
 
     while (stack.length > 0) {
-      const currentDir = stack.pop()!;
+      const currentDir = stack.pop();
+      if (!currentDir) {continue;}
       const entries = await fs.readdir(currentDir, { withFileTypes: true }).catch(() => []);
 
       for (const entry of entries) {

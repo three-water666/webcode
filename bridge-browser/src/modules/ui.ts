@@ -204,7 +204,7 @@ export async function deliverResult(text: string, domSelectors: SiteSelectors): 
   Logger.log(`Attached oversized result as TXT (${finalInlineLength} chars inline)`, "action");
 
   // Also provide a textual indication inside the input box to the LLM
-  const oversizePrompt = i18n.resources.oversize || `The result exceeds the character limit. It has been attached as a text file. Please read the attached file for the full details.`;
+  const oversizePrompt = i18n.resources.oversize ?? `The result exceeds the character limit. It has been attached as a text file. Please read the attached file for the full details.`;
   writeToInputBox(oversizePrompt, domSelectors.inputArea);
 
   return { uploaded: true };
@@ -214,7 +214,7 @@ function buildFinalInputText(
   inputEl: HTMLElement | HTMLInputElement | HTMLTextAreaElement,
   text: string
 ): string {
-  let cur = inputEl.innerText || (inputEl as any).value || "";
+  let cur = inputEl.innerText ?? (inputEl as any).value ?? "";
   cur = cur.replace(/\r\n/g, "\n").replace(/\n+/g, "\n").trim();
   const sep = cur ? "\n\n" : "";
   return cur + sep + text;
@@ -253,7 +253,7 @@ export function triggerAutoSend(
     if (inputEl) {inputEl.focus();}
 
     const currentVal = inputEl
-      ? (inputEl as any).value || inputEl.innerText || ""
+      ? (inputEl as any).value ?? inputEl.innerText ?? ""
       : "";
 
     if (currentVal.trim().length === 0) {
@@ -284,7 +284,7 @@ export function triggerAutoSend(
       let isSending = false;
 
       // 再次检查输入框是否已经被网页清空，这说明确切发出去了
-      const currentValCheck = inputEl ? ((inputEl as any).value || inputEl.innerText || "") : "";
+      const currentValCheck = inputEl ? ((inputEl as any).value ?? inputEl.innerText ?? "") : "";
       if (currentValCheck.trim().length === 0) {
         isSending = true;
       }
@@ -614,9 +614,9 @@ export function showConfirmationModal(
           .replace(/'/g, "&#039;");
   };
 
-  const safeArgs = escapeHtml(JSON.stringify(payload.arguments || {}, null, 2));
+  const safeArgs = escapeHtml(JSON.stringify(payload.arguments ?? {}, null, 2));
   const safeName = escapeHtml(payload.name);
-  const safePurpose = escapeHtml((payload as any).purpose || "No purpose provided.");
+  const safePurpose = escapeHtml((payload as any).purpose ?? "No purpose provided.");
   const commandValue = typeof payload.arguments?.command === "string"
     ? payload.arguments.command.trim().replace(/\s+/g, " ")
     : "";
