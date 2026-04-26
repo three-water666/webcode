@@ -27,8 +27,8 @@ Follow this sequence end-to-end unless the user explicitly asks to stop earlier.
 
 4. Generate changelog entries.
    - Summarize `git log --oneline <previous-tag>..HEAD`, plus any current release-version edits if relevant.
-   - Add a new top section to both `CHANGELOG.md` and `CHANGELOG_zh.md`.
-   - Use the format already present in each file: `## v<version> (YYYY-MM-DD)`.
+   - Add new version files at `changelogs/en/v<version>.md` and `changelogs/zh/v<version>.md`.
+   - Start each file with `# v<version> (YYYY-MM-DD)`, followed by the release notes body.
    - Keep English and Chinese content semantically aligned.
    - Group entries by user-facing categories such as Features, Improvements, Fixes, and Engineering. Do not paste raw commit logs.
 
@@ -45,11 +45,11 @@ Follow this sequence end-to-end unless the user explicitly asks to stop earlier.
 7. Tag and push.
    - Create the tag on the release commit: `git tag <version>`.
    - Push the branch and tag: `git push origin main` and `git push origin <version>`.
-   - The tag push triggers `.github/workflows/release.yml`, which builds release artifacts and creates or updates the GitHub Release using bilingual notes extracted from the changelogs.
+   - The tag push triggers `.github/workflows/release.yml`, which builds release artifacts and creates or updates the GitHub Release using bilingual notes read from `changelogs/en/v<version>.md` and `changelogs/zh/v<version>.md`.
 
 ## Safety Rules
 
-- Do not create or push a tag if the changelog section for that version is missing.
+- Do not create or push a tag if either `changelogs/en/v<version>.md` or `changelogs/zh/v<version>.md` is missing or empty.
 - Do not push if the working tree is dirty after the release commit.
 - Do not amend or force-push release commits or tags unless the user explicitly instructs it.
 - If a tag was pushed before the release workflow existed, use the `Release` workflow's manual dispatch with the existing tag instead of recreating the tag.

@@ -47,6 +47,6 @@ chmod +x build_release.sh
 
 ## 🚀 自动 GitHub Release
 
-推送类似 `0.6.2` 的版本 tag 后，会触发 GitHub Actions 发布流水线。流水线会构建 `.vsix` 和 `.zip` 产物，从 `CHANGELOG.md` 与 `CHANGELOG_zh.md` 中抽取对应版本段落，并用中英文更新日志创建或更新 GitHub Release。
+推送类似 `0.6.2` 的版本 tag 后，会触发 GitHub Actions 发布流水线。流水线会构建 `.vsix` 和 `.zip` 产物，从 `changelogs/en/` 与 `changelogs/zh/` 中读取对应版本文件，并用中英文更新日志创建或更新 GitHub Release。
 
 如果 tag 在 workflow 创建前就已经推送过，可以在 GitHub Actions 页面手动运行 `Release` workflow，并填写已有 tag 名称。

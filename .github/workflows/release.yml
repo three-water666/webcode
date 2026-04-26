@@ -45,41 +45,45 @@ jobs:
         run: |
           node --input-type=module <<'EOF'
           import { readFileSync, writeFileSync } from "node:fs";
+          import { join } from "node:path";
 
-          const version = process.env.RELEASE_TAG.replace(/^refs\/tags\//, "").replace(/^v/, "");
+          const rawTag = process.env.RELEASE_TAG.replace(/^refs\/tags\//, "");
+          const version = rawTag.startsWith("v") ? rawTag.slice(1) : rawTag;
 
-          function escapeRegExp(value) {
-            return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          if (!/^\d+\.\d+\.\d+$/.test(version)) {
+            throw new Error(`Release tag must be a semver version, got ${rawTag}`);
           }
 
-          function extractSection(filePath) {
-            const lines = readFileSync(filePath, "utf8").split(/\r?\n/);
-            const headerPattern = new RegExp(`^##\\s+v?${escapeRegExp(version)}(?:\\s|$)`);
-            const startIndex = lines.findIndex((line) => headerPattern.test(line));
+          function readVersionNotes(locale) {
+            const filePath = join("changelogs", locale, `v${version}.md`);
+            let content = "";
 
-            if (startIndex === -1) {
-              throw new Error(`Could not find v${version} in ${filePath}`);
+            try {
+              content = readFileSync(filePath, "utf8");
+            } catch (error) {
+              throw new Error(`Could not read release notes file ${filePath}: ${error.message}`);
             }
 
-            const sectionLines = [];
-            for (let i = startIndex + 1; i < lines.length; i += 1) {
-              const line = lines[i];
-              if (line.trim() === "---" || /^##\s+v?\d/.test(line)) {
-                break;
-              }
-              sectionLines.push(line);
+            const normalized = content.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trim();
+            if (!normalized) {
+              throw new Error(`Release notes file is empty: ${filePath}`);
             }
 
-            const section = sectionLines.join("\n").trim();
-            if (!section) {
-              throw new Error(`Found v${version} in ${filePath}, but the section is empty`);
+            const lines = normalized.split("\n");
+            if (lines[0]?.startsWith("# ")) {
+              lines.shift();
             }
 
-            return section;
+            const notes = lines.join("\n").trim();
+            if (!notes) {
+              throw new Error(`Release notes file has no body after title: ${filePath}`);
+            }
+
+            return notes;
           }
 
-          const englishNotes = extractSection("CHANGELOG.md");
-          const chineseNotes = extractSection("CHANGELOG_zh.md");
+          const englishNotes = readVersionNotes("en");
+          const chineseNotes = readVersionNotes("zh");
           const releaseNotes = `# webcode ${version}
 
           ## English

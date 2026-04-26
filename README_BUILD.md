@@ -47,6 +47,6 @@ After a successful build, a `release/` folder will be generated in the root dire
 
 ## 🚀 Automated GitHub Release
 
-Pushing a version tag such as `0.6.2` triggers the GitHub Actions release workflow. It builds the `.vsix` and `.zip` artifacts, extracts the matching version sections from both `CHANGELOG.md` and `CHANGELOG_zh.md`, and creates or updates the GitHub Release with bilingual release notes.
+Pushing a version tag such as `0.6.2` triggers the GitHub Actions release workflow. It builds the `.vsix` and `.zip` artifacts, reads the matching version files from `changelogs/en/` and `changelogs/zh/`, and creates or updates the GitHub Release with bilingual release notes.
 
 If the tag was already pushed before the workflow existed, run the `Release` workflow manually and enter the existing tag name.
