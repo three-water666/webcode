@@ -403,7 +403,7 @@ function launchBridge(targetUrl: string, browserMode: string) {
         const aiSites = getConfiguredAiSites(config.get<AISiteConfig[]>('aiSites'));
         const matchedSite = aiSites.find(site => site.address === targetUrl);
 
-        if (matchedSite && matchedSite.browser && matchedSite.browser !== 'default') {
+        if (matchedSite?.browser && matchedSite.browser !== 'default') {
             finalBrowser = matchedSite.browser;
         } else {
             // 如果没有特定配置，使用全局默认设置

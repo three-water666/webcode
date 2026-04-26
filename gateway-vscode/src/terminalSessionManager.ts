@@ -1,4 +1,4 @@
-import { ChildProcess, spawn } from 'child_process';
+import { type ChildProcess, spawn } from 'child_process';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { BRANDING } from '@webcode/shared';

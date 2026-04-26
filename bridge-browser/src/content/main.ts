@@ -1,7 +1,7 @@
 import { Logger, i18n, t } from "../modules/utils";
 import * as UI from "../modules/ui";
-import { SiteSelectors } from "../modules/config";
-import { ToolExecutionPayload } from "../types";
+import { type SiteSelectors } from "../modules/config";
+import { type ToolExecutionPayload } from "../types";
 import type { CommandApprovalScope } from "../modules/ui";
 import { BRANDING, PROTOCOL } from "@webcode/shared";
 
@@ -11,7 +11,7 @@ interface ConfigState {
   autoSend: boolean;
 }
 
-let CONFIG: ConfigState = {
+const CONFIG: ConfigState = {
   pollInterval: 1000,
   autoSend: true,
 };
@@ -159,7 +159,7 @@ function initDOMConfig() {
         // Find matching site by URL prefix
         const matchedSite = sites.find((site: any) => currentUrl.startsWith(site.address));
 
-        if (matchedSite && matchedSite.selectors) {
+        if (matchedSite?.selectors) {
           DOM = matchedSite.selectors;
           currentPlatform = matchedSite.name;
           setupAutoInitTrigger();
@@ -190,7 +190,7 @@ function setupAutoInitTrigger() {
 async function maybePromptAutoInit() {
   if (!DOM || !isClientConnected || autoInitModalOpen) {return;}
 
-  const inputEl = document.querySelector(DOM.inputArea) as HTMLElement | HTMLInputElement | HTMLTextAreaElement | null;
+  const inputEl = document.querySelector<HTMLElement>(DOM.inputArea);
   if (!inputEl || !isActiveInput(inputEl)) {return;}
 
   const currentText = getInputText(inputEl);
@@ -211,7 +211,7 @@ async function maybePromptAutoInit() {
 
   if (!confirmed || !DOM) {return;}
 
-  const latestInput = document.querySelector(DOM.inputArea) as HTMLElement | HTMLInputElement | HTMLTextAreaElement | null;
+  const latestInput = document.querySelector<HTMLElement>(DOM.inputArea);
   if (!latestInput) {return;}
 
   const latestText = getInputText(latestInput);
@@ -231,7 +231,7 @@ async function maybePromptAutoInit() {
 
 function isActiveInput(inputEl: HTMLElement): boolean {
   const activeEl = document.activeElement;
-  return activeEl === inputEl || !!activeEl && inputEl.contains(activeEl);
+  return activeEl === inputEl || Boolean(activeEl) && inputEl.contains(activeEl);
 }
 
 function getInputText(inputEl: HTMLElement | HTMLInputElement | HTMLTextAreaElement): string {
@@ -366,8 +366,8 @@ function runMainLoop() {
     } catch (e: any) {
       // JSON Stabilization Logic
       const now = Date.now();
-      let state = blockStates.get(codeEl);
-      if (!state || state.text !== textContent) {
+      const state = blockStates.get(codeEl);
+      if (state?.text !== textContent) {
         blockStates.set(codeEl, {
           text: textContent,
           time: now,
@@ -501,7 +501,7 @@ function startObserver() {
 
   // 2. Check initial status
   chrome.runtime.sendMessage({ type: "GET_STATUS" }, async (response) => {
-    if (response && response.connected) {
+    if (response?.connected) {
       isClientConnected = true;
       if (response.workspaceId) {
         currentWorkspaceId = response.workspaceId;
@@ -615,7 +615,7 @@ function performExecution(payload: any) {
     (response) => {
       activeExecutions.delete(payload.request_id);
       let outputContent = "";
-      if (response && response.success) {
+      if (response?.success) {
         Logger.log(`${t("exec_success")}: ${payload.name}`, "success");
         let finalData = response.data;
         if (payload.name === "list_tools") {
@@ -789,7 +789,7 @@ function getCommandApprovalRules(payload: ToolExecutionPayload): string[] {
   const exact = getCommandApprovalRule(payload, 'exact');
   const executable = getCommandApprovalRule(payload, 'executable');
   const prefix = getCommandApprovalRule(payload, 'prefix');
-  return [exact, executable, prefix].filter((value): value is string => !!value);
+  return [exact, executable, prefix].filter((value): value is string => Boolean(value));
 }
 
 function getCommandApprovalRule(payload: ToolExecutionPayload, scope: Exclude<CommandApprovalScope, false>): string | null {

@@ -1,4 +1,4 @@
-import { Session, ToolExecutionPayload } from '@webcode/shared';
+import { type Session, type ToolExecutionPayload } from '@webcode/shared';
 
 // Re-export shared types for convenience
 export type { Session, ToolExecutionPayload };

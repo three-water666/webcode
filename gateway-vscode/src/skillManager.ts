@@ -100,7 +100,7 @@ export class SkillManager {
     }
 
     const stat = await fs.stat(absolutePath).catch(() => null);
-    if (!stat || !stat.isFile()) {
+    if (!stat?.isFile()) {
       throw new Error(`Skill resource not found: ${requestedPath}`);
     }
 

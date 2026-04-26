@@ -1,4 +1,4 @@
-import { Session } from '../types';
+import { type Session } from '../types';
 import { BRANDING } from '@webcode/shared';
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -94,7 +94,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   chrome.runtime.sendMessage(
     { type: "GET_STATUS", tabId: currentTabId },
     (response) => {
-      if (response && response.connected) {
+      if (response?.connected) {
         connectedView.classList.remove("hidden");
         disconnectedView.classList.add("hidden");
         statusDot.classList.add("online");
@@ -161,7 +161,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                       })(),
                     },
                     (res) => {
-                      if (res && res.success) {window.close();} // Close popup on success
+                      if (res?.success) {window.close();} // Close popup on success
                     }
                   );
                 };

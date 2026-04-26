@@ -1,4 +1,4 @@
-import { Session, MessageRequest, HandshakeResponse } from '../types';
+import { type Session, type MessageRequest, type HandshakeResponse } from '../types';
 import { BRANDING, PROTOCOL } from '@webcode/shared';
 
 // === Background Service (MV3 Persistent Edition) ===
@@ -114,7 +114,7 @@ chrome.runtime.onMessage.addListener((request: MessageRequest, sender, sendRespo
     if (targetTabId) {
         getSession(targetTabId).then((session) => {
           sendResponse({
-            connected: !!session,
+            connected: Boolean(session),
             port: session?.port,
             showLog: session?.showLog || false,
             workspaceId: session?.workspaceId || 'global'
@@ -313,16 +313,14 @@ async function executeTool(request: any, tabId: number | null | undefined) {
         ? resJson.content.map((c: any) => c.text).join("\n")
         : JSON.stringify(resJson);
       return { success: true, data: textContent };
-    } else {
-      if (response.status === 403) {
-        return { success: false, error: "Session Expired/Invalid Token." };
-      } else {
-        return {
-          success: false,
-          error: `${response.status} - ${response.statusText}`,
-        };
-      }
     }
+    if (response.status === 403) {
+      return { success: false, error: "Session Expired/Invalid Token." };
+    }
+    return {
+      success: false,
+      error: `${response.status} - ${response.statusText}`,
+    };
   } catch (err: any) {
     return { success: false, error: `Connection Failed: ${err.message}` };
   }

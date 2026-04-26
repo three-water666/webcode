@@ -1,4 +1,4 @@
-import { HandshakeResponse } from '../types';
+import { type HandshakeResponse } from '../types';
 import { BRANDING } from '@webcode/shared';
 
 (function () {
@@ -43,9 +43,9 @@ import { BRANDING } from '@webcode/shared';
     const dataEl = document.getElementById("mcp-data");
     const workspaceId = dataEl ? dataEl.getAttribute("data-workspace-id") : "global";
 
-    const loader = document.getElementById("loader") as HTMLElement | null;
+    const loader = document.getElementById("loader");
     const statusText = document.querySelector("p") as HTMLElement | null;
-    const card = document.getElementById("main-card") as HTMLElement | null;
+    const card = document.getElementById("main-card");
 
     if (!token || !target || !portStr) {
       if (statusText) {
@@ -97,7 +97,7 @@ import { BRANDING } from '@webcode/shared';
             setTimeout(() => {
               window.location.href = target as string;
             }, 500);
-          } else if (response && response.error === "BUSY") {
+          } else if (response?.error === "BUSY") {
             // === 冲突处理 UI ===
             document.body.dataset.bridgeState = "conflict";
             loader.style.display = "none";

@@ -1,6 +1,6 @@
 import { Logger, t, i18n } from './utils';
-import { ToolExecutionPayload } from '../types';
-import { SiteSelectors } from './config';
+import { type ToolExecutionPayload } from '../types';
+import { type SiteSelectors } from './config';
 import { BRANDING } from '@webcode/shared';
 
 let autoSendTimer: NodeJS.Timeout | null = null;
@@ -137,7 +137,7 @@ export function writeToInputBox(text: string, inputSelector: string) {
 }
 
 export function replaceInputBoxText(text: string, inputSelector: string): boolean {
-  const inputEl = document.querySelector(inputSelector) as HTMLElement | HTMLInputElement | HTMLTextAreaElement | null;
+  const inputEl = document.querySelector<HTMLElement>(inputSelector);
   if (!inputEl) {
     Logger.log(t("input_not_found"), "error");
     return false;
@@ -184,7 +184,7 @@ export async function deliverResult(text: string, domSelectors: SiteSelectors): 
   const maxInlineChars = typeof domSelectors.maxInlineChars === "number"
     ? domSelectors.maxInlineChars
     : 0;
-  const inputEl = document.querySelector(domSelectors.inputArea) as HTMLElement | HTMLInputElement | HTMLTextAreaElement | null;
+  const inputEl = document.querySelector<HTMLElement>(domSelectors.inputArea);
   const finalInlineText = inputEl ? buildFinalInputText(inputEl, text) : text;
   const finalInlineLength = finalInlineText.length;
 
@@ -304,12 +304,12 @@ export function triggerAutoSend(
 
       // 此时既没有清空输入框，也没有变成生成状态，说明回车失效了。可以尝试点发送按钮。
       let triggered = false;
-      const btnNow = document.querySelector(domSelectors.sendButton) as HTMLButtonElement | null;
+      const btnNow = document.querySelector<HTMLButtonElement>(domSelectors.sendButton);
       if (isSendButtonReady(btnNow)) {
         // 再次确认一下，我们要点的真的是发送按钮，不是由于选择器重叠导致的停止按钮
         const isActuallyStopBtn = domSelectors.stopButton && document.querySelector(domSelectors.stopButton) === btnNow;
         if (!isActuallyStopBtn) {
-            triggered = triggerButtonSend(btnNow!);
+            triggered = triggerButtonSend(btnNow);
             if (triggered) {
               Logger.log(
                 `${t("auto_send_attempt")} (${retryCount + 1})`,
@@ -351,7 +351,7 @@ export function triggerAutoSend(
  * - 绝大多数先进的 AI 网页平台会立刻读取这个事件并自动把它当作一个图片或者文本文件上传。
  */
 async function pasteTextAsAttachment(text: string, domSelectors: SiteSelectors): Promise<boolean> {
-  const inputEl = document.querySelector(domSelectors.inputArea) as HTMLElement | null;
+  const inputEl = document.querySelector<HTMLElement>(domSelectors.inputArea);
   if (!inputEl) {return false;}
 
   const filename = `${BRANDING.resultFilePrefix}-${Date.now()}.txt`;
@@ -534,7 +534,7 @@ export function showAutoInitConfirm(): Promise<boolean> {
         cleanup(false);
       }
     });
-    (shadow.querySelector(".primary") as HTMLButtonElement | null)?.focus();
+    shadow.querySelector<HTMLButtonElement>(".primary")?.focus();
   });
 }
 
@@ -620,7 +620,7 @@ export function showConfirmationModal(
   const commandValue = typeof payload.arguments?.command === "string"
     ? payload.arguments.command.trim().replace(/\s+/g, " ")
     : "";
-  const isCommandScopedApproval = (payload.name === "execute_command" || payload.name === "run_in_terminal") && !!commandValue;
+  const isCommandScopedApproval = (payload.name === "execute_command" || payload.name === "run_in_terminal") && Boolean(commandValue);
   const safeAlwaysTarget = escapeHtml(isCommandScopedApproval ? commandValue : payload.name);
   const alwaysTitle = isCommandScopedApproval
     ? t("cmd_always_title")
@@ -709,9 +709,9 @@ export function showConfirmationModal(
   const btnConfirm = card.querySelector(".btn-confirm") as HTMLButtonElement;
   const btnConfirmAlways = card.querySelector(".btn-confirm-always") as HTMLButtonElement;
   const inputReason = card.querySelector(".reason") as HTMLInputElement;
-  const btnAllowExact = card.querySelector(".btn-allow-exact") as HTMLButtonElement | null;
-  const btnAllowExecutable = card.querySelector(".btn-allow-executable") as HTMLButtonElement | null;
-  const btnAllowPrefix = card.querySelector(".btn-allow-prefix") as HTMLButtonElement | null;
+  const btnAllowExact = card.querySelector<HTMLButtonElement>(".btn-allow-exact");
+  const btnAllowExecutable = card.querySelector<HTMLButtonElement>(".btn-allow-executable");
+  const btnAllowPrefix = card.querySelector<HTMLButtonElement>(".btn-allow-prefix");
 
   // 1. Approve Once
   btnConfirm.onclick = () => {
