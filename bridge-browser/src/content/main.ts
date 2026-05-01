@@ -1,6 +1,7 @@
 import { Logger, i18n, t } from "../modules/utils";
 import * as UI from "../modules/ui";
 import { type SiteSelectors } from "../modules/config";
+import { parseModelJson } from "../modules/jsonRepair";
 import { type ToolExecutionPayload } from "../types";
 import type { CommandApprovalScope } from "../modules/ui";
 import { BRANDING, PROTOCOL } from "@webcode/shared";
@@ -271,8 +272,6 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 
 // === 主循环逻辑 ===
 
-// 正则表达式匹配常见的非标准空白字符，包括不间断空格 (\u00a0)
-const nonStandardSpaces = /[\u00a0\uFEFF\u200B]/g;
 // 记录所有出现request_id，从而判断是不是新的工具请求
 const processedRequests = new Set<string>();
 // 记录所有工具调用结果回填的 request_id
@@ -313,11 +312,8 @@ function runMainLoop() {
     const textContent = (codeEl.textContent ?? "").trim();
     if (!/"mcp_action"\s*:\s*"call"/.test(textContent)) { return; }
 
-    // 核心修复: 清理非标准空白字符 (如不间断空格 \u00a0)，以防止 JSON.parse 失败。
-    const cleanedText = textContent.replace(nonStandardSpaces, ' ');
-
     try {
-      const payload = JSON.parse(cleanedText);
+      const payload = parseModelJson<ToolExecutionPayload & { mcp_action?: string }>(textContent);
       if (blockStates.has(codeEl)) { blockStates.delete(codeEl); }
 
       // 成功解析 JSON，尝试清除旧的错误样式（如果存在）
