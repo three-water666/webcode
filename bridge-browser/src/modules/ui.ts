@@ -50,14 +50,57 @@ function ensureVisualStatusStyle() {
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
       white-space: nowrap;
     }
+    [data-mcp-state="processing"]::before {
+      content: "...";
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      z-index: 2;
+      width: 0;
+      overflow: hidden;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 16px;
+      pointer-events: none;
+      white-space: nowrap;
+      animation: ${BRANDING.slug}-mcp-loading-dots 1.2s steps(4, end) infinite;
+    }
     [data-mcp-state="processing"]::after {
       background: #1565C0;
+      padding-right: 24px;
+      animation: ${BRANDING.slug}-mcp-status-pulse 1.2s ease-in-out infinite;
     }
     [data-mcp-state="success"]::after {
       background: #008C45;
     }
     [data-mcp-state="error"]::after {
       background: #C62828;
+    }
+    @keyframes ${BRANDING.slug}-mcp-loading-dots {
+      0% {
+        width: 0;
+      }
+      25% {
+        width: 0.35em;
+      }
+      50% {
+        width: 0.7em;
+      }
+      75%,
+      100% {
+        width: 1.05em;
+      }
+    }
+    @keyframes ${BRANDING.slug}-mcp-status-pulse {
+      0%,
+      100% {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
+      }
+      50% {
+        box-shadow: 0 2px 12px rgba(21, 101, 192, 0.55);
+      }
     }
   `;
   (document.head || document.documentElement).appendChild(style);
