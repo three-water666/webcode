@@ -2,7 +2,7 @@
   "name": "gateway-vscode",
   "publisher": "three-water666",
   "displayName": "webcode gateway",
-  "description": "Connect Web AI to Local VS Code via Model Context Protocol (Zero-Config)",
+  "description": "Connect Web AI to Local VS Code",
   "repository": {
     "type": "git",
     "url": "https://github.com/three-water666/webcode.git"
