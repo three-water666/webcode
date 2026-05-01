@@ -32,17 +32,22 @@ Follow this sequence end-to-end unless the user explicitly asks to stop earlier.
    - Keep English and Chinese content semantically aligned.
    - Group entries by user-facing categories such as Features, Improvements, Fixes, and Engineering. Do not paste raw commit logs.
 
-5. Validate before tagging.
+5. Ask the user to review the changelog.
+   - Show the generated English and Chinese changelog summaries to the user, or point them to the exact files if the content is long.
+   - Stop after writing the changelog and wait for the user to explicitly say to continue before running validation, committing, tagging, or pushing.
+   - If the user requests changelog changes, update the changelog files and ask for review again.
+
+6. Validate before tagging.
    - Run `pnpm lint`.
    - Run `pnpm --filter bridge-browser run build`.
    - When feasible for a release, run `./build_release.sh` to verify both `.vsix` and browser `.zip` artifacts are produced.
    - If any validation fails, fix it or report the blocker. Do not commit, tag, or push a failed release.
 
-6. Commit the release changes.
+7. Commit the release changes.
    - Confirm the diff contains only intended version and changelog changes.
    - Commit with `chore: release <version>`.
 
-7. Tag and push.
+8. Tag and push.
    - Create the tag on the release commit: `git tag <version>`.
    - Push the branch and tag: `git push origin main` and `git push origin <version>`.
    - The tag push triggers `.github/workflows/release.yml`, which builds release artifacts and creates or updates the GitHub Release using bilingual notes read from `changelogs/en/v<version>.md` and `changelogs/zh/v<version>.md`.
