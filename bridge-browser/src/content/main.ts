@@ -302,11 +302,13 @@ function runMainLoop() {
   if (messages.length === 0) { return; }
 
   // 只处理最后一次大模型返回的消息块
-  const lastMessage = messages[messages.length - 1];
+  const messageIndex = messages.length - 1;
+  const lastMessage = messages[messageIndex];
   // 找到大模型最后一次返回的消息快中所有JSON块
   const codeElements = lastMessage.querySelectorAll(DOM.codeBlocks);
   // 记录大模型最后一次返回的消息块的所有JSON块中的request_id
   const currentTurnIds: string[] = [];
+  const currentTurnIdSet = new Set<string>();
 
   codeElements.forEach((codeEl) => {
     const textContent = (codeEl.textContent ?? "").trim();
@@ -323,20 +325,19 @@ function runMainLoop() {
       }
 
       if (payload.mcp_action === "call") {
-        if (!payload.request_id) {
-          const el = codeEl as HTMLElement;
-          el.dataset.mcpRequestId ??= "req_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
-          payload.request_id = el.dataset.mcpRequestId;
+        const requestId = ensurePayloadRequestId(payload, codeEl as HTMLElement, messageIndex);
+        if (!currentTurnIdSet.has(requestId)) {
+          currentTurnIds.push(requestId);
+          currentTurnIdSet.add(requestId);
         }
-        currentTurnIds.push(payload.request_id);
 
-        const isProcessing = activeExecutions.has(payload.request_id);
-        const isKnown = processedRequests.has(payload.request_id);
+        const isProcessing = activeExecutions.has(requestId);
+        const isKnown = processedRequests.has(requestId);
 
         if (!isKnown) {
           // === Case 1: 新发现的任务 ===
-          processedRequests.add(payload.request_id);
-          activeExecutions.add(payload.request_id);
+          processedRequests.add(requestId);
+          activeExecutions.add(requestId);
 
           // [Fix 2] 发现新任务，立即中断任何正在进行的自动发送尝试
           UI.cancelAutoSend();
@@ -466,6 +467,85 @@ function runMainLoop() {
       }
     }
   }
+}
+
+function ensurePayloadRequestId(
+  payload: ToolExecutionPayload & { mcp_action?: string },
+  codeEl: HTMLElement,
+  messageIndex: number
+): string {
+  const explicitRequestId = normalizeRequestId(payload.request_id);
+  if (explicitRequestId) {
+    codeEl.dataset.mcpRequestId = explicitRequestId;
+    delete codeEl.dataset.mcpCallSignature;
+    payload.request_id = explicitRequestId;
+    return explicitRequestId;
+  }
+
+  const signature = buildToolCallSignature(payload);
+  const cachedRequestId = codeEl.dataset.mcpRequestId;
+  const cachedSignature = codeEl.dataset.mcpCallSignature;
+  const syntheticRequestId = cachedRequestId && cachedSignature === signature
+    ? cachedRequestId
+    : `req_auto_${messageIndex}_${hashStableString(signature)}`;
+
+  codeEl.dataset.mcpRequestId = syntheticRequestId;
+  codeEl.dataset.mcpCallSignature = signature;
+  payload.request_id = syntheticRequestId;
+  return syntheticRequestId;
+}
+
+function normalizeRequestId(value: unknown): string | null {
+  if (typeof value !== "string") {return null;}
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function buildToolCallSignature(payload: ToolExecutionPayload): string {
+  return stableStringify({
+    name: payload.name,
+    arguments: payload.arguments ?? {},
+  });
+}
+
+function stableStringify(value: unknown): string {
+  if (value === null) {return "null";}
+
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(",")}]`;
+  }
+
+  if (typeof value === "object") {
+    return stableStringifyObject(value as Record<string, unknown>);
+  }
+
+  return stableStringifyPrimitive(value);
+}
+
+function stableStringifyObject(record: Record<string, unknown>): string {
+  return `{${Object.keys(record)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
+    .join(",")}}`;
+}
+
+function stableStringifyPrimitive(value: unknown): string {
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return JSON.stringify(value) ?? "";
+  }
+  if (typeof value === "bigint") {return `${value.toString()}n`;}
+  if (typeof value === "symbol") {return value.description ? `symbol:${value.description}` : "symbol";}
+  if (typeof value === "function") {return `function:${value.name}`;}
+  return "undefined";
+}
+
+function hashStableString(value: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
 }
 
 // 初始化观察者
