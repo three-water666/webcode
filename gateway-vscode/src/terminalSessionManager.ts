@@ -27,6 +27,7 @@ class ManagedPseudoterminal implements vscode.Pseudoterminal {
   private readonly closeEmitter = new vscode.EventEmitter<number>();
   private child: ChildProcess | null = null;
   private started = false;
+  private stopping = false;
 
   onDidWrite: vscode.Event<string> = this.writeEmitter.event;
   onDidClose?: vscode.Event<number> = this.closeEmitter.event;
@@ -56,6 +57,7 @@ class ManagedPseudoterminal implements vscode.Pseudoterminal {
     const child = spawn(this.options.file, this.options.args, {
       cwd: this.options.cwd,
       env: this.options.env,
+      detached: process.platform !== 'win32',
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe']
     });
@@ -93,16 +95,18 @@ class ManagedPseudoterminal implements vscode.Pseudoterminal {
   }
 
   close(): void {
-    if (!this.child || this.child.killed) {
+    if (
+      !this.child
+      || this.stopping
+      || this.child.exitCode !== null
+      || this.child.signalCode !== null
+    ) {
       return;
     }
 
-    this.options.log(`Terminal session terminated by user.`);
-    try {
-      this.child.kill();
-    } catch {
-      return;
-    }
+    this.stopping = true;
+    this.options.log(`Terminal session process tree terminated by user.`);
+    terminateProcessTree(this.child, this.options.log);
     this.options.onExit({ exitCode: null, signal: null, forced: true });
   }
 
@@ -115,6 +119,54 @@ class ManagedPseudoterminal implements vscode.Pseudoterminal {
   private write(data: string) {
     this.writeEmitter.fire(data);
   }
+}
+
+function terminateProcessTree(child: ChildProcess, log: (message: string) => void): void {
+  const pid = child.pid;
+  if (!pid) {
+    killChildProcess(child, log);
+    return;
+  }
+
+  if (process.platform === 'win32') {
+    terminateWindowsProcessTree(pid, child, log);
+    return;
+  }
+
+  terminatePosixProcessGroup(pid, child, log);
+}
+
+function terminateWindowsProcessTree(pid: number, child: ChildProcess, log: (message: string) => void): void {
+  const killer = spawn('taskkill', ['/PID', String(pid), '/T', '/F'], {
+    windowsHide: true,
+    stdio: 'ignore'
+  });
+
+  killer.on('error', (error) => {
+    log(`Failed to run taskkill for process tree ${pid}: ${error.message}`);
+    killChildProcess(child, log);
+  });
+}
+
+function terminatePosixProcessGroup(pid: number, child: ChildProcess, log: (message: string) => void): void {
+  try {
+    process.kill(-pid, 'SIGTERM');
+  } catch (error: unknown) {
+    log(`Failed to terminate process group ${pid}: ${formatUnknownError(error)}`);
+    killChildProcess(child, log);
+  }
+}
+
+function killChildProcess(child: ChildProcess, log: (message: string) => void): void {
+  try {
+    child.kill();
+  } catch (error: unknown) {
+    log(`Failed to terminate child process: ${formatUnknownError(error)}`);
+  }
+}
+
+function formatUnknownError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export class TerminalSessionManager {
