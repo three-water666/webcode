@@ -8,6 +8,10 @@ import {
   normalizeShellCommand,
   resolveShellExecutionPlan,
 } from './commandShell';
+import {
+  assessShellCommandRisk,
+  formatCommandRiskAssessment,
+} from './commandRisk';
 
 function isSubPath(parent: string, child: string): boolean {
   const relative = path.relative(parent, child);
@@ -39,7 +43,7 @@ const server = new McpServer({
 server.registerTool(
   'execute_command',
   {
-    description: 'Execute a short-lived POSIX shell command in the background and return stdout, stderr, and exitCode. Write commands as bash/POSIX shell text, like you would type in a Unix terminal: "git status", "pnpm test", "mkdir -p dist && pnpm build". On Windows this requires Git Bash and does not support cmd.exe or PowerShell syntax. For long-running commands or visible output, use run_in_terminal instead.',
+    description: 'Execute a short-lived POSIX shell command in the background and return stdout, stderr, and exitCode. Write commands as bash/POSIX shell text, like you would type in a Unix terminal: "git status", "pnpm test", "mkdir -p dist && pnpm build". On Windows this requires Git Bash and does not support cmd.exe or PowerShell syntax. Obviously destructive, privileged, or shell-escape commands are rejected before execution. For long-running commands or visible output, use run_in_terminal instead.',
     inputSchema: {
       command: z.string().describe('The POSIX shell command to execute (e.g., "git status", "pnpm test", "mkdir -p dist && pnpm build"). Use bash/POSIX syntax, not cmd.exe or PowerShell syntax.'),
       cwd: z.string().optional().describe('Optional: Current working directory. Must be within the workspace. Defaults to workspace root.'),
@@ -86,6 +90,16 @@ server.registerTool(
       return {
         content: [
           { type: 'text', text: `❌ Command Error: ${error.message}\nPolicy: ${describeShellCommandPolicy(process.platform)}` },
+        ],
+        isError: true,
+      };
+    }
+
+    const risk = assessShellCommandRisk(commandLine);
+    if (risk.level !== 'allowed') {
+      return {
+        content: [
+          { type: 'text', text: `❌ Security Error: ${formatCommandRiskAssessment(risk)}` },
         ],
         isError: true,
       };

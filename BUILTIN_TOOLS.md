@@ -17,7 +17,7 @@
 | --- | --- |
 | `list_tools` | 返回当前可用工具列表，按 server 分组，并区分完整 schema 的 `tools` 和只列名称的 `hidden_tools`。 |
 | `get_tool_definitions` | 为 `hidden_tools` 中的工具按名称拉取完整 schema，也可返回部分 internal tools 的 schema。 |
-| `run_in_terminal` | 在 VS Code 可见终端会话中启动一条长时间运行的 POSIX shell 命令，立即返回 `session_id`，适合常驻任务或需要用户可见输出的任务。Windows 上要求 Git Bash，命令应使用 bash/POSIX 语法，而不是 cmd.exe 或 PowerShell 语法。 |
+| `run_in_terminal` | 在 VS Code 可见终端会话中启动一条长时间运行的 POSIX shell 命令，立即返回 `session_id`，适合常驻任务或需要用户可见输出的任务。Windows 上要求 Git Bash，命令应使用 bash/POSIX 语法，而不是 cmd.exe 或 PowerShell 语法；明显破坏性、提权或 shell 逃逸类命令会在执行前被拒绝。 |
 | `list_terminal_sessions` | 列出由 `run_in_terminal` 创建的终端会话。 |
 | `get_terminal_session` | 根据 `session_id` 获取终端会话状态、进程、退出码等摘要。 |
 | `read_terminal_output` | 读取指定终端会话最近输出，默认返回最近 200 行。 |
@@ -35,7 +35,7 @@
 
 | 工具名 | 位置 | 作用 |
 | --- | --- | --- |
-| `execute_command` | `gateway-vscode/src/servers/command.ts` | 在后台执行一条短生命周期 POSIX shell 命令并返回 stdout/stderr/exitCode。Windows 上要求 Git Bash，命令应使用 bash/POSIX 语法，而不是 cmd.exe 或 PowerShell 语法；`cwd` 必须位于当前 workspace 内。 |
+| `execute_command` | `gateway-vscode/src/servers/command.ts` | 在后台执行一条短生命周期 POSIX shell 命令并返回 stdout/stderr/exitCode。Windows 上要求 Git Bash，命令应使用 bash/POSIX 语法，而不是 cmd.exe 或 PowerShell 语法；`cwd` 必须位于当前 workspace 内，明显破坏性、提权或 shell 逃逸类命令会在执行前被拒绝。 |
 
 ### `builtin_filesystem`
 

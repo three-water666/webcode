@@ -18,10 +18,11 @@ import {
     normalizeShellCommand,
     resolveShellExecutionPlan
 } from './servers/commandShell';
+import { assertShellCommandRiskAllowed } from './servers/commandRisk';
 
 const RUN_IN_TERMINAL_TOOL = {
     name: "run_in_terminal",
-    description: "Start a long-running POSIX shell command in a visible VS Code terminal session. Returns a session_id immediately so you can inspect output, check status, or stop it later. Write commands as bash/POSIX shell text, like you would type in a Unix terminal. On Windows this requires Git Bash and does not support cmd.exe or PowerShell syntax.",
+    description: "Start a long-running POSIX shell command in a visible VS Code terminal session. Returns a session_id immediately so you can inspect output, check status, or stop it later. Write commands as bash/POSIX shell text, like you would type in a Unix terminal. On Windows this requires Git Bash and does not support cmd.exe or PowerShell syntax. Obviously destructive, privileged, or shell-escape commands are rejected before execution.",
     inputSchema: {
         type: "object",
         properties: {
@@ -317,6 +318,7 @@ export class GatewayManager {
         }
 
         const commandLine = normalizeShellCommand(command);
+        assertShellCommandRiskAllowed(commandLine);
 
         return {
             commandLine,
