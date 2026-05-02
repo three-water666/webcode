@@ -6,6 +6,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { t } from './i18n';
 import { getConfiguredAiSites } from './platforms';
+import { COMMAND_SHELL_ENV } from './servers/commandShell';
 import { BRANDING } from '@webcode/shared';
 
 // 定义配置文件的 AI 站点结构
@@ -114,9 +115,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
         const config = vscode.workspace.getConfiguration('webcodeGateway');
         const portConfig = config.get<number>('port') ?? 34567;
+        const configuredCommandShellPath = config.get<string>('commandShell.path')?.trim();
+        const commandShellPath = configuredCommandShellPath === '' ? undefined : configuredCommandShellPath;
         const customServers = filterCustomServers(config.get<Record<string, BuiltinServerConfig>>('servers') ?? {}, outputChannel);
         const mcpServers = {
-            ...getBuiltinServers(context.extensionPath, outputChannel),
+            ...getBuiltinServers(context.extensionPath, outputChannel, commandShellPath),
             ...customServers
         };
         const skillDirectories = config.get<string[]>('skillDirectories') ?? [];
@@ -139,7 +142,8 @@ export async function activate(context: vscode.ExtensionContext) {
                 mcpServers,
                 allowedOrigins,
                 aiSites,
-                skillDirectories
+                skillDirectories,
+                commandShellPath
             });
 
             currentPort = result.port;
@@ -347,8 +351,13 @@ export async function activate(context: vscode.ExtensionContext) {
     // Do not auto-start
 }
 
-function getBuiltinServers(extensionPath: string, output: vscode.OutputChannel): Record<string, BuiltinServerConfig> {
+function getBuiltinServers(
+    extensionPath: string,
+    output: vscode.OutputChannel,
+    commandShellPath?: string
+): Record<string, BuiltinServerConfig> {
     const filesystemEntry = path.join(extensionPath, 'dist', 'filesystemServer.js');
+    const commandServerEnv = commandShellPath ? { [COMMAND_SHELL_ENV]: commandShellPath } : undefined;
 
     if (!fs.existsSync(filesystemEntry)) {
         output.appendLine(
@@ -371,7 +380,8 @@ function getBuiltinServers(extensionPath: string, output: vscode.OutputChannel):
                 `${extensionPath}/dist/commandServer.js`,
                 '--project-root',
                 '.'
-            ]
+            ],
+            env: commandServerEnv
         }
     };
 }

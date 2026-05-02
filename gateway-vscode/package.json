@@ -116,6 +116,11 @@
           ],
           "description": "Global default browser. Used if no site-specific browser is configured."
         },
+        "webcodeGateway.commandShell.path": {
+          "type": "string",
+          "default": "",
+          "description": "Optional path to the POSIX shell used by execute_command and run_in_terminal. On Windows this should point to Git Bash bash.exe. Leave empty to auto-detect Git Bash on Windows or use the user/system POSIX shell on macOS and Linux."
+        },
         "webcodeGateway.skillDirectories": {
           "type": "array",
           "default": [

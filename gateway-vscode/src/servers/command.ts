@@ -4,12 +4,10 @@ import { z } from 'zod';
 import { execFile } from 'child_process';
 import * as path from 'path';
 import {
-  formatCommandPolicyError,
-  formatAllowedCommands,
-  parseCommandLine,
-  resolveExecutionPlan,
-  validateParsedCommand,
-} from './commandSecurity';
+  describeShellCommandPolicy,
+  normalizeShellCommand,
+  resolveShellExecutionPlan,
+} from './commandShell';
 
 function isSubPath(parent: string, child: string): boolean {
   const relative = path.relative(parent, child);
@@ -41,9 +39,9 @@ const server = new McpServer({
 server.registerTool(
   'execute_command',
   {
-    description: 'Execute a single short-lived command in the background without shell chaining. Use this for commands like "git status" or "pnpm test". For long-running processes, shell pipelines, or anything requiring terminal visibility, use "run_in_terminal" instead. SECURITY RESTRICTION: The command must be a single invocation from the allowlist and must stay inside the current workspace.',
+    description: 'Execute a short-lived POSIX shell command in the background and return stdout, stderr, and exitCode. Write commands as bash/POSIX shell text, like you would type in a Unix terminal: "git status", "pnpm test", "mkdir -p dist && pnpm build". On Windows this requires Git Bash and does not support cmd.exe or PowerShell syntax. For long-running commands or visible output, use run_in_terminal instead.',
     inputSchema: {
-      command: z.string().describe('The command to execute (e.g., "git status", "pnpm test"). Shell chaining, pipes, redirects, and command substitution are blocked.'),
+      command: z.string().describe('The POSIX shell command to execute (e.g., "git status", "pnpm test", "mkdir -p dist && pnpm build"). Use bash/POSIX syntax, not cmd.exe or PowerShell syntax.'),
       cwd: z.string().optional().describe('Optional: Current working directory. Must be within the workspace. Defaults to workspace root.'),
       timeout: z.number().int().min(1000).max(120000).default(60000).describe('Optional: Timeout in milliseconds (1000-120000, default: 60000).'),
     },
@@ -81,32 +79,23 @@ server.registerTool(
       targetCwd = resolvedCwd;
     }
 
-    // 2. 命令安全检查
-    const parsed = parseCommandLine(command);
-    if (!parsed.ok) {
+    let commandLine: string;
+    try {
+      commandLine = normalizeShellCommand(command);
+    } catch (error: any) {
       return {
         content: [
-          { type: 'text', text: `❌ Security Error: ${formatCommandPolicyError(parsed.reason)}\nPolicy: ${formatAllowedCommands(process.platform)}` },
-        ],
-        isError: true,
-      };
-    }
-
-    const validation = validateParsedCommand(parsed.value, {
-      projectRoot,
-      platform: process.platform
-    });
-    if (!validation.valid) {
-      return {
-        content: [
-          { type: 'text', text: `❌ Security Error: ${validation.reason}\nPolicy: ${formatAllowedCommands(process.platform)}` },
+          { type: 'text', text: `❌ Command Error: ${error.message}\nPolicy: ${describeShellCommandPolicy(process.platform)}` },
         ],
         isError: true,
       };
     }
 
     try {
-      const execution = resolveExecutionPlan(parsed.value, process.platform, process.env);
+      const execution = resolveShellExecutionPlan(commandLine, {
+        platform: process.platform,
+        env: process.env
+      });
 
       // 3. 执行命令
       const result = await new Promise<{
@@ -128,7 +117,7 @@ server.registerTool(
 
           const execError = error as NodeJS.ErrnoException & { code?: number | string; signal?: NodeJS.Signals | null; killed?: boolean };
           if (execError.code === 'ENOENT') {
-            reject(new Error(`Command not found: ${parsed.value.baseCommand}`));
+            reject(new Error(`Command shell not found: ${execution.shell.path}`));
             return;
           }
 
@@ -151,6 +140,10 @@ server.registerTool(
               stderr: result.stderr.trim(),
               exitCode: result.exitCode,
               signal: result.signal,
+              shell: {
+                id: execution.shell.id,
+                path: execution.shell.path
+              },
               status: isError ? 'error' : (result.stderr ? 'completed_with_stderr' : 'success')
             }, null, 2)
           }
@@ -160,7 +153,7 @@ server.registerTool(
     } catch (error: any) {
       return {
         content: [
-          { type: 'text', text: `❌ Execution System Error: ${error.message}` },
+          { type: 'text', text: `❌ Execution System Error: ${error.message}\nPolicy: ${describeShellCommandPolicy(process.platform)}` },
         ],
         isError: true,
       };

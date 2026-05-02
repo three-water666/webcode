@@ -14,20 +14,18 @@ import { getDefaultBridgeTarget, getDefaultSelectors, getPlatformIdByAddress } f
 import { SkillManager } from './skillManager';
 import { TerminalSessionManager } from './terminalSessionManager';
 import {
-    formatCommandPolicyError,
-    formatAllowedCommands,
-    parseCommandLine,
-    resolveExecutionPlan,
-    validateParsedCommand
-} from './servers/commandSecurity';
+    describeShellCommandPolicy,
+    normalizeShellCommand,
+    resolveShellExecutionPlan
+} from './servers/commandShell';
 
 const RUN_IN_TERMINAL_TOOL = {
     name: "run_in_terminal",
-    description: "Start a single long-running command in a visible VS Code terminal session. Returns a session_id immediately so you can inspect output, check status, or stop it later.",
+    description: "Start a long-running POSIX shell command in a visible VS Code terminal session. Returns a session_id immediately so you can inspect output, check status, or stop it later. Write commands as bash/POSIX shell text, like you would type in a Unix terminal. On Windows this requires Git Bash and does not support cmd.exe or PowerShell syntax.",
     inputSchema: {
         type: "object",
         properties: {
-            command: { type: "string", description: "A single command to execute (for example: 'pnpm dev'). Shell chaining, pipes, redirects, and command substitution are blocked." },
+            command: { type: "string", description: "The POSIX shell command to execute (for example: 'pnpm dev', 'pnpm test -- --watch', or 'mkdir -p dist && pnpm build'). Use bash/POSIX syntax, not cmd.exe or PowerShell syntax." },
             cwd: { type: "string", description: "Optional working directory inside the workspace. Defaults to the workspace root." },
             auto_focus: { type: "boolean", description: "Focus the terminal after sending the command", default: true }
         },
@@ -175,6 +173,7 @@ interface Config {
     allowedOrigins: string[]; // [Security] Whitelist for CORS
     aiSites?: any[]; // Dynamic sites from config
     skillDirectories?: string[];
+    commandShellPath?: string;
 }
 
 interface StartResult {
@@ -248,6 +247,7 @@ export class GatewayManager {
     private skillManager: SkillManager;
     private terminalSessionManager: TerminalSessionManager;
     private skillDirectories: string[] = [];
+    private commandShellPath: string | undefined;
 
     constructor(outputChannel: vscode.OutputChannel, extensionPath: string, context: vscode.ExtensionContext, onAutoStop?: () => void) {
         this.outputChannel = outputChannel;
@@ -311,35 +311,20 @@ export class GatewayManager {
         return resolved;
     }
 
-    private validateTerminalCommand(command: unknown, cwd: string) {
+    private validateTerminalCommand(command: unknown) {
         if (typeof command !== 'string') {
             throw new Error('command must be a string.');
         }
 
-        const commandLine = command.trim();
-        if (!commandLine) {
-            throw new Error('command must not be empty.');
-        }
-
-        const parsed = parseCommandLine(commandLine);
-
-        if (!parsed.ok) {
-            throw new Error(`${formatCommandPolicyError(parsed.reason)} Policy: ${formatAllowedCommands(process.platform)}`);
-        }
-
-        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? cwd;
-        const validation = validateParsedCommand(parsed.value, {
-            projectRoot: workspaceRoot,
-            platform: process.platform
-        });
-
-        if (!validation.valid) {
-            throw new Error(`${validation.reason} Policy: ${formatAllowedCommands(process.platform)}`);
-        }
+        const commandLine = normalizeShellCommand(command);
 
         return {
             commandLine,
-            execution: resolveExecutionPlan(parsed.value, process.platform, process.env),
+            execution: resolveShellExecutionPlan(commandLine, {
+                platform: process.platform,
+                env: process.env,
+                configuredPath: this.commandShellPath
+            }),
             env: { ...process.env } as NodeJS.ProcessEnv
         };
     }
@@ -501,6 +486,8 @@ export class GatewayManager {
             await this.stop();
         }
         this.skillDirectories = config.skillDirectories ?? [];
+        const commandShellPath = config.commandShellPath?.trim();
+        this.commandShellPath = commandShellPath === '' ? undefined : commandShellPath;
         await this.connectToServers(config.mcpServers);
 
         // 1. 使用持久化 Token (仅首次生成)
@@ -751,7 +738,7 @@ export class GatewayManager {
             if (name === 'run_in_terminal') {
                 try {
                     const cwd = this.resolveWorkspaceCwd(args?.cwd);
-                    const validated = this.validateTerminalCommand(args?.command, cwd);
+                    const validated = this.validateTerminalCommand(args?.command);
                     this.log(`   🚀 Executing: run_in_terminal ${validated.commandLine}`);
 
                     const session = this.terminalSessionManager.createSession({
@@ -772,7 +759,11 @@ export class GatewayManager {
                                 name: session.name,
                                 status: session.status,
                                 cwd: session.cwd,
-                                command: session.command
+                                command: session.command,
+                                shell: {
+                                    id: validated.execution.shell.id,
+                                    path: validated.execution.shell.path
+                                }
                             }, null, 2)
                         }],
                         isError: false
@@ -781,7 +772,7 @@ export class GatewayManager {
                     this.error('Terminal session start failed', error);
                     return res.status(400).json({
                         isError: true,
-                        content: [{ type: 'text', text: `Error: ${error.message}` }]
+                        content: [{ type: 'text', text: `Error: ${error.message}\nPolicy: ${describeShellCommandPolicy(process.platform)}` }]
                     });
                 }
             }
