@@ -42,13 +42,14 @@ function ensureVisualStatusStyle() {
   style.textContent = `
     [data-mcp-visual="true"] {
       position: relative !important;
+      box-sizing: border-box !important;
     }
     [data-mcp-visual="true"]::after {
       content: attr(data-mcp-status-label);
       position: absolute;
       top: 6px;
       right: 8px;
-      z-index: 1;
+      z-index: 10;
       padding: 2px 8px;
       border-radius: 999px;
       color: #fff;
@@ -61,12 +62,12 @@ function ensureVisualStatusStyle() {
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
       white-space: nowrap;
     }
-    [data-mcp-state="processing"]::before {
+    [data-mcp-visual="true"][data-mcp-state="processing"]::before {
       content: "...";
       position: absolute;
       top: 8px;
       right: 12px;
-      z-index: 2;
+      z-index: 11;
       width: 0;
       overflow: hidden;
       color: #fff;
@@ -78,15 +79,15 @@ function ensureVisualStatusStyle() {
       white-space: nowrap;
       animation: ${BRANDING.slug}-mcp-loading-dots 1.2s steps(4, end) infinite;
     }
-    [data-mcp-state="processing"]::after {
+    [data-mcp-visual="true"][data-mcp-state="processing"]::after {
       background: #1565C0;
       padding-right: 24px;
       animation: ${BRANDING.slug}-mcp-status-pulse 1.2s ease-in-out infinite;
     }
-    [data-mcp-state="success"]::after {
+    [data-mcp-visual="true"][data-mcp-state="success"]::after {
       background: #008C45;
     }
-    [data-mcp-state="error"]::after {
+    [data-mcp-visual="true"][data-mcp-state="error"]::after {
       background: #C62828;
     }
     @keyframes ${BRANDING.slug}-mcp-loading-dots {
@@ -125,16 +126,84 @@ function markVisualState(
   shadowColor: string
 ) {
   const label = t(labelKey);
-  if (element.dataset.mcpState === state && element.dataset.mcpStatusLabel === label) {return;}
+  const visualElement = getVisualElement(element);
+  if (
+    element.dataset.mcpState === state &&
+    visualElement.dataset.mcpState === state &&
+    visualElement.dataset.mcpStatusLabel === label
+  ) {
+    return;
+  }
 
   ensureVisualStatusStyle();
+  if (visualElement !== element && element.dataset.mcpVisual === "true") {
+    clearVisualAttributes(element);
+  }
+
   element.dataset.mcpState = state;
-  element.dataset.mcpVisual = "true";
   element.dataset.mcpStatusLabel = label;
-  element.style.border = `2px solid ${borderColor}`;
-  element.style.borderRadius = "6px";
-  element.style.transition = "border-color 0.3s ease, box-shadow 0.3s ease";
-  element.style.boxShadow = `0 0 0 3px ${shadowColor}`;
+
+  if (visualElement !== element) {
+    delete element.dataset.mcpVisual;
+  }
+
+  visualElement.style.border = `2px solid ${borderColor}`;
+  visualElement.style.borderRadius = "6px";
+  visualElement.style.transition = "border-color 0.3s ease, box-shadow 0.3s ease";
+  visualElement.style.boxShadow = `0 0 0 3px ${shadowColor}`;
+  visualElement.dataset.mcpState = state;
+  visualElement.dataset.mcpVisual = "true";
+  visualElement.dataset.mcpStatusLabel = label;
+}
+
+function getVisualElement(element: HTMLElement): HTMLElement {
+  if (element.tagName.toLowerCase() === "code") {
+    const pre = element.closest("pre");
+    if (pre instanceof HTMLElement && shouldUsePreVisualElement(element, pre)) {
+      return pre;
+    }
+  }
+
+  return element;
+}
+
+function shouldUsePreVisualElement(element: HTMLElement, pre: HTMLElement): boolean {
+  const display = window.getComputedStyle(element).display;
+  if (display.includes("inline") || display === "contents") {
+    return true;
+  }
+
+  const elementRect = element.getBoundingClientRect();
+  const preRect = pre.getBoundingClientRect();
+  if (elementRect.width <= 0 || preRect.width <= 0) {
+    return false;
+  }
+
+  return elementRect.width + 24 < preRect.width;
+}
+
+function clearVisualAttributes(element: HTMLElement) {
+  const hadVisualStyle = element.dataset.mcpVisual === "true";
+
+  delete element.dataset.mcpState;
+  delete element.dataset.mcpVisual;
+  delete element.dataset.mcpStatusLabel;
+
+  if (!hadVisualStyle) {return;}
+
+  element.style.border = "";
+  element.style.borderRadius = "";
+  element.style.transition = "";
+  element.style.boxShadow = "";
+}
+
+export function clearVisualState(element: HTMLElement) {
+  const visualElement = getVisualElement(element);
+
+  clearVisualAttributes(element);
+  if (visualElement !== element) {
+    clearVisualAttributes(visualElement);
+  }
 }
 
 // 状态 1: 处理中 (蓝色)

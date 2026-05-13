@@ -320,8 +320,7 @@ function runMainLoop() {
 
       // 成功解析 JSON，尝试清除旧的错误样式（如果存在）
       if ((codeEl as HTMLElement).dataset.mcpState === "error") {
-        (codeEl as HTMLElement).style.border = "none";
-        delete (codeEl as HTMLElement).dataset.mcpState;
+        UI.clearVisualState(codeEl as HTMLElement);
       }
 
       if (payload.mcp_action === "call") {
@@ -369,9 +368,7 @@ function runMainLoop() {
           errorNotified: false,
         });
         if ((codeEl as HTMLElement).dataset.mcpState === "error") {
-          (codeEl as HTMLElement).style.border = "none";
-          delete (codeEl as HTMLElement).dataset.mcpState;
-          delete (codeEl as HTMLElement).dataset.mcpVisual;
+          UI.clearVisualState(codeEl as HTMLElement);
         }
       } else {
         if (now - state.time > STABILIZATION_TIMEOUT && !state.errorNotified) {
