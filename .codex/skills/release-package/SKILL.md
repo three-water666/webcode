@@ -40,11 +40,14 @@ Follow this sequence end-to-end unless the user explicitly asks to stop earlier.
 6. Validate before tagging.
    - Run `pnpm lint`.
    - Run `pnpm --filter bridge-browser run build`.
-   - When feasible for a release, run `./build_release.sh` to verify both `.vsix` and browser `.zip` artifacts are produced.
+   - When feasible for a release, run the platform release build to verify both `.vsix` and browser `.zip` artifacts are produced:
+     - On Windows/PowerShell, run `.\build_release.ps1`.
+     - In non-interactive Windows shells, set `$env:CI='true'` before running `.\build_release.ps1` so `pnpm install` will not require a TTY.
+     - On macOS/Linux, or Git Bash environments with `zip` available, run `./build_release.sh`.
    - If any validation fails, fix it or report the blocker. Do not commit, tag, or push a failed release.
 
 7. Commit the release changes.
-   - Confirm the diff contains only intended version and changelog changes.
+   - Confirm the diff contains only intended release changes, such as version, changelog, or explicitly requested release workflow updates.
    - Commit with `chore: release <version>`.
 
 8. Tag and push.
