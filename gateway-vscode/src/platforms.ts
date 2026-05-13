@@ -83,7 +83,7 @@ const BUILTIN_PLATFORMS: BuiltinPlatformDefinition[] = [
         addressIncludes: ['deepseek.com'],
         selectors: {
             messageBlocks: '.ds-message',
-            codeBlocks: 'pre',
+            codeBlocks: '.ds-markdown.ds-assistant-message-main-content pre',
             inputArea: 'textarea.ds-scroll-area',
             sendButton: "div[role='button']:has(path[d^='M8.3125'])",
             stopButton: "div[role='button']:has(path[d^='M2 4.88'])"
