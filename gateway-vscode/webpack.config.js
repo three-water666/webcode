@@ -47,6 +47,12 @@ const extensionConfig = {
     ]
   },
   devtool: 'nosources-source-map',
+  ignoreWarnings: [
+    {
+      module: /express[\\/]lib[\\/]view\.js/,
+      message: /Critical dependency: the request of a dependency is an expression/
+    }
+  ],
   infrastructureLogging: {
     level: 'log'
   }

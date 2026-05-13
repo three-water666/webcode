@@ -16,14 +16,14 @@
 			},
 			"problemMatcher": {
 				"owner": "webpack",
+				"severity": "error",
 				"fileLocation": [
 					"relative",
 					"${workspaceFolder}/gateway-vscode"
 				],
 				"pattern": {
-					"regexp": "^(ERROR|WARNING) in (.*)$",
-					"severity": 1,
-					"message": 2
+					"regexp": "^ERROR in (.*)$",
+					"message": 1
 				},
 				"background": {
 					"activeOnStart": true,
