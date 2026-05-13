@@ -98,7 +98,7 @@ const BUILTIN_PLATFORMS: BuiltinPlatformDefinition[] = [
         },
         addressIncludes: ['chatglm.cn'],
         selectors: {
-            messageBlocks: '.answer-content-wrap',
+            messageBlocks: '.code-box.flex1 > .answer-content-wrap',
             codeBlocks: 'pre code',
             inputArea: 'textarea.scroll-display-none',
             sendButton: '.enter.is-main-chat.m-three-row',
