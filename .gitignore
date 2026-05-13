@@ -1,6 +1,7 @@
 node_modules
 dist
 .pnpm-debug.log
+.pnpm-store/
 dist
 *.vsix
 bridge-browser.zip
