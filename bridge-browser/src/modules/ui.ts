@@ -301,7 +301,7 @@ export function triggerAutoSend(
   let retryCount = 0;
   const maxRetries = AUTO_SEND_ACTIONS.length;
 
-  const getInputEl = () => document.querySelector(domSelectors.inputArea);
+  const getInputEl = () => document.querySelector<HTMLElement>(domSelectors.inputArea);
   const getInputValue = (inputEl: HTMLElement) => (inputEl as any).value ?? inputEl.innerText ?? "";
   const isSendComplete = () => {
     const latestInput = getInputEl();
@@ -309,8 +309,8 @@ export function triggerAutoSend(
       return true;
     }
 
-    const stopBtn = domSelectors.stopButton ? document.querySelector(domSelectors.stopButton) : null;
-    return Boolean(stopBtn && isElementVisible(stopBtn as HTMLElement));
+    const stopBtn = domSelectors.stopButton ? document.querySelector<HTMLElement>(domSelectors.stopButton) : null;
+    return Boolean(stopBtn && isElementVisible(stopBtn));
   };
 
   const scheduleRetry = () => {
