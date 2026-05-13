@@ -1,0 +1,66 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "gateway-vscode: watch",
+			"type": "shell",
+			"command": "pnpm",
+			"args": [
+				"--filter",
+				"gateway-vscode",
+				"run",
+				"watch"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": {
+				"owner": "webpack",
+				"fileLocation": [
+					"relative",
+					"${workspaceFolder}/gateway-vscode"
+				],
+				"pattern": {
+					"regexp": "^(ERROR|WARNING) in (.*)$",
+					"severity": 1,
+					"message": 2
+				},
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": "Compiler starting",
+					"endsPattern": "Compiler finished"
+				}
+			},
+			"isBackground": true,
+			"presentation": {
+				"reveal": "never",
+				"group": "watchers"
+			},
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
+			"label": "gateway-vscode: watch-tests",
+			"type": "shell",
+			"command": "pnpm",
+			"args": [
+				"--filter",
+				"gateway-vscode",
+				"run",
+				"watch-tests"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": "$tsc-watch",
+			"isBackground": true,
+			"presentation": {
+				"reveal": "never",
+				"group": "watchers"
+			},
+			"group": "build"
+		}
+	]
+}

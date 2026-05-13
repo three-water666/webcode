@@ -1,0 +1,18 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Run gateway-vscode Extension",
+			"type": "extensionHost",
+			"request": "launch",
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}/gateway-vscode",
+				"${workspaceFolder}"
+			],
+			"outFiles": [
+				"${workspaceFolder}/gateway-vscode/dist/**/*.js"
+			],
+			"preLaunchTask": "gateway-vscode: watch"
+		}
+	]
+}
