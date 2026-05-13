@@ -1,10 +1,44 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import { crx } from '@crxjs/vite-plugin';
 import manifest from './manifest.json';
 import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+
+const sharedIndexPath = normalizePath(resolve(__dirname, '../shared/src/index.ts'));
+const sharedBrandingPath = resolve(__dirname, '../shared/src/branding.json');
+const sharedBrandingConfig = JSON.parse(readFileSync(sharedBrandingPath, 'utf8'));
+
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, '/');
+}
+
+function inlineSharedBrandingConfig(): Plugin {
+  return {
+    name: 'webcode:inline-shared-branding-config',
+    apply: 'serve',
+    enforce: 'pre',
+    transform(code, id) {
+      if (normalizePath(id).split('?')[0] !== sharedIndexPath) {
+        return null;
+      }
+
+      // CRXJS dev file-writer treats Vite's external-root JSON import
+      // (/@fs/.../branding.json?import) as an asset and reads it from this
+      // package root. Inline this tiny config in dev to avoid that bad path.
+      return code.replace(
+        /import\s+brandConfig\s+from\s+['"]\.\/branding\.json['"];?/,
+        `const brandConfig = ${JSON.stringify(sharedBrandingConfig)} as const;`
+      );
+    },
+  };
+}
 
 export default defineConfig({
-  plugins: [crx({ manifest: manifest as any })],
+  plugins: [inlineSharedBrandingConfig(), crx({ manifest: manifest as any })],
+  server: {
+    port: 5173,
+    strictPort: true,
+  },
   build: {
     rollupOptions: {
       output: {

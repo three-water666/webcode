@@ -12,7 +12,7 @@
     "@webcode/shared": "workspace:*"
   },
   "devDependencies": {
-    "@crxjs/vite-plugin": "2.0.0-beta.23",
+    "@crxjs/vite-plugin": "2.4.0",
     "@types/chrome": "^0.0.260",
     "@types/node": "^20.11.0",
     "typescript": "^5.3.0",
