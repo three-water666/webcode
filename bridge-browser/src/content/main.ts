@@ -782,11 +782,6 @@ function processConfirmationQueue() {
 
   const payload = confirmationQueue[0] as any;
   isPopupOpen = true;
-  chrome.runtime.sendMessage({
-    type: "SHOW_NOTIFICATION",
-    title: "Approval Required",
-    message: `Tool: ${payload.name}`,
-  });
 
   UI.showConfirmationModal(
     payload,
