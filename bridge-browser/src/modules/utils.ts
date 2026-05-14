@@ -248,7 +248,7 @@ export const Logger = {
 
   setFilter(filter: LoggerFilterType) {
     if (filter === "all") {
-      this.activeTypes = new Set<LoggerLogType>(LOG_TYPES);
+      this.activeTypes = this.activeTypes.size === LOG_TYPES.length ? new Set<LoggerLogType>() : new Set<LoggerLogType>(LOG_TYPES);
     } else if (this.activeTypes.has(filter)) {
       this.activeTypes.delete(filter);
     } else {
