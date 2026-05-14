@@ -98,9 +98,8 @@ export function t(key: string): string {
   return (entry as any)[i18n.lang] ?? entry.en;
 }
 
-const LOG_TYPES = ["summary", "info", "success", "warn", "error", "action"] as const;
 const STANDARD_LOG_TYPES = ["info", "success", "warn", "error", "action"] as const;
-type LoggerLogType = typeof LOG_TYPES[number];
+type LoggerLogType = "summary" | typeof STANDARD_LOG_TYPES[number];
 type LoggerFilterType = LoggerLogType | "all";
 const LOGGER_DEFAULT_WIDTH = 480;
 const LOGGER_DEFAULT_HEIGHT = 236;
@@ -259,7 +258,14 @@ export const Logger = {
 
   setFilter(filter: LoggerFilterType) {
     if (filter === "all") {
-      this.activeTypes = this.activeTypes.size === LOG_TYPES.length ? new Set<LoggerLogType>() : new Set<LoggerLogType>(LOG_TYPES);
+      const allStandardTypesActive = STANDARD_LOG_TYPES.every((type) => this.activeTypes.has(type));
+      STANDARD_LOG_TYPES.forEach((type) => {
+        if (allStandardTypesActive) {
+          this.activeTypes.delete(type);
+        } else {
+          this.activeTypes.add(type);
+        }
+      });
     } else if (this.activeTypes.has(filter)) {
       this.activeTypes.delete(filter);
     } else {
@@ -272,7 +278,9 @@ export const Logger = {
 
   refreshFilterButtons() {
     this.filterButtons.forEach((button, filter) => {
-      const isActive = filter === "all" ? this.activeTypes.size === LOG_TYPES.length : this.activeTypes.has(filter);
+      const isActive = filter === "all"
+        ? STANDARD_LOG_TYPES.every((type) => this.activeTypes.has(type))
+        : this.activeTypes.has(filter);
       button.classList.toggle("active", isActive);
       button.setAttribute("aria-pressed", String(isActive));
     });
