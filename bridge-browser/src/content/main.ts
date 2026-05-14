@@ -345,6 +345,7 @@ function runMainLoop() {
           UI.markVisualProcessing(codeEl as HTMLElement);
 
           Logger.log(`${t("captured")}: ${payload.name}`, "info");
+          logToolSummary(payload);
           executeTool(payload);
         } else {
           // === Case 2: 已知任务，更新视觉状态 ===
@@ -503,6 +504,13 @@ function buildToolCallSignature(payload: ToolExecutionPayload): string {
     name: payload.name,
     arguments: payload.arguments ?? {},
   });
+}
+
+function logToolSummary(payload: ToolExecutionPayload) {
+  const purpose = typeof payload.purpose === "string" && payload.purpose.trim()
+    ? payload.purpose.trim().replace(/\s+/g, " ")
+    : (i18n.lang === "zh" ? "未提供 purpose" : "No purpose provided");
+  Logger.log(`${payload.name} | purpose: ${purpose}`, "summary");
 }
 
 function stableStringify(value: unknown): string {
@@ -755,7 +763,7 @@ function saveToBuffer(requestId: string, content: string, isError = false) {
 
   toolCallCount++;
   if (toolCallCount > 0 && toolCallCount % 5 === 0) {
-    const note = i18n.resources.train ?? `[System] Reminder: Tool calls MUST use this JSON format: {"mcp_action":"call", "name": "tool_name", "arguments": {...}}.`;
+    const note = i18n.resources.train ?? `[System] Reminder: Tool calls MUST use this JSON format: {"mcp_action":"call", "name": "tool_name", "purpose": "reason", "arguments": {...}}.`;
     responseJson.system_note = note;
   }
 

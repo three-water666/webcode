@@ -98,15 +98,17 @@ export function t(key: string): string {
   return (entry as any)[i18n.lang] ?? entry.en;
 }
 
-const LOG_TYPES = ["info", "success", "warn", "error", "action"] as const;
+const LOG_TYPES = ["summary", "info", "success", "warn", "error", "action"] as const;
+const STANDARD_LOG_TYPES = ["info", "success", "warn", "error", "action"] as const;
 type LoggerLogType = typeof LOG_TYPES[number];
 type LoggerFilterType = LoggerLogType | "all";
-const LOGGER_DEFAULT_WIDTH = 420;
+const LOGGER_DEFAULT_WIDTH = 480;
 const LOGGER_DEFAULT_HEIGHT = 236;
-const LOGGER_MIN_WIDTH = 420;
+const LOGGER_MIN_WIDTH = 480;
 const LOGGER_MIN_HEIGHT = 180;
 
 const LOG_TYPE_META: Record<LoggerLogType, { icon: string; color: string; label: { en: string; zh: string } }> = {
+  summary: { icon: "📌", color: "#f5d76e", label: { en: "Summary", zh: "摘要" } },
   info: { icon: "🔹", color: "#ddd", label: { en: "Info", zh: "信息" } },
   success: { icon: "✅", color: "#4caf50", label: { en: "Success", zh: "成功" } },
   warn: { icon: "⚠️", color: "#ff9800", label: { en: "Warn", zh: "警告" } },
@@ -129,7 +131,7 @@ export const Logger = {
   panelEl: null as HTMLDivElement | null,
   contentEl: null as HTMLDivElement | null,
   filterButtons: new Map<LoggerFilterType, HTMLButtonElement>(),
-  activeTypes: new Set<LoggerLogType>(LOG_TYPES),
+  activeTypes: new Set<LoggerLogType>(["summary"]),
   isMinimized: false,
 
   init() {
@@ -146,7 +148,7 @@ export const Logger = {
 
     const shadow = host.attachShadow({ mode: "open" });
     const style = document.createElement("style");
-    style.textContent =       `:host{all:initial;color-scheme:dark;}*{box-sizing:border-box;}button{font:inherit;}.logger{position:relative;width:${LOGGER_DEFAULT_WIDTH}px;height:${LOGGER_DEFAULT_HEIGHT}px;min-width:${LOGGER_MIN_WIDTH}px;min-height:${LOGGER_MIN_HEIGHT}px;background:rgba(0,0,0,0.85);color:#00ff00;font-family:Consolas,"SFMono-Regular",Menlo,monospace;font-size:12px;border-radius:8px;display:flex;flex-direction:column;border:1px solid #333;backdrop-filter:blur(4px);box-shadow:0 4px 12px rgba(0,0,0,0.5);overflow:hidden;}.logger.minimized{width:auto!important;height:32px!important;min-width:78px!important;min-height:32px!important;}.header{min-height:32px;padding:5px 6px;background:#333;color:#fff;cursor:move;display:flex;justify-content:space-between;align-items:center;gap:8px;user-select:none;}.title{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.drag-handle{display:none;align-self:stretch;width:18px;cursor:move;}.actions{display:flex;align-items:center;gap:4px;flex:0 0 auto;}.icon-btn{width:22px;height:22px;border:0;border-radius:4px;background:transparent;color:#ddd;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;line-height:1;padding:0;}.icon-btn:hover{background:rgba(255,255,255,0.14);color:#fff;}.icon-btn.close:hover{background:#9b1c1c;color:#fff;}.filters{display:flex;gap:4px;flex-wrap:nowrap;padding:6px;background:#151515;border-bottom:1px solid #333;}.filter{border:1px solid #3b3b3b;border-radius:4px;background:#222;color:#aaa;cursor:pointer;padding:2px 6px;line-height:16px;white-space:nowrap;}.filter:hover{border-color:#666;color:#fff;}.filter.active{background:#0b3d32;border-color:#14b88a;color:#d8fff3;}.content{flex:1;overflow-y:auto;padding:8px;}.line{margin-bottom:4px;line-height:1.4;word-break:break-word;}.time{color:#888;font-size:10px;}.resize-handle{position:absolute;right:0;bottom:0;width:14px;height:14px;cursor:nwse-resize;background:linear-gradient(135deg,transparent 0 44%,rgba(255,255,255,0.28) 45% 54%,transparent 55% 64%,rgba(255,255,255,0.38) 65% 74%,transparent 75%);}.logger.minimized .title,.logger.minimized .clear,.logger.minimized .minimize,.logger.minimized .filters,.logger.minimized .content,.logger.minimized .resize-handle{display:none;}.logger:not(.minimized) .restore{display:none;}.logger.minimized .drag-handle{display:block;}.logger.minimized .header{padding:4px;justify-content:flex-end;gap:4px;background:#222;}`;
+    style.textContent =       `:host{all:initial;color-scheme:dark;}*{box-sizing:border-box;}button{font:inherit;}.logger{position:relative;width:${LOGGER_DEFAULT_WIDTH}px;height:${LOGGER_DEFAULT_HEIGHT}px;min-width:${LOGGER_MIN_WIDTH}px;min-height:${LOGGER_MIN_HEIGHT}px;background:rgba(0,0,0,0.85);color:#00ff00;font-family:Consolas,"SFMono-Regular",Menlo,monospace;font-size:12px;border-radius:8px;display:flex;flex-direction:column;border:1px solid #333;backdrop-filter:blur(4px);box-shadow:0 4px 12px rgba(0,0,0,0.5);overflow:hidden;}.logger.minimized{width:auto!important;height:32px!important;min-width:78px!important;min-height:32px!important;}.header{min-height:32px;padding:5px 6px;background:#333;color:#fff;cursor:move;display:flex;justify-content:space-between;align-items:center;gap:8px;user-select:none;}.title{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.drag-handle{display:none;align-self:stretch;width:18px;cursor:move;}.actions{display:flex;align-items:center;gap:4px;flex:0 0 auto;}.icon-btn{width:22px;height:22px;border:0;border-radius:4px;background:transparent;color:#ddd;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;line-height:1;padding:0;}.icon-btn:hover{background:rgba(255,255,255,0.14);color:#fff;}.icon-btn.close:hover{background:#9b1c1c;color:#fff;}.filters{display:flex;gap:4px;flex-wrap:nowrap;padding:6px;background:#151515;border-bottom:1px solid #333;}.filter{border:1px solid #3b3b3b;border-radius:4px;background:#222;color:#aaa;cursor:pointer;padding:2px 6px;line-height:16px;white-space:nowrap;}.filter:hover{border-color:#666;color:#fff;}.filter.active{background:#0b3d32;border-color:#14b88a;color:#d8fff3;}.filter-separator{color:#777;line-height:22px;padding:0 2px;user-select:none;}.content{flex:1;overflow-y:auto;padding:8px;}.line{margin-bottom:4px;line-height:1.4;word-break:break-word;}.time{color:#888;font-size:10px;}.resize-handle{position:absolute;right:0;bottom:0;width:14px;height:14px;cursor:nwse-resize;background:linear-gradient(135deg,transparent 0 44%,rgba(255,255,255,0.28) 45% 54%,transparent 55% 64%,rgba(255,255,255,0.38) 65% 74%,transparent 75%);}.logger.minimized .title,.logger.minimized .clear,.logger.minimized .minimize,.logger.minimized .filters,.logger.minimized .content,.logger.minimized .resize-handle{display:none;}.logger:not(.minimized) .restore{display:none;}.logger.minimized .drag-handle{display:block;}.logger.minimized .header{padding:4px;justify-content:flex-end;gap:4px;background:#222;}`;
 
     const panel = document.createElement("div");
     panel.className = "logger";
@@ -212,8 +214,10 @@ export const Logger = {
     const filters = document.createElement("div");
     filters.className = "filters";
     this.filterButtons.clear();
+    filters.appendChild(this.createFilterButton("summary"));
+    filters.appendChild(this.createFilterSeparator());
     filters.appendChild(this.createFilterButton("all"));
-    LOG_TYPES.forEach((type) => filters.appendChild(this.createFilterButton(type)));
+    STANDARD_LOG_TYPES.forEach((type) => filters.appendChild(this.createFilterButton(type)));
 
     this.contentEl = document.createElement("div");
     this.contentEl.className = "content";
@@ -244,6 +248,13 @@ export const Logger = {
     button.onclick = () => this.setFilter(filter);
     this.filterButtons.set(filter, button);
     return button;
+  },
+
+  createFilterSeparator(): HTMLSpanElement {
+    const separator = document.createElement("span");
+    separator.className = "filter-separator";
+    separator.textContent = "|";
+    return separator;
   },
 
   setFilter(filter: LoggerFilterType) {
