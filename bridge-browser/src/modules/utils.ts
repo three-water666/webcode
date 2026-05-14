@@ -98,10 +98,39 @@ export function t(key: string): string {
   return (entry as any)[i18n.lang] ?? entry.en;
 }
 
+const LOG_TYPES = ["info", "success", "warn", "error", "action"] as const;
+type LoggerLogType = typeof LOG_TYPES[number];
+type LoggerFilterType = LoggerLogType | "all";
+const LOGGER_DEFAULT_WIDTH = 420;
+const LOGGER_DEFAULT_HEIGHT = 236;
+const LOGGER_MIN_WIDTH = 420;
+const LOGGER_MIN_HEIGHT = 180;
+
+const LOG_TYPE_META: Record<LoggerLogType, { icon: string; color: string; label: { en: string; zh: string } }> = {
+  info: { icon: "🔹", color: "#ddd", label: { en: "Info", zh: "信息" } },
+  success: { icon: "✅", color: "#4caf50", label: { en: "Success", zh: "成功" } },
+  warn: { icon: "⚠️", color: "#ff9800", label: { en: "Warn", zh: "警告" } },
+  error: { icon: "❌", color: "#f44336", label: { en: "Error", zh: "错误" } },
+  action: { icon: "⚡", color: "#00bcd4", label: { en: "Action", zh: "操作" } },
+};
+
+function getFilterLabel(type: LoggerFilterType): string {
+  if (type === "all") {
+    return i18n.lang === "zh" ? "全部" : "All";
+  }
+
+  const meta = LOG_TYPE_META[type];
+  return `${meta.icon} ${meta.label[i18n.lang === "zh" ? "zh" : "en"]}`;
+}
+
 // === Logger 组件 ===
 export const Logger = {
   el: null as HTMLDivElement | null,
+  panelEl: null as HTMLDivElement | null,
   contentEl: null as HTMLDivElement | null,
+  filterButtons: new Map<LoggerFilterType, HTMLButtonElement>(),
+  activeTypes: new Set<LoggerLogType>(LOG_TYPES),
+  isMinimized: false,
 
   init() {
     if (this.el) {return;}
@@ -111,42 +140,147 @@ export const Logger = {
       position: "fixed",
       top: "20px",
       right: "20px",
-      width: "320px",
-      height: "200px",
       zIndex: "2147483647",
       display: "none",
     });
 
     const shadow = host.attachShadow({ mode: "open" });
     const style = document.createElement("style");
-    style.textContent =       ':host{all:initial;color-scheme:dark;}*{box-sizing:border-box;}.logger{width:320px;height:200px;background:rgba(0,0,0,0.85);color:#00ff00;font-family:Consolas,"SFMono-Regular",Menlo,monospace;font-size:12px;border-radius:8px;display:flex;flex-direction:column;border:1px solid #333;backdrop-filter:blur(4px);box-shadow:0 4px 12px rgba(0,0,0,0.5);overflow:hidden;}.header{padding:6px;background:#333;color:#fff;cursor:move;display:flex;justify-content:space-between;align-items:center;user-select:none;}.clear{cursor:pointer;}.content{flex:1;overflow-y:auto;padding:8px;}.line{margin-bottom:4px;line-height:1.4;word-break:break-word;}.time{color:#888;font-size:10px;}';
+    style.textContent =       `:host{all:initial;color-scheme:dark;}*{box-sizing:border-box;}button{font:inherit;}.logger{position:relative;width:${LOGGER_DEFAULT_WIDTH}px;height:${LOGGER_DEFAULT_HEIGHT}px;min-width:${LOGGER_MIN_WIDTH}px;min-height:${LOGGER_MIN_HEIGHT}px;background:rgba(0,0,0,0.85);color:#00ff00;font-family:Consolas,"SFMono-Regular",Menlo,monospace;font-size:12px;border-radius:8px;display:flex;flex-direction:column;border:1px solid #333;backdrop-filter:blur(4px);box-shadow:0 4px 12px rgba(0,0,0,0.5);overflow:hidden;}.logger.minimized{width:auto!important;height:32px!important;min-width:78px!important;min-height:32px!important;}.header{min-height:32px;padding:5px 6px;background:#333;color:#fff;cursor:move;display:flex;justify-content:space-between;align-items:center;gap:8px;user-select:none;}.title{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.drag-handle{display:none;align-self:stretch;width:18px;cursor:move;}.actions{display:flex;align-items:center;gap:4px;flex:0 0 auto;}.icon-btn{width:22px;height:22px;border:0;border-radius:4px;background:transparent;color:#ddd;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;line-height:1;padding:0;}.icon-btn:hover{background:rgba(255,255,255,0.14);color:#fff;}.icon-btn.close:hover{background:#9b1c1c;color:#fff;}.filters{display:flex;gap:4px;flex-wrap:nowrap;padding:6px;background:#151515;border-bottom:1px solid #333;}.filter{border:1px solid #3b3b3b;border-radius:4px;background:#222;color:#aaa;cursor:pointer;padding:2px 6px;line-height:16px;white-space:nowrap;}.filter:hover{border-color:#666;color:#fff;}.filter.active{background:#0b3d32;border-color:#14b88a;color:#d8fff3;}.content{flex:1;overflow-y:auto;padding:8px;}.line{margin-bottom:4px;line-height:1.4;word-break:break-word;}.time{color:#888;font-size:10px;}.resize-handle{position:absolute;right:0;bottom:0;width:14px;height:14px;cursor:nwse-resize;background:linear-gradient(135deg,transparent 0 44%,rgba(255,255,255,0.28) 45% 54%,transparent 55% 64%,rgba(255,255,255,0.38) 65% 74%,transparent 75%);}.logger.minimized .title,.logger.minimized .clear,.logger.minimized .minimize,.logger.minimized .filters,.logger.minimized .content,.logger.minimized .resize-handle{display:none;}.logger:not(.minimized) .restore{display:none;}.logger.minimized .drag-handle{display:block;}.logger.minimized .header{padding:4px;justify-content:flex-end;gap:4px;background:#222;}`;
 
     const panel = document.createElement("div");
     panel.className = "logger";
+    this.panelEl = panel;
 
     const header = document.createElement("div");
     header.className = "header";
-    header.innerText = `${BRANDING.bridgeName} Process Log`;
 
-    const clearBtn = document.createElement("span");
-    clearBtn.className = "clear";
-    clearBtn.innerText = "🗑️";
+    const title = document.createElement("span");
+    title.className = "title";
+    title.textContent = `${BRANDING.bridgeName} Process Log`;
+
+    const dragHandle = document.createElement("span");
+    dragHandle.className = "drag-handle";
+    dragHandle.title = i18n.lang === "zh" ? "拖动日志窗口" : "Drag log window";
+    dragHandle.setAttribute("aria-hidden", "true");
+
+    const actions = document.createElement("div");
+    actions.className = "actions";
+
+    const clearBtn = document.createElement("button");
+    clearBtn.type = "button";
+    clearBtn.className = "icon-btn clear";
+    clearBtn.title = i18n.lang === "zh" ? "清空日志" : "Clear logs";
+    clearBtn.setAttribute("aria-label", clearBtn.title);
+    clearBtn.textContent = "🗑️";
     clearBtn.onclick = () => {
       if (this.contentEl) {this.contentEl.innerHTML = "";}
     };
 
+    const minimizeBtn = document.createElement("button");
+    minimizeBtn.type = "button";
+    minimizeBtn.className = "icon-btn minimize";
+    minimizeBtn.title = i18n.lang === "zh" ? "缩小" : "Minimize";
+    minimizeBtn.setAttribute("aria-label", minimizeBtn.title);
+    minimizeBtn.textContent = "−";
+    minimizeBtn.onclick = () => this.setMinimized(true);
+
+    const restoreBtn = document.createElement("button");
+    restoreBtn.type = "button";
+    restoreBtn.className = "icon-btn restore";
+    restoreBtn.title = i18n.lang === "zh" ? "放大" : "Restore";
+    restoreBtn.setAttribute("aria-label", restoreBtn.title);
+    restoreBtn.textContent = "□";
+    restoreBtn.onclick = () => this.setMinimized(false);
+
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "icon-btn close";
+    closeBtn.title = i18n.lang === "zh" ? "关闭日志" : "Close logs";
+    closeBtn.setAttribute("aria-label", closeBtn.title);
+    closeBtn.textContent = "×";
+    closeBtn.onclick = () => this.close();
+
+    actions.appendChild(clearBtn);
+    actions.appendChild(minimizeBtn);
+    actions.appendChild(restoreBtn);
+    actions.appendChild(closeBtn);
+    header.appendChild(title);
+    header.appendChild(dragHandle);
+    header.appendChild(actions);
+
+    const filters = document.createElement("div");
+    filters.className = "filters";
+    this.filterButtons.clear();
+    filters.appendChild(this.createFilterButton("all"));
+    LOG_TYPES.forEach((type) => filters.appendChild(this.createFilterButton(type)));
+
     this.contentEl = document.createElement("div");
     this.contentEl.className = "content";
 
-    header.appendChild(clearBtn);
+    const resizeHandle = document.createElement("div");
+    resizeHandle.className = "resize-handle";
+    resizeHandle.title = i18n.lang === "zh" ? "拖动调整大小" : "Resize log window";
+
     panel.appendChild(header);
+    panel.appendChild(filters);
     panel.appendChild(this.contentEl);
+    panel.appendChild(resizeHandle);
     shadow.appendChild(style);
     shadow.appendChild(panel);
     document.body.appendChild(host);
 
     this.el = host;
+    this.refreshFilterButtons();
     this.makeDraggable(header);
+    this.makeResizable(resizeHandle);
+  },
+
+  createFilterButton(filter: LoggerFilterType): HTMLButtonElement {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "filter";
+    button.textContent = getFilterLabel(filter);
+    button.onclick = () => this.setFilter(filter);
+    this.filterButtons.set(filter, button);
+    return button;
+  },
+
+  setFilter(filter: LoggerFilterType) {
+    if (filter === "all") {
+      this.activeTypes = new Set<LoggerLogType>(LOG_TYPES);
+    } else if (this.activeTypes.has(filter)) {
+      this.activeTypes.delete(filter);
+    } else {
+      this.activeTypes.add(filter);
+    }
+
+    this.refreshFilterButtons();
+    this.applyFilters();
+  },
+
+  refreshFilterButtons() {
+    this.filterButtons.forEach((button, filter) => {
+      const isActive = filter === "all" ? this.activeTypes.size === LOG_TYPES.length : this.activeTypes.has(filter);
+      button.classList.toggle("active", isActive);
+      button.setAttribute("aria-pressed", String(isActive));
+    });
+  },
+
+  applyFilters() {
+    if (!this.contentEl) {return;}
+
+    this.contentEl.querySelectorAll<HTMLDivElement>(".line").forEach((line) => {
+      const type = line.dataset.logType as LoggerLogType | undefined;
+      line.hidden = type ? !this.activeTypes.has(type) : false;
+    });
+  },
+
+  setMinimized(minimized: boolean) {
+    this.isMinimized = minimized;
+    if (this.panelEl) {
+      this.panelEl.classList.toggle("minimized", minimized);
+    }
   },
 
   makeDraggable(headerEl: HTMLElement) {
@@ -157,6 +291,7 @@ export const Logger = {
       iTop: number;
     headerEl.onmousedown = (e) => {
       if (!this.el) {return;}
+      if ((e.target as HTMLElement).closest("button")) {return;}
       isDragging = true;
       startX = e.clientX;
       startY = e.clientY;
@@ -174,35 +309,87 @@ export const Logger = {
     window.onmouseup = () => (isDragging = false);
   },
 
+  makeResizable(handleEl: HTMLElement) {
+    let isResizing = false,
+      startX: number,
+      startY: number,
+      startWidth: number,
+      startHeight: number;
+
+    handleEl.onmousedown = (e) => {
+      if (!this.el || !this.panelEl || this.isMinimized) {return;}
+      e.preventDefault();
+      e.stopPropagation();
+      isResizing = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      const hostRect = this.el.getBoundingClientRect();
+      const panelRect = this.panelEl.getBoundingClientRect();
+      startWidth = panelRect.width;
+      startHeight = panelRect.height;
+      this.el.style.left = hostRect.left + "px";
+      this.el.style.top = hostRect.top + "px";
+      this.el.style.right = "auto";
+    };
+
+    window.addEventListener("mousemove", (e) => {
+      if (!isResizing || !this.panelEl) {return;}
+      const width = Math.max(LOGGER_MIN_WIDTH, startWidth + e.clientX - startX);
+      const height = Math.max(LOGGER_MIN_HEIGHT, startHeight + e.clientY - startY);
+      this.panelEl.style.width = width + "px";
+      this.panelEl.style.height = height + "px";
+    });
+
+    window.addEventListener("mouseup", () => {
+      isResizing = false;
+    });
+  },
+
   toggle(show: boolean) {
     if (!this.el && show) {this.init();}
     if (this.el) {this.el.style.display = show ? "block" : "none";}
   },
 
-  log(msg: string, type: "info" | "success" | "error" | "warn" | "action" = "info") {
+  close() {
+    this.toggle(false);
+    this.syncVisibility(false);
+  },
+
+  syncVisibility(show: boolean) {
+    try {
+      chrome.runtime.sendMessage({ type: "SET_LOG_VISIBLE", show }, () => {
+        void chrome.runtime.lastError;
+      });
+    } catch {
+      // Logger may be reused outside an extension context during local testing.
+    }
+  },
+
+  log(msg: string, type: LoggerLogType = "info") {
     if (!this.el || this.el.style.display === "none") {return;}
     const line = document.createElement("div");
     line.className = "line";
+    line.dataset.logType = type;
     const time = new Date().toLocaleTimeString("en-US", { hour12: false });
-    let icon = "🔹",
-      color = "#ddd";
-    if (type === "success") {
-      icon = "✅";
-      color = "#4caf50";
-    } else if (type === "error") {
-      icon = "❌";
-      color = "#f44336";
-    } else if (type === "warn") {
-      icon = "⚠️";
-      color = "#ff9800";
-    } else if (type === "action") {
-      icon = "⚡";
-      color = "#00bcd4";
-    }
-    line.innerHTML = `<span class="time">[${time}]</span> ${icon} <span style="color:${color}">${msg}</span>`;
+    const meta = LOG_TYPE_META[type];
+    const timeEl = document.createElement("span");
+    timeEl.className = "time";
+    timeEl.textContent = `[${time}]`;
+
+    const msgEl = document.createElement("span");
+    msgEl.style.color = meta.color;
+    msgEl.textContent = msg;
+
+    line.appendChild(timeEl);
+    line.append(` ${meta.icon} `);
+    line.appendChild(msgEl);
+    line.hidden = !this.activeTypes.has(type);
+
     if (this.contentEl) {
       this.contentEl.appendChild(line);
-      this.contentEl.scrollTop = this.contentEl.scrollHeight;
+      if (!line.hidden) {
+        this.contentEl.scrollTop = this.contentEl.scrollHeight;
+      }
     }
   },
 };

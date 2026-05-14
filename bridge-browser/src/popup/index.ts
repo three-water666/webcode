@@ -90,6 +90,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   if (!currentTabId) {return;}
 
+  chrome.runtime.onMessage.addListener((request) => {
+    if (request.type === "LOG_VISIBLE_CHANGED" && request.tabId === currentTabId) {
+      showLogInput.checked = Boolean(request.show);
+    }
+  });
+
   // 向 Background 查询状态
   chrome.runtime.sendMessage(
     { type: "GET_STATUS", tabId: currentTabId },

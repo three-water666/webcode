@@ -126,13 +126,18 @@ chrome.runtime.onMessage.addListener((request: MessageRequest, sender, sendRespo
     return true;
   }
   if (request.type === "SET_LOG_VISIBLE") {
-    const targetTabId = request.tabId;
+    const targetTabId = request.tabId ?? currentTabId;
     const show = request.show ?? false;
     if (targetTabId) {
         updateSessionLog(targetTabId, show).then(() => {
         chrome.tabs.sendMessage(targetTabId, { type: "TOGGLE_LOG", show: show }).catch(() => {});
+        chrome.runtime.sendMessage({ type: "LOG_VISIBLE_CHANGED", tabId: targetTabId, show }, () => {
+          void chrome.runtime.lastError;
+        });
         sendResponse({ success: true });
         });
+    } else {
+      sendResponse({ success: false, error: "Missing Tab ID" });
     }
     return true;
   }
