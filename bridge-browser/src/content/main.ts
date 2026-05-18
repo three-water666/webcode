@@ -277,10 +277,12 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 
 // === 主循环逻辑 ===
 
-// 记录所有出现request_id，从而判断是不是新的工具请求
+// 记录所有进入执行路径的 request_id，从而判断是不是新的工具请求
 const processedRequests = new Set<string>();
 // 记录所有工具调用结果回填的 request_id
 const flushedRequests = new Set<string>();
+// 记录已经发送过协议错误反馈，但尚未执行过工具的 request_id
+const protocolErrorFeedbackRequests = new Set<string>();
 // 主要用来储存解析失败的JSON块信息，流式输出过程中可能解析失败，只提示真正失败的
 const blockStates = new WeakMap<
   Element,
@@ -329,6 +331,7 @@ function runMainLoop() {
       }
 
       const requestId = ensurePayloadRequestId(payload, codeEl as HTMLElement, messageIndex);
+      clearProtocolErrorFeedbackState(requestId);
       if (!currentTurnIdSet.has(requestId)) {
         currentTurnIds.push(requestId);
         currentTurnIdSet.add(requestId);
@@ -574,8 +577,8 @@ function handleProtocolErrorBlock(
       message: "Invalid tool call format. Returned guidance to the model.",
     });
 
-    if (!processedRequests.has(requestId)) {
-      processedRequests.add(requestId);
+    if (!processedRequests.has(requestId) && !protocolErrorFeedbackRequests.has(requestId)) {
+      protocolErrorFeedbackRequests.add(requestId);
       saveToBuffer(requestId, message, true);
     }
 
@@ -584,6 +587,12 @@ function handleProtocolErrorBlock(
   }
 
   return requestId;
+}
+
+function clearProtocolErrorFeedbackState(requestId: string) {
+  if (!protocolErrorFeedbackRequests.delete(requestId)) {return;}
+  flushedRequests.delete(requestId);
+  resultBuffer.delete(requestId);
 }
 
 function scheduleStabilizationCheck() {
