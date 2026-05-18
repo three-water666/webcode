@@ -1,13 +1,15 @@
 import * as path from 'path';
+import * as vscode from 'vscode';
 import type { LocalTool } from './types';
 import { textResult } from './result';
 import {
+    DEFAULT_EXCLUDED_DIRECTORIES,
     getNumberArg,
     getStringArrayArg,
+    matchesAnyPattern,
     matchesFileQuery,
     resolveWorkspaceDirectory,
-    toPosixPath,
-    walkWorkspaceFiles
+    toPosixPath
 } from './filesystemUtils';
 
 export const searchFilesTool: LocalTool = {
@@ -30,23 +32,65 @@ export const searchFilesTool: LocalTool = {
     async execute(args, context) {
         const searchRoot = await resolveWorkspaceDirectory(context.workspaceRoot, args.path ?? '.');
         const workspaceRoot = context.workspaceRoot ?? searchRoot;
-        const query = String(args.query);
+        const query = toPosixPath(String(args.query).trim());
         const maxResults = getNumberArg(args.max_results, 200);
         const excludePatterns = getStringArrayArg(args.exclude_patterns);
-        const matches: string[] = [];
+        const includePattern = createFileSearchIncludePattern(query);
+        const excludePattern = createFindFilesExcludePattern(excludePatterns);
+        const uris = await vscode.workspace.findFiles(
+            new vscode.RelativePattern(searchRoot, includePattern),
+            excludePattern ? new vscode.RelativePattern(searchRoot, excludePattern) : undefined,
+            includePattern === '**/*' ? undefined : maxResults
+        );
 
-        await walkWorkspaceFiles(searchRoot, async (filePath, relativeToSearchRoot) => {
+        const matches: string[] = [];
+        for (const uri of uris.sort((left, right) => left.fsPath.localeCompare(right.fsPath))) {
+            const filePath = uri.fsPath;
+            const relativeToSearchRoot = toPosixPath(path.relative(searchRoot, filePath));
+            const relativeToWorkspace = toPosixPath(path.relative(workspaceRoot, filePath));
             const fileName = path.basename(filePath);
-            if (!matchesFileQuery(relativeToSearchRoot, fileName, query)) {
-                return false;
+            if (
+                matchesAnyPattern(relativeToSearchRoot, excludePatterns) ||
+                matchesAnyPattern(relativeToWorkspace, excludePatterns) ||
+                !matchesFileQuery(relativeToSearchRoot, fileName, query)
+            ) {
+                continue;
             }
 
-            matches.push(toPosixPath(path.relative(workspaceRoot, filePath)));
-            return matches.length >= maxResults;
-        }, {
-            excludePatterns
-        });
+            matches.push(relativeToWorkspace);
+            if (matches.length >= maxResults) {
+                break;
+            }
+        }
 
         return textResult(matches.length > 0 ? matches.join('\n') : 'No matches found.');
     }
 };
+
+function createFileSearchIncludePattern(query: string): string {
+    if (hasGlobSyntax(query)) {
+        return query.includes('/') ? query : `**/${query}`;
+    }
+
+    return query.includes('/') ? '**/*' : `**/*${query}*`;
+}
+
+function createFindFilesExcludePattern(excludePatterns: string[]): string | undefined {
+    const patterns = [
+        ...DEFAULT_EXCLUDED_DIRECTORIES.map(directory => `**/${directory}/**`),
+        ...excludePatterns.map(pattern => toPosixPath(pattern.trim())).filter(Boolean)
+    ];
+
+    if (patterns.length === 0) {
+        return undefined;
+    }
+    if (patterns.length === 1) {
+        return patterns[0];
+    }
+
+    return `{${patterns.join(',')}}`;
+}
+
+function hasGlobSyntax(value: string): boolean {
+    return /[*?[\]{}]/.test(value);
+}

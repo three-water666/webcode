@@ -7,7 +7,7 @@ export type WorkspacePathOptions = {
     forWrite?: boolean;
 };
 
-const DEFAULT_EXCLUDED_DIRECTORIES = new Set([
+export const DEFAULT_EXCLUDED_DIRECTORIES = [
     '.git',
     'node_modules',
     '.pnpm-store',
@@ -15,7 +15,9 @@ const DEFAULT_EXCLUDED_DIRECTORIES = new Set([
     'out',
     'build',
     'coverage'
-]);
+] as const;
+
+const DEFAULT_EXCLUDED_DIRECTORY_SET: ReadonlySet<string> = new Set(DEFAULT_EXCLUDED_DIRECTORIES);
 
 export function normalizeLineEndings(text: string): string {
     return text.replace(/\r\n/g, '\n');
@@ -113,7 +115,7 @@ export async function walkWorkspaceFiles(
             const normalizedRelative = toPosixPath(relative);
 
             if (entry.isDirectory()) {
-                if (DEFAULT_EXCLUDED_DIRECTORIES.has(entry.name) || matchesAnyPattern(normalizedRelative, options.excludePatterns ?? [])) {
+                if (DEFAULT_EXCLUDED_DIRECTORY_SET.has(entry.name) || matchesAnyPattern(normalizedRelative, options.excludePatterns ?? [])) {
                     continue;
                 }
                 const shouldStop = await walk(absolute);
