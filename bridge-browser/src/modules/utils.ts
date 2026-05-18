@@ -323,8 +323,8 @@ export const Logger = {
         const rect = this.el.getBoundingClientRect();
         let left = iLeft + e.clientX - startX;
         let top = iTop + e.clientY - startY;
-        // Keep at least half the width and the full header (32px) within the viewport
-        left = Math.max(-rect.width / 2, Math.min(left, window.innerWidth - rect.width / 2));
+        // Keep the full window within the viewport horizontally, and at least the header (32px) vertically
+        left = Math.max(0, Math.min(left, window.innerWidth - rect.width));
         top = Math.max(0, Math.min(top, window.innerHeight - 32));
         this.el.style.left = left + "px";
         this.el.style.top = top + "px";
