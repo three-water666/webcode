@@ -9,7 +9,7 @@ const DEFAULT_SKILL_DIRECTORIES = [
 ];
 
 const MAX_SCAN_DEPTH = 8;
-const CACHE_TTL_MS = 3000;
+const CACHE_TTL_MS = 30000;
 
 export interface SkillSummary {
   id: string;
@@ -31,16 +31,21 @@ interface ParsedSkillFile {
   body: string;
 }
 
+interface SkillCacheRecord {
+  entries: SkillEntry[];
+  lastScanAt: number;
+}
+
 export class SkillManager {
-  private cache: SkillEntry[] = [];
-  private lastScanAt = 0;
+  private readonly caches = new Map<string, SkillCacheRecord>();
 
   constructor(private readonly outputChannel: vscode.OutputChannel) {}
 
   invalidateCache(reason = 'manual refresh') {
-    this.cache = [];
-    this.lastScanAt = 0;
-    this.log(`Cache invalidated: ${reason}`);
+    for (const cache of this.caches.values()) {
+      cache.lastScanAt = 0;
+    }
+    this.log(`Cache marked stale: ${reason}`);
   }
 
   async listSkills(customDirectories: string[] = []): Promise<SkillSummary[]> {
@@ -152,18 +157,25 @@ export class SkillManager {
 
   private async scanSkills(customDirectories: string[]): Promise<SkillEntry[]> {
     const now = Date.now();
-    if (now - this.lastScanAt < CACHE_TTL_MS) {
-      return this.cache;
+    const searchRoots = this.getSearchDirectories(customDirectories);
+    const cacheKey = this.getCacheKey(searchRoots);
+    const cache = this.getCache(cacheKey);
+
+    if (now - cache.lastScanAt < CACHE_TTL_MS) {
+      return cache.entries;
     }
 
     const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
     if (workspaceFolders.length === 0) {
-      this.cache = [];
-      this.lastScanAt = now;
-      return this.cache;
+      cache.lastScanAt = now;
+      if (cache.entries.length > 0) {
+        this.log(`Workspace folders unavailable; reusing ${cache.entries.length} cached skills.`);
+      } else {
+        this.log('Workspace folders unavailable; no cached skills to reuse.');
+      }
+      return cache.entries;
     }
 
-    const searchRoots = this.getSearchDirectories(customDirectories);
     const found = new Map<string, SkillEntry>();
 
     for (const folder of workspaceFolders) {
@@ -173,10 +185,19 @@ export class SkillManager {
       }
     }
 
-    this.cache = Array.from(found.values()).sort((a, b) => a.id.localeCompare(b.id));
-    this.lastScanAt = now;
-    this.log(`Indexed ${this.cache.length} workspace skills.`);
-    return this.cache;
+    cache.entries = Array.from(found.values()).sort((a, b) => a.id.localeCompare(b.id));
+    cache.lastScanAt = now;
+    this.log(`Indexed ${cache.entries.length} workspace skills.`);
+    return cache.entries;
+  }
+
+  private getCache(cacheKey: string): SkillCacheRecord {
+    let cache = this.caches.get(cacheKey);
+    if (!cache) {
+      cache = { entries: [], lastScanAt: 0 };
+      this.caches.set(cacheKey, cache);
+    }
+    return cache;
   }
 
   private async collectSkillsFromDirectory(
@@ -362,6 +383,10 @@ export class SkillManager {
       .map((dir) => dir.trim())
       .filter(Boolean)
       .map((dir) => dir.replace(/[\\/]+/g, '/').replace(/^\.\//, '').replace(/\/$/, ''))));
+  }
+
+  private getCacheKey(searchRoots: string[]): string {
+    return searchRoots.join('\0');
   }
 
   private toSummary(entry: SkillEntry): SkillSummary {
