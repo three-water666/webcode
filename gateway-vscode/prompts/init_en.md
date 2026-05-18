@@ -5,6 +5,8 @@ The initialization command must be placed inside a JSON code block. Do not use p
 ```json
 {
   "mcp_action": "call",
-  "name": "{{INIT_TOOL_NAME}}"
+  "name": "{{INIT_TOOL_NAME}}",
+  "purpose": "Initialize {{PRODUCT_NAME}} for this conversation",
+  "request_id": "step_1"
 }
 ```

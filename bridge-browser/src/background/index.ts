@@ -322,12 +322,28 @@ async function executeTool(request: any, tabId: number | null | undefined) {
     if (response.status === 403) {
       return { success: false, error: "Session Expired/Invalid Token." };
     }
+    const errorText = await readGatewayError(response);
     return {
       success: false,
-      error: `${response.status} - ${response.statusText}`,
+      error: errorText || `${response.status} - ${response.statusText}`,
     };
   } catch (err: any) {
     return { success: false, error: `Connection Failed: ${err.message}` };
+  }
+}
+
+async function readGatewayError(response: Response): Promise<string> {
+  try {
+    const resJson = await response.json();
+    if (Array.isArray(resJson?.content)) {
+      return resJson.content.map((item: any) => item?.text ?? "").filter(Boolean).join("\n");
+    }
+    if (typeof resJson?.error === "string") {
+      return resJson.error;
+    }
+    return JSON.stringify(resJson);
+  } catch {
+    return `${response.status} - ${response.statusText}`;
   }
 }
 

@@ -6,6 +6,8 @@
 调用工具时，必须输出 **JSON 代码块**。
 
 ## 1. 请求格式 (你发送给插件)
+顶层字段只能包含 `mcp_action`、`name`、`purpose`、`arguments`、`request_id`。`name` 和 `purpose` 必填；如果所选工具有入参，`arguments` 必须严格匹配该工具的 `inputSchema`。
+
 ```json
 {
   "mcp_action": "call",
