@@ -1,7 +1,12 @@
 import { Logger, i18n, t } from "../modules/utils";
 import * as UI from "../modules/ui";
 import { type SiteSelectors } from "../modules/config";
-import { parseModelJson } from "../modules/jsonRepair";
+import {
+  looksLikeToolCall,
+  parseToolCall,
+  ToolCallProtocolError,
+  type ParsedToolCallPayload,
+} from "../modules/toolCallProtocol";
 import { type ToolExecutionPayload } from "../types";
 import type { CommandApprovalScope } from "../modules/ui";
 import { BRANDING, PROTOCOL } from "@webcode/shared";
@@ -272,10 +277,12 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 
 // === 主循环逻辑 ===
 
-// 记录所有出现request_id，从而判断是不是新的工具请求
+// 记录所有进入执行路径的 request_id，从而判断是不是新的工具请求
 const processedRequests = new Set<string>();
 // 记录所有工具调用结果回填的 request_id
 const flushedRequests = new Set<string>();
+// 记录已经发送过协议错误反馈，但尚未执行过工具的 request_id
+const protocolErrorFeedbackRequests = new Set<string>();
 // 主要用来储存解析失败的JSON块信息，流式输出过程中可能解析失败，只提示真正失败的
 const blockStates = new WeakMap<
   Element,
@@ -312,10 +319,10 @@ function runMainLoop() {
 
   codeElements.forEach((codeEl) => {
     const textContent = (codeEl.textContent ?? "").trim();
-    if (!/"mcp_action"\s*:\s*"call"/.test(textContent)) { return; }
+    if (!looksLikeToolCall(textContent)) { return; }
 
     try {
-      const payload = parseModelJson<ToolExecutionPayload & { mcp_action?: string }>(textContent);
+      const payload = parseToolCall(textContent);
       if (blockStates.has(codeEl)) { blockStates.delete(codeEl); }
 
       // 成功解析 JSON，尝试清除旧的错误样式（如果存在）
@@ -323,66 +330,45 @@ function runMainLoop() {
         UI.clearVisualState(codeEl as HTMLElement);
       }
 
-      if (payload.mcp_action === "call") {
-        const requestId = ensurePayloadRequestId(payload, codeEl as HTMLElement, messageIndex);
-        if (!currentTurnIdSet.has(requestId)) {
-          currentTurnIds.push(requestId);
-          currentTurnIdSet.add(requestId);
-        }
+      const requestId = ensurePayloadRequestId(payload, codeEl as HTMLElement, messageIndex);
+      clearProtocolErrorFeedbackState(requestId);
+      if (!currentTurnIdSet.has(requestId)) {
+        currentTurnIds.push(requestId);
+        currentTurnIdSet.add(requestId);
+      }
 
-        const isProcessing = activeExecutions.has(requestId);
-        const isKnown = processedRequests.has(requestId);
+      const isProcessing = activeExecutions.has(requestId);
+      const isKnown = processedRequests.has(requestId);
 
-        if (!isKnown) {
-          // === Case 1: 新发现的任务 ===
-          processedRequests.add(requestId);
-          activeExecutions.add(requestId);
+      if (!isKnown) {
+        // === Case 1: 新发现的任务 ===
+        processedRequests.add(requestId);
+        activeExecutions.add(requestId);
 
-          // [Fix 2] 发现新任务，立即中断任何正在进行的自动发送尝试
-          UI.cancelAutoSend();
+        // [Fix 2] 发现新任务，立即中断任何正在进行的自动发送尝试
+        UI.cancelAutoSend();
 
-          // 立即标记为处理中 (Blue)
+        // 立即标记为处理中 (Blue)
+        UI.markVisualProcessing(codeEl as HTMLElement);
+
+        Logger.log(`${t("captured")}: ${payload.name}`, "info");
+        logToolSummary(payload);
+        executeTool(payload);
+      } else {
+        // === Case 2: 已知任务，更新视觉状态 ===
+        if (isProcessing) {
+          // 仍在执行或等待审批 -> 蓝色
           UI.markVisualProcessing(codeEl as HTMLElement);
-
-          Logger.log(`${t("captured")}: ${payload.name}`, "info");
-          logToolSummary(payload);
-          executeTool(payload);
         } else {
-          // === Case 2: 已知任务，更新视觉状态 ===
-          if (isProcessing) {
-            // 仍在执行或等待审批 -> 蓝色
-            UI.markVisualProcessing(codeEl as HTMLElement);
-          } else {
-            // 已从 activeExecutions 移除 (执行完成/失败/被拒) -> 绿色
-            UI.markVisualSuccess(codeEl as HTMLElement);
-          }
+          // 已从 activeExecutions 移除 (执行完成/失败/被拒) -> 绿色
+          UI.markVisualSuccess(codeEl as HTMLElement);
         }
       }
     } catch (e: any) {
-      // JSON Stabilization Logic
-      const now = Date.now();
-      const state = blockStates.get(codeEl);
-      if (state?.text !== textContent) {
-        blockStates.set(codeEl, {
-          text: textContent,
-          time: now,
-          errorNotified: false,
-        });
-        if ((codeEl as HTMLElement).dataset.mcpState === "error") {
-          UI.clearVisualState(codeEl as HTMLElement);
-        }
-      } else {
-        if (now - state.time > STABILIZATION_TIMEOUT && !state.errorNotified) {
-          Logger.log("JSON Parse Error (Stable): " + e.message, "error");
-          UI.markVisualError(codeEl as HTMLElement);
-          chrome.runtime.sendMessage({
-            type: "SHOW_NOTIFICATION",
-            title: `${BRANDING.productName} Error`,
-            message: "Invalid JSON format (Stuck).",
-          });
-          state.errorNotified = true;
-          blockStates.set(codeEl, state);
-        }
+      const requestId = handleProtocolErrorBlock(codeEl as HTMLElement, textContent, messageIndex, e);
+      if (requestId && !currentTurnIdSet.has(requestId)) {
+        currentTurnIds.push(requestId);
+        currentTurnIdSet.add(requestId);
       }
     }
   });
@@ -467,8 +453,14 @@ function runMainLoop() {
   }
 }
 
+function normalizeRequestId(value: unknown): string | null {
+  if (typeof value !== "string") {return null;}
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
 function ensurePayloadRequestId(
-  payload: ToolExecutionPayload & { mcp_action?: string },
+  payload: ParsedToolCallPayload,
   codeEl: HTMLElement,
   messageIndex: number
 ): string {
@@ -491,12 +483,6 @@ function ensurePayloadRequestId(
   codeEl.dataset.mcpCallSignature = signature;
   payload.request_id = syntheticRequestId;
   return syntheticRequestId;
-}
-
-function normalizeRequestId(value: unknown): string | null {
-  if (typeof value !== "string") {return null;}
-  const trimmed = value.trim();
-  return trimmed || null;
 }
 
 function buildToolCallSignature(payload: ToolExecutionPayload): string {
@@ -551,6 +537,134 @@ function hashStableString(value: string): string {
     hash = Math.imul(hash, 16777619);
   }
   return (hash >>> 0).toString(36);
+}
+
+function handleProtocolErrorBlock(
+  codeEl: HTMLElement,
+  textContent: string,
+  messageIndex: number,
+  error: unknown
+): string | null {
+  const now = Date.now();
+  const state = blockStates.get(codeEl);
+  const requestId = getProtocolErrorRequestId(textContent, codeEl, messageIndex);
+
+  if (state?.text !== textContent) {
+    blockStates.set(codeEl, {
+      text: textContent,
+      time: now,
+      errorNotified: false,
+    });
+    if (codeEl.dataset.mcpState === "error") {
+      UI.clearVisualState(codeEl);
+    }
+    scheduleStabilizationCheck();
+    return null;
+  }
+
+  if (!state.errorNotified && now - state.time <= STABILIZATION_TIMEOUT) {
+    scheduleStabilizationCheck();
+    return null;
+  }
+
+  if (!state.errorNotified) {
+    const message = buildProtocolErrorMessage(error);
+    Logger.log(`Tool call protocol error: ${message}`, "error");
+    UI.markVisualError(codeEl);
+    chrome.runtime.sendMessage({
+      type: "SHOW_NOTIFICATION",
+      title: `${BRANDING.productName} Error`,
+      message: "Invalid tool call format. Returned guidance to the model.",
+    });
+
+    if (!processedRequests.has(requestId) && !protocolErrorFeedbackRequests.has(requestId)) {
+      protocolErrorFeedbackRequests.add(requestId);
+      saveToBuffer(requestId, message, true);
+    }
+
+    state.errorNotified = true;
+    blockStates.set(codeEl, state);
+  }
+
+  return requestId;
+}
+
+function clearProtocolErrorFeedbackState(requestId: string) {
+  if (!protocolErrorFeedbackRequests.delete(requestId)) {return;}
+  flushedRequests.delete(requestId);
+  resultBuffer.delete(requestId);
+}
+
+function scheduleStabilizationCheck() {
+  if (isCheckScheduled) {return;}
+  isCheckScheduled = true;
+  setTimeout(runMainLoop, STABILIZATION_TIMEOUT + 50);
+}
+
+function getProtocolErrorRequestId(
+  textContent: string,
+  codeEl: HTMLElement,
+  messageIndex: number
+): string {
+  const explicitRequestId = extractRequestIdCandidate(textContent);
+  if (explicitRequestId) {
+    codeEl.dataset.mcpRequestId = explicitRequestId;
+    return explicitRequestId;
+  }
+
+  const cachedRequestId = codeEl.dataset.mcpRequestId;
+  if (cachedRequestId?.startsWith("req_invalid_")) {
+    return cachedRequestId;
+  }
+
+  const syntheticRequestId = `req_invalid_${messageIndex}_${hashStableString(textContent)}`;
+  codeEl.dataset.mcpRequestId = syntheticRequestId;
+  return syntheticRequestId;
+}
+
+function extractRequestIdCandidate(textContent: string): string | null {
+  const match = /["']request_id["']\s*:\s*["']([^"']+)["']/.exec(textContent);
+  return normalizeRequestId(match?.[1]);
+}
+
+function buildProtocolErrorMessage(error: unknown): string {
+  const issues = error instanceof ToolCallProtocolError
+    ? error.issues
+    : [error instanceof Error ? error.message : String(error)];
+  const intro = i18n.lang === "zh"
+    ? "工具调用已被 webcode 拒绝，未请求 VS Code，也未执行任何工具。"
+    : "The tool call was rejected by webcode before contacting VS Code. No tool was executed.";
+  const nextStep = i18n.lang === "zh"
+    ? "请重新输出一个新的 JSON 工具调用代码块。顶层只能包含 mcp_action、name、purpose、arguments、request_id；name 和 purpose 必填。当前工具有入参时，arguments 必须严格匹配该工具的 inputSchema。"
+    : "Regenerate a new JSON tool-call code block. Top-level fields may only be mcp_action, name, purpose, arguments, and request_id; name and purpose are required. When the selected tool has inputs, arguments must exactly match that tool's inputSchema.";
+  const issueList = issues.map((issue) => `- ${issue}`).join("\n");
+  const formatHint = getDefaultProtocolErrorHint();
+  return `${intro}\n\nProblems:\n${issueList}\n\n${nextStep}\n\n${formatHint}`;
+}
+
+function getDefaultProtocolErrorHint(): string {
+  return `Standard tool format:
+\`\`\`json
+{
+  "mcp_action": "call",
+  "name": "tool_name",
+  "purpose": "Brief justification for this action",
+  "arguments": {
+    "key": "value"
+  },
+  "request_id": "step_1"
+}
+\`\`\`
+
+Initialization tool format:
+\`\`\`json
+{
+  "mcp_action": "call",
+  "name": "${PROTOCOL.initToolName}",
+  "purpose": "Initialize webcode for this conversation",
+  "request_id": "step_1"
+}
+\`\`\``;
 }
 
 // 初始化观察者
@@ -694,6 +808,7 @@ function performExecution(payload: any) {
     (response) => {
       activeExecutions.delete(payload.request_id);
       let outputContent = "";
+      let isError = false;
       if (response?.success) {
         Logger.log(`${t("exec_success")}: ${payload.name}`, "success");
         let finalData = response.data;
@@ -727,9 +842,10 @@ function performExecution(payload: any) {
         outputContent = finalData;
       } else {
         Logger.log(`${t("exec_fail")}: ${response.error}`, "error");
-        outputContent = `❌ Error: ${response.error}`;
+        outputContent = response.error ?? "Tool execution failed.";
+        isError = true;
       }
-      saveToBuffer(payload.request_id, outputContent);
+      saveToBuffer(payload.request_id, outputContent, isError);
 
       // [Fix 5] Manual check required: Tool completion doesn't trigger MutationObserver.
       setTimeout(runMainLoop, 50);

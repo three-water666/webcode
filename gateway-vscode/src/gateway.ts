@@ -19,6 +19,10 @@ import {
     resolveShellExecutionPlan
 } from './servers/commandShell';
 import { assertShellCommandRiskAllowed } from './servers/commandRisk';
+import {
+    formatToolArgumentValidationError,
+    validateToolArguments
+} from './schemaValidation';
 
 const RUN_IN_TERMINAL_TOOL = {
     name: "run_in_terminal",
@@ -47,6 +51,15 @@ const GET_TOOL_DEFINITIONS_TOOL = {
             }
         },
         required: ["tool_names"]
+    }
+};
+
+const LIST_TOOLS_TOOL = {
+    name: "list_tools",
+    description: "List the tools available through webcode, grouped by MCP server.",
+    inputSchema: {
+        type: "object",
+        properties: {}
     }
 };
 
@@ -187,10 +200,15 @@ interface ProjectRuleDocument {
     content: string;
 }
 
+type ToolDefinition = Record<string, unknown> & {
+    name: string;
+    inputSchema?: unknown;
+};
+
 export class GatewayManager {
     private app: express.Express | null = null;
     private server: any = null;
-    private toolRouter = new Map<string, { client: Client; definition: any; serverId: string }>();
+    private toolRouter = new Map<string, { client: Client; definition: ToolDefinition; serverId: string }>();
     private connectedClients: { id: string; client: Client }[] = [];
 
     // Helper: Generate grouped tool list
@@ -199,6 +217,7 @@ export class GatewayManager {
         const allTools = Array.from(this.toolRouter.values()).map(t => ({ ...t.definition, _server: t.serverId }));
         
         // 2. Inject Internal Tools
+        allTools.push({ ...LIST_TOOLS_TOOL, _server: 'internal' });
         allTools.push({ ...RUN_IN_TERMINAL_TOOL, _server: 'internal' });
         allTools.push({ ...GET_TOOL_DEFINITIONS_TOOL, _server: 'internal' });
         allTools.push({ ...LIST_SKILLS_TOOL, _server: 'internal' });
@@ -237,6 +256,39 @@ export class GatewayManager {
             tools: data.tools,
             hidden_tools: data.hidden_tools.sort()
         }));
+    }
+
+    private getInternalToolDefinition(name: string): ToolDefinition | null {
+        switch (name) {
+            case 'list_tools':
+                return LIST_TOOLS_TOOL;
+            case 'run_in_terminal':
+                return RUN_IN_TERMINAL_TOOL;
+            case 'get_tool_definitions':
+                return GET_TOOL_DEFINITIONS_TOOL;
+            case 'list_skills':
+                return LIST_SKILLS_TOOL;
+            case 'search_skills':
+                return SEARCH_SKILLS_TOOL;
+            case 'get_skill':
+                return GET_SKILL_TOOL;
+            case 'get_skill_resource':
+                return GET_SKILL_RESOURCE_TOOL;
+            case 'list_terminal_sessions':
+                return LIST_TERMINAL_SESSIONS_TOOL;
+            case 'get_terminal_session':
+                return GET_TERMINAL_SESSION_TOOL;
+            case 'read_terminal_output':
+                return READ_TERMINAL_OUTPUT_TOOL;
+            case 'stop_terminal_session':
+                return STOP_TERMINAL_SESSION_TOOL;
+            default:
+                return null;
+        }
+    }
+
+    private getToolDefinition(name: string): ToolDefinition | null {
+        return this.getInternalToolDefinition(name) ?? this.toolRouter.get(name)?.definition ?? null;
     }
     private outputChannel: vscode.OutputChannel;
     private extensionPath: string;
@@ -473,7 +525,7 @@ export class GatewayManager {
                     if (this.toolRouter.has(tool.name)) {
                         this.log(`   ⚠️ Warning: Tool '${tool.name}' overridden by ${serverId}.`);
                     }
-                    this.toolRouter.set(tool.name, { client, definition: tool, serverId });
+                    this.toolRouter.set(tool.name, { client, definition: tool as ToolDefinition, serverId });
                 });
 
             } catch (err) {
@@ -695,9 +747,43 @@ export class GatewayManager {
         });
 
         this.app.post('/v1/tools/call', async (req, res) => {
-            const payload = req.body as ToolExecutionPayload;
-            const { name, arguments: args } = payload;
+            const payload = req.body as Partial<ToolExecutionPayload> | null;
             const toolStart = Date.now();
+
+            if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+                return res.status(400).json({
+                    isError: true,
+                    content: [{ type: 'text', text: 'Invalid tool call request: request body must be a JSON object.' }]
+                });
+            }
+
+            if (typeof payload.name !== 'string' || payload.name.trim() === '') {
+                return res.status(400).json({
+                    isError: true,
+                    content: [{ type: 'text', text: 'Invalid tool call request: "name" must be a non-empty string.' }]
+                });
+            }
+
+            const name = payload.name;
+            const args = payload.arguments ?? {};
+            const toolDefinition = this.getToolDefinition(name);
+
+            if (!toolDefinition) {
+                return res.status(404).json({
+                    isError: true,
+                    content: [{ type: 'text', text: `Tool '${name}' not found.` }]
+                });
+            }
+
+            const argumentErrors = validateToolArguments(args, toolDefinition.inputSchema);
+            if (argumentErrors.length > 0) {
+                const errorText = formatToolArgumentValidationError(name, toolDefinition.inputSchema, argumentErrors);
+                this.log(`   ⛔ Rejected invalid arguments for ${name}: ${argumentErrors.join(' ')}`);
+                return res.status(400).json({
+                    isError: true,
+                    content: [{ type: 'text', text: errorText }]
+                });
+            }
 
             // Auto-resolve relative paths for local filesystem tools
             // [Fix v2] Use Allowlist instead of Blocklist to avoid matching remote tools like 'get_file_contents'
@@ -784,32 +870,9 @@ export class GatewayManager {
                 this.log(`   🚀 Executing: get_tool_definitions for [${requestedNames.join(', ')}]`);
                 
                 const definitions = [];
-                // 1. Check Tool Router
                 for (const tName of requestedNames) {
-                    if (this.toolRouter.has(tName)) {
-                        const tInfo = this.toolRouter.get(tName);
-                        if (tInfo) {definitions.push(tInfo.definition);}
-                    } else if (tName === 'run_in_terminal') {
-                        definitions.push(RUN_IN_TERMINAL_TOOL);
-                    } else if (tName === 'get_tool_definitions') {
-                        definitions.push(GET_TOOL_DEFINITIONS_TOOL);
-                    } else if (tName === 'list_skills') {
-                        definitions.push(LIST_SKILLS_TOOL);
-                    } else if (tName === 'search_skills') {
-                        definitions.push(SEARCH_SKILLS_TOOL);
-                    } else if (tName === 'get_skill') {
-                        definitions.push(GET_SKILL_TOOL);
-                    } else if (tName === 'get_skill_resource') {
-                        definitions.push(GET_SKILL_RESOURCE_TOOL);
-                    } else if (tName === 'list_terminal_sessions') {
-                        definitions.push(LIST_TERMINAL_SESSIONS_TOOL);
-                    } else if (tName === 'get_terminal_session') {
-                        definitions.push(GET_TERMINAL_SESSION_TOOL);
-                    } else if (tName === 'read_terminal_output') {
-                        definitions.push(READ_TERMINAL_OUTPUT_TOOL);
-                    } else if (tName === 'stop_terminal_session') {
-                        definitions.push(STOP_TERMINAL_SESSION_TOOL);
-                    }
+                    const definition = this.getToolDefinition(tName);
+                    if (definition) {definitions.push(definition);}
                 }
 
                 this.log(`   ✅ Finished: get_tool_definitions (Found ${definitions.length}/${requestedNames.length})`);
