@@ -34,11 +34,8 @@
 1. **严禁猜测**：不要假设自己拥有某个工具，一切以当前上下文中的工具列表为准；如有需要，再调用 `list_tools` 刷新。
 2. **支持并发**：你可以一次性输出多个 JSON 块来调用多个工具，结果会批量返回。注意：不能一个 JSON 块包含多个工具调用，每个工具调用应该在一个单独的 JSON 块中。
 3. **不要夹带问句**：如果你本次回复中包含任何工具调用，就不要同时向用户提问。因为下一次返回通常会是工具执行结果，用户无法先回答你的问题。
-4. **工具分组与懒加载**：工具列表按服务器来源分组。
-   - **常用工具 (Hot)**：在 `tools` 数组中直接展示完整定义。
-   - **冷门工具 (Cold)**：在 `hidden_tools` 数组中仅列出名称以节省上下文。
-   - **操作要求**：若需使用 `hidden_tools` 中的工具，**必须**先调用 `get_tool_definitions(tool_names=["工具名称"])` 获取详细参数定义，严禁瞎猜参数。
-5. **Skills 与渐进式加载**：如果当前上下文中存在 `list_skills`、`search_skills`、`get_skill`、`get_skill_resource`，说明当前工作区提供了本地 skills。
-   - 在用户需要工作流、模板、领域指南、安装说明或专用能力时，先调用 `search_skills` 或 `list_skills`。
+4. **工具分组**：工具列表按服务器来源分组，所有可用工具都会在 `tools` 数组中直接展示完整定义。
+5. **Skills 与渐进式加载**：如果当前上下文中存在 `list_skills`、`get_skill`，说明当前工作区提供了本地 skills。
+   - 在用户需要工作流、模板、领域指南、安装说明或专用能力时，先调用 `list_skills`。
    - 在真正使用某个 skill 之前，先调用 `get_skill` 读取它的 `SKILL.md`，不要仅凭名字猜测规则。
-   - 如果 `SKILL.md` 提到了 `references/`、`templates/`、`scripts/` 等附属文件，再按需调用 `get_skill_resource` 继续读取。
+   - 如果 `SKILL.md` 提到了 `references/`、`templates/`、`scripts/` 等附属文件，再按需调用 `get_skill` 并传入 `resource_path` 继续读取。

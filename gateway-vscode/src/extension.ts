@@ -1,12 +1,9 @@
 import * as vscode from 'vscode';
 import { GatewayManager } from './gateway';
 import { exec } from 'child_process';
-import * as fs from 'fs';
 import * as os from 'os';
-import * as path from 'path';
 import { t } from './i18n';
 import { getConfiguredAiSites } from './platforms';
-import { COMMAND_SHELL_ENV } from './servers/commandShell';
 import { BRANDING } from '@webcode/shared';
 
 // 定义配置文件的 AI 站点结构
@@ -118,10 +115,6 @@ export async function activate(context: vscode.ExtensionContext) {
         const configuredCommandShellPath = config.get<string>('commandShell.path')?.trim();
         const commandShellPath = configuredCommandShellPath === '' ? undefined : configuredCommandShellPath;
         const customServers = filterCustomServers(config.get<Record<string, BuiltinServerConfig>>('servers') ?? {}, outputChannel);
-        const mcpServers = {
-            ...getBuiltinServers(context.extensionPath, outputChannel, commandShellPath),
-            ...customServers
-        };
         const skillDirectories = config.get<string[]>('skillDirectories') ?? [];
         const lastUsedPort = context.workspaceState.get<number>('mcp.lastPort');
 
@@ -139,7 +132,7 @@ export async function activate(context: vscode.ExtensionContext) {
             const result = await manager.start({
                 port: portConfig,
                 preferredPort: lastUsedPort,
-                mcpServers,
+                mcpServers: customServers,
                 allowedOrigins,
                 aiSites,
                 skillDirectories,
@@ -351,41 +344,6 @@ export async function activate(context: vscode.ExtensionContext) {
     // Do not auto-start
 }
 
-function getBuiltinServers(
-    extensionPath: string,
-    output: vscode.OutputChannel,
-    commandShellPath?: string
-): Record<string, BuiltinServerConfig> {
-    const filesystemEntry = path.join(extensionPath, 'dist', 'filesystemServer.js');
-    const commandServerEnv = commandShellPath ? { [COMMAND_SHELL_ENV]: commandShellPath } : undefined;
-
-    if (!fs.existsSync(filesystemEntry)) {
-        output.appendLine(
-            `[Builtin] Missing bundled filesystem server at ${filesystemEntry}. ` +
-            `The extension package or build output is incomplete.`
-        );
-    }
-
-    return {
-        builtin_filesystem: {
-            command: 'node',
-            args: [
-                filesystemEntry,
-                '.'
-            ]
-        },
-        builtin_command: {
-            command: 'node',
-            args: [
-                `${extensionPath}/dist/commandServer.js`,
-                '--project-root',
-                '.'
-            ],
-            env: commandServerEnv
-        }
-    };
-}
-
 function filterCustomServers(
     servers: Record<string, BuiltinServerConfig>,
     output: vscode.OutputChannel
@@ -393,7 +351,7 @@ function filterCustomServers(
     const filtered = Object.fromEntries(
         Object.entries(servers).filter(([serverId]) => {
             if (LEGACY_BUILTIN_SERVER_IDS.has(serverId)) {
-                output.appendLine(`[Builtin] Ignoring legacy built-in server config '${serverId}'. Built-in servers are now managed automatically.`);
+                output.appendLine(`[Builtin] Ignoring legacy built-in server config '${serverId}'. Built-in tools are implemented locally.`);
                 return false;
             }
             return true;

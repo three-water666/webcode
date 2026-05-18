@@ -810,7 +810,7 @@ function performExecution(payload: any) {
             // 1. Inject Virtual Client Tools
             let clientGroup = groups.find((g: any) => g.server === "client");
             if (!clientGroup) {
-              clientGroup = { server: "client", tools: [], hidden_tools: [] };
+              clientGroup = { server: "client", tools: [] };
               groups.push(clientGroup);
             }
             clientGroup.tools.push({

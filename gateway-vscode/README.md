@@ -45,9 +45,7 @@ The extension scans these workspace-relative directories by default:
 Each folder containing `SKILL.md` is exposed as a local skill. The model can then use:
 
 - `list_skills`
-- `search_skills`
 - `get_skill`
-- `get_skill_resource`
 
 You can override the scan paths with the setting `webcodeGateway.skillDirectories`.
 
@@ -55,8 +53,8 @@ You can override the scan paths with the setting `webcodeGateway.skillDirectorie
 
 The setting `webcodeGateway.servers` is now only for optional third-party MCP servers.
 
-- Built-in filesystem access is launched from the extension's bundled local dependency, without using `npx`.
-- Built-in command execution is enabled automatically.
+- Built-in filesystem and diagnostics access is implemented directly by the VS Code extension as a small local tool set: read, write, edit, search files, search code, and diagnostics.
+- Built-in command execution is implemented directly by the VS Code extension and uses POSIX/bash commands.
 - Legacy `filesystem` / `command` entries in user settings are ignored.
 
 ## ❓ FAQ

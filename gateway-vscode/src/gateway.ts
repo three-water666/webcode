@@ -7,167 +7,23 @@ import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import * as fs from 'fs/promises';
 import { BRANDING, PROTOCOL, type ToolExecutionPayload } from '@webcode/shared';
 import { PROMPTS } from './defaults';
 import { getDefaultBridgeTarget, getDefaultSelectors, getPlatformIdByAddress } from './platforms';
 import { SkillManager } from './skillManager';
 import { TerminalSessionManager } from './terminalSessionManager';
 import {
-    describeShellCommandPolicy,
-    normalizeShellCommand,
-    resolveShellExecutionPlan
-} from './servers/commandShell';
-import { assertShellCommandRiskAllowed } from './servers/commandRisk';
-import {
     formatToolArgumentValidationError,
     validateToolArguments
 } from './schemaValidation';
-
-const RUN_IN_TERMINAL_TOOL = {
-    name: "run_in_terminal",
-    description: "Start a long-running POSIX shell command in a visible VS Code terminal session. Returns a session_id immediately so you can inspect output, check status, or stop it later. Write commands as bash/POSIX shell text, like you would type in a Unix terminal. On Windows this requires Git Bash and does not support cmd.exe or PowerShell syntax. Obviously destructive, privileged, or shell-escape commands are rejected before execution.",
-    inputSchema: {
-        type: "object",
-        properties: {
-            command: { type: "string", description: "The POSIX shell command to execute (for example: 'pnpm dev', 'pnpm test -- --watch', or 'mkdir -p dist && pnpm build'). Use bash/POSIX syntax, not cmd.exe or PowerShell syntax." },
-            cwd: { type: "string", description: "Optional working directory inside the workspace. Defaults to the workspace root." },
-            auto_focus: { type: "boolean", description: "Focus the terminal after sending the command", default: true }
-        },
-        required: ["command"]
-    }
-};
-
-const GET_TOOL_DEFINITIONS_TOOL = {
-    name: "get_tool_definitions",
-    description: "Fetch detailed schemas for tools that are in 'Summary Mode'. Use this when you need to use a tool but its inputSchema is hidden.",
-    inputSchema: {
-        type: "object",
-        properties: {
-            tool_names: {
-                type: "array",
-                items: { type: "string" },
-                description: "List of tool names to fetch definitions for (e.g. ['git_commit', 'git_status'])"
-            }
-        },
-        required: ["tool_names"]
-    }
-};
-
-const LIST_TOOLS_TOOL = {
-    name: "list_tools",
-    description: "List the tools available through webcode, grouped by MCP server.",
-    inputSchema: {
-        type: "object",
-        properties: {}
-    }
-};
-
-const LIST_SKILLS_TOOL = {
-    name: "list_skills",
-    description: "List skills discovered in the current VS Code workspace. Use this before loading a skill so you know what is available.",
-    inputSchema: {
-        type: "object",
-        properties: {}
-    }
-};
-
-const SEARCH_SKILLS_TOOL = {
-    name: "search_skills",
-    description: "Search workspace skills by task or keyword. Use this when the user asks for a workflow, template, guide, or specialized capability.",
-    inputSchema: {
-        type: "object",
-        properties: {
-            query: { type: "string", description: "Keywords describing the task or domain to match against skills." },
-            limit: { type: "number", description: "Maximum number of matches to return. Default: 10.", default: 10 }
-        },
-        required: ["query"]
-    }
-};
-
-const GET_SKILL_TOOL = {
-    name: "get_skill",
-    description: "Load the full SKILL.md content for a workspace skill. Prefer passing skill_id from list_skills or search_skills when available.",
-    inputSchema: {
-        type: "object",
-        properties: {
-            skill_id: { type: "string", description: "Stable skill identifier returned by list_skills or search_skills." },
-            skill_name: { type: "string", description: "Fallback skill name when skill_id is unavailable." }
-        }
-    }
-};
-
-const GET_SKILL_RESOURCE_TOOL = {
-    name: "get_skill_resource",
-    description: "Read a text resource referenced by a workspace skill, such as a file under references/, templates/, or scripts/.",
-    inputSchema: {
-        type: "object",
-        properties: {
-            skill_id: { type: "string", description: "Stable skill identifier returned by list_skills or search_skills." },
-            skill_name: { type: "string", description: "Fallback skill name when skill_id is unavailable." },
-            resource_path: { type: "string", description: "Path relative to the skill directory." }
-        },
-        required: ["resource_path"]
-    }
-};
-
-const LIST_TERMINAL_SESSIONS_TOOL = {
-    name: "list_terminal_sessions",
-    description: "List visible terminal sessions created by run_in_terminal.",
-    inputSchema: {
-        type: "object",
-        properties: {}
-    }
-};
-
-const GET_TERMINAL_SESSION_TOOL = {
-    name: "get_terminal_session",
-    description: "Get the current status for a run_in_terminal session by session_id.",
-    inputSchema: {
-        type: "object",
-        properties: {
-            session_id: { type: "string", description: "The session id returned by run_in_terminal." }
-        },
-        required: ["session_id"]
-    }
-};
-
-const READ_TERMINAL_OUTPUT_TOOL = {
-    name: "read_terminal_output",
-    description: "Read recent output from a run_in_terminal session.",
-    inputSchema: {
-        type: "object",
-        properties: {
-            session_id: { type: "string", description: "The session id returned by run_in_terminal." },
-            tail_lines: { type: "number", description: "Number of recent lines to return. Default: 200.", default: 200 }
-        },
-        required: ["session_id"]
-    }
-};
-
-const STOP_TERMINAL_SESSION_TOOL = {
-    name: "stop_terminal_session",
-    description: "Stop a run_in_terminal session by session_id.",
-    inputSchema: {
-        type: "object",
-        properties: {
-            session_id: { type: "string", description: "The session id returned by run_in_terminal." }
-        },
-        required: ["session_id"]
-    }
-};
+import {
+    createLocalToolMap,
+    type LocalTool,
+    type ToolDefinition,
+    type ToolExecutionContext
+} from './tools';
 
 const BUILTIN_SELECTORS = getDefaultSelectors();
-
-// Tools that always show full schema (Hot Tools)
-const BASIC_TOOLS = [
-    'read_file', 'read_text_file', 'write_file', 'edit_file', 
-    'list_directory', 'list_directory_with_sizes', 
-    'run_in_terminal', 'execute_command', 
-    'search_files', 'get_tool_definitions', 'list_tools',
-    'list_skills', 'search_skills', 'get_skill', 'get_skill_resource',
-    'list_terminal_sessions', 'get_terminal_session', 'read_terminal_output', 'stop_terminal_session'
-];
 
 // 定义服务器配置接口
 interface ServerConfig {
@@ -195,100 +51,45 @@ interface StartResult {
     token: string;
 }
 
-interface ProjectRuleDocument {
-    fileName: string;
-    content: string;
-}
-
-type ToolDefinition = Record<string, unknown> & {
-    name: string;
-    inputSchema?: unknown;
-};
-
 export class GatewayManager {
     private app: express.Express | null = null;
     private server: any = null;
     private toolRouter = new Map<string, { client: Client; definition: ToolDefinition; serverId: string }>();
     private connectedClients: { id: string; client: Client }[] = [];
+    private localTools: Map<string, LocalTool> = createLocalToolMap();
 
     // Helper: Generate grouped tool list
     private _generateGroupedTools() {
         // 1. Gather all tools with their server association
         const allTools = Array.from(this.toolRouter.values()).map(t => ({ ...t.definition, _server: t.serverId }));
-        
-        // 2. Inject Internal Tools
-        allTools.push({ ...LIST_TOOLS_TOOL, _server: 'internal' });
-        allTools.push({ ...RUN_IN_TERMINAL_TOOL, _server: 'internal' });
-        allTools.push({ ...GET_TOOL_DEFINITIONS_TOOL, _server: 'internal' });
-        allTools.push({ ...LIST_SKILLS_TOOL, _server: 'internal' });
-        allTools.push({ ...SEARCH_SKILLS_TOOL, _server: 'internal' });
-        allTools.push({ ...GET_SKILL_TOOL, _server: 'internal' });
-        allTools.push({ ...GET_SKILL_RESOURCE_TOOL, _server: 'internal' });
-        allTools.push({ ...LIST_TERMINAL_SESSIONS_TOOL, _server: 'internal' });
-        allTools.push({ ...GET_TERMINAL_SESSION_TOOL, _server: 'internal' });
-        allTools.push({ ...READ_TERMINAL_OUTPUT_TOOL, _server: 'internal' });
-        allTools.push({ ...STOP_TERMINAL_SESSION_TOOL, _server: 'internal' });
+
+        // 2. Inject local VS Code tools
+        for (const tool of this.localTools.values()) {
+            allTools.push({ ...tool.definition, _server: tool.serverId ?? 'internal' });
+        }
 
         // 3. Group by Server
-        const groups: Record<string, { tools: any[], hidden_tools: string[] }> = {};
+        const groups: Record<string, { tools: any[] }> = {};
 
         allTools.forEach(tool => {
             const server = tool._server ?? 'unknown';
             if (!groups[server]) {
-                groups[server] = { tools: [], hidden_tools: [] };
+                groups[server] = { tools: [] };
             }
 
-            // Hot vs Cold decision
-            if (BASIC_TOOLS.includes(tool.name)) {
-                // Hot: Show full schema
-                // Remove internal grouping tag before sending
-                const { _server, ...cleanTool } = tool;
-                groups[server].tools.push(cleanTool);
-            } else {
-                // Cold: Only name
-                groups[server].hidden_tools.push(tool.name);
-            }
+            const { _server, ...cleanTool } = tool;
+            groups[server].tools.push(cleanTool);
         });
 
         // 4. Transform to Array format
         return Object.entries(groups).map(([server, data]) => ({
             server,
-            tools: data.tools,
-            hidden_tools: data.hidden_tools.sort()
+            tools: data.tools.sort((a, b) => a.name.localeCompare(b.name))
         }));
     }
 
-    private getInternalToolDefinition(name: string): ToolDefinition | null {
-        switch (name) {
-            case 'list_tools':
-                return LIST_TOOLS_TOOL;
-            case 'run_in_terminal':
-                return RUN_IN_TERMINAL_TOOL;
-            case 'get_tool_definitions':
-                return GET_TOOL_DEFINITIONS_TOOL;
-            case 'list_skills':
-                return LIST_SKILLS_TOOL;
-            case 'search_skills':
-                return SEARCH_SKILLS_TOOL;
-            case 'get_skill':
-                return GET_SKILL_TOOL;
-            case 'get_skill_resource':
-                return GET_SKILL_RESOURCE_TOOL;
-            case 'list_terminal_sessions':
-                return LIST_TERMINAL_SESSIONS_TOOL;
-            case 'get_terminal_session':
-                return GET_TERMINAL_SESSION_TOOL;
-            case 'read_terminal_output':
-                return READ_TERMINAL_OUTPUT_TOOL;
-            case 'stop_terminal_session':
-                return STOP_TERMINAL_SESSION_TOOL;
-            default:
-                return null;
-        }
-    }
-
     private getToolDefinition(name: string): ToolDefinition | null {
-        return this.getInternalToolDefinition(name) ?? this.toolRouter.get(name)?.definition ?? null;
+        return this.localTools.get(name)?.definition ?? this.toolRouter.get(name)?.definition ?? null;
     }
     private outputChannel: vscode.OutputChannel;
     private extensionPath: string;
@@ -338,111 +139,21 @@ export class GatewayManager {
         this.skillManager.invalidateCache(reason);
     }
 
-    private resolveWorkspaceCwd(requestedCwd: unknown): string {
-        if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
-            throw new Error('A workspace folder is required to run terminal commands.');
-        }
-
-        const root = vscode.workspace.workspaceFolders[0].uri.fsPath;
-        if (requestedCwd == null || requestedCwd === '') {
-            return root;
-        }
-
-        if (typeof requestedCwd !== 'string') {
-            throw new Error('cwd must be a string.');
-        }
-
-        const cwd = requestedCwd;
-        const resolved = path.isAbsolute(cwd) ? path.normalize(cwd) : path.resolve(root, cwd);
-        const relative = path.relative(root, resolved);
-        const isSubPath = relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
-
-        if (!isSubPath) {
-            throw new Error(`Permission denied: cwd must stay inside the workspace (${root}).`);
-        }
-
-        return resolved;
-    }
-
-    private validateTerminalCommand(command: unknown) {
-        if (typeof command !== 'string') {
-            throw new Error('command must be a string.');
-        }
-
-        const commandLine = normalizeShellCommand(command);
-        assertShellCommandRiskAllowed(commandLine);
-
-        return {
-            commandLine,
-            execution: resolveShellExecutionPlan(commandLine, {
-                platform: process.platform,
-                env: process.env,
-                configuredPath: this.commandShellPath
-            }),
-            env: { ...process.env } as NodeJS.ProcessEnv
-        };
-    }
-
     private getPrimaryWorkspaceRoot(): string | null {
         return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null;
     }
 
-    private async readProjectRuleFile(root: string, fileName: string): Promise<ProjectRuleDocument | null> {
-        try {
-            const content = await fs.readFile(path.join(root, fileName), 'utf8');
-            return {
-                fileName,
-                content: content.trimEnd()
-            };
-        } catch (error: any) {
-            if (error?.code !== 'ENOENT' && error?.code !== 'EISDIR') {
-                this.error(`Failed to read project rule file ${fileName}`, error);
-            }
-            return null;
-        }
-    }
-
-    private async readProjectRuleDocuments(): Promise<ProjectRuleDocument[]> {
-        const root = this.getPrimaryWorkspaceRoot();
-        if (!root) {
-            return [];
-        }
-
-        const documents: ProjectRuleDocument[] = [];
-        const userRules = await this.readProjectRuleFile(root, 'USER_RULES.md');
-        if (userRules) {
-            documents.push(userRules);
-        }
-
-        const agentsRules = await this.readProjectRuleFile(root, 'AGENTS.md');
-        if (agentsRules) {
-            documents.push(agentsRules);
-            return documents;
-        }
-
-        const claudeRules = await this.readProjectRuleFile(root, 'CLAUDE.md');
-        if (claudeRules) {
-            documents.push(claudeRules);
-        }
-
-        return documents;
-    }
-
-    private formatProjectRulesForPrompt(documents: ProjectRuleDocument[]): string {
-        if (documents.length === 0) {
-            return '';
-        }
-
-        const sections = documents
-            .map(document => `## ${document.fileName}\n${document.content || '(empty)'}`)
-            .join('\n\n');
-
-        return [
-            '# Project Rules',
-            'The following project-specific instructions were read from the VS Code workspace root. Follow them for this session.',
-            '',
-            sections
-        ].join('\n');
+    private createToolExecutionContext(): ToolExecutionContext {
+        return {
+            workspaceRoot: this.getPrimaryWorkspaceRoot(),
+            outputChannel: this.outputChannel,
+            skillManager: this.skillManager,
+            terminalSessionManager: this.terminalSessionManager,
+            skillDirectories: this.skillDirectories,
+            commandShellPath: this.commandShellPath,
+            listTools: () => this._generateGroupedTools(),
+            getToolDefinition: (name: string) => this.getToolDefinition(name)
+        };
     }
 
     async connectToServers(servers: Record<string, ServerConfig>) {
@@ -765,7 +476,7 @@ export class GatewayManager {
             }
 
             const name = payload.name;
-            const args = payload.arguments ?? {};
+            const rawArgs = payload.arguments ?? {};
             const toolDefinition = this.getToolDefinition(name);
 
             if (!toolDefinition) {
@@ -775,7 +486,7 @@ export class GatewayManager {
                 });
             }
 
-            const argumentErrors = validateToolArguments(args, toolDefinition.inputSchema);
+            const argumentErrors = validateToolArguments(rawArgs, toolDefinition.inputSchema);
             if (argumentErrors.length > 0) {
                 const errorText = formatToolArgumentValidationError(name, toolDefinition.inputSchema, argumentErrors);
                 this.log(`   ⛔ Rejected invalid arguments for ${name}: ${argumentErrors.join(' ')}`);
@@ -785,13 +496,31 @@ export class GatewayManager {
                 });
             }
 
-            // Auto-resolve relative paths for local filesystem tools
+            const args = rawArgs as Record<string, any>;
+            const localTool = this.localTools.get(name);
+            if (localTool) {
+                try {
+                    const argsPreview = JSON.stringify(args ?? {}).slice(0, 80);
+                    this.log(`   🚀 Executing local tool: ${name} ${argsPreview}`);
+                    const result = await localTool.execute(args, this.createToolExecutionContext());
+                    const toolDuration = Date.now() - toolStart;
+                    this.log(`   ✅ Finished local tool: ${name} (${toolDuration}ms)`);
+                    return res.json(result);
+                } catch (error: any) {
+                    this.error(`Local tool execution failed: ${name}`, error);
+                    return res.status(500).json({
+                        isError: true,
+                        content: [{ type: 'text', text: `Error: ${error.message}` }]
+                    });
+                }
+            }
+
+            // Auto-resolve relative paths for external MCP tools known to operate on local files.
             // [Fix v2] Use Allowlist instead of Blocklist to avoid matching remote tools like 'get_file_contents'
             const localPathTools = [
                 'read_file', 'read_text_file', 'read_multiple_files', 'write_file', 'edit_file', 'append_file',
                 'list_directory', 'list_directory_with_sizes', 'directory_tree',
-                'move_file', 'search_files', 'get_file_info', 'create_directory',
-                'execute_command', 'run_in_terminal' // Built-in tools
+                'move_file', 'search_files', 'get_file_info', 'create_directory'
             ];
             // Git tools also operate on local filesystem
             const isLocalTool = localPathTools.includes(name) || name.startsWith('git_');
@@ -811,229 +540,6 @@ export class GatewayManager {
                 if (args.source) {args.source = fixPath(args.source);}
                 if (args.destination) {args.destination = fixPath(args.destination);}
                 if (Array.isArray(args.paths)) {args.paths = args.paths.map((p: any) => fixPath(p));}
-            }
-
-            if (name === 'list_tools') {
-                const result = this._generateGroupedTools();
-                this.log(`   🚀 Executing: list_tools (Internal) - Grouped into ${result.length} servers`);
-                this.log(`   ✅ Finished: list_tools (0ms)`);
-                return res.json({
-                    content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-                    isError: false
-                });
-            }
-
-            if (name === 'run_in_terminal') {
-                try {
-                    const cwd = this.resolveWorkspaceCwd(args?.cwd);
-                    const validated = this.validateTerminalCommand(args?.command);
-                    this.log(`   🚀 Executing: run_in_terminal ${validated.commandLine}`);
-
-                    const session = this.terminalSessionManager.createSession({
-                        commandLine: validated.commandLine,
-                        file: validated.execution.file,
-                        args: validated.execution.args,
-                        cwd,
-                        env: validated.env,
-                        autoFocus: args?.auto_focus !== false
-                    });
-
-                    this.log(`   ✅ Finished: run_in_terminal (${session.id})`);
-                    return res.json({
-                        content: [{
-                            type: 'text',
-                            text: JSON.stringify({
-                                session_id: session.id,
-                                name: session.name,
-                                status: session.status,
-                                cwd: session.cwd,
-                                command: session.command,
-                                shell: {
-                                    id: validated.execution.shell.id,
-                                    path: validated.execution.shell.path
-                                }
-                            }, null, 2)
-                        }],
-                        isError: false
-                    });
-                } catch (error: any) {
-                    this.error('Terminal session start failed', error);
-                    return res.status(400).json({
-                        isError: true,
-                        content: [{ type: 'text', text: `Error: ${error.message}\nPolicy: ${describeShellCommandPolicy(process.platform)}` }]
-                    });
-                }
-            }
-
-            if (name === 'get_tool_definitions') {
-                const requestedNames = args.tool_names as string[] || [];
-                this.log(`   🚀 Executing: get_tool_definitions for [${requestedNames.join(', ')}]`);
-                
-                const definitions = [];
-                for (const tName of requestedNames) {
-                    const definition = this.getToolDefinition(tName);
-                    if (definition) {definitions.push(definition);}
-                }
-
-                this.log(`   ✅ Finished: get_tool_definitions (Found ${definitions.length}/${requestedNames.length})`);
-                return res.json({
-                    content: [{ type: 'text', text: JSON.stringify(definitions, null, 2) }],
-                    isError: false
-                });
-            }
-
-            if (name === 'list_skills') {
-                try {
-                    const result = await this.skillManager.listSkills(this.skillDirectories);
-                    this.log(`   🚀 Executing: list_skills (Internal) - Found ${result.length} skills`);
-                    this.log(`   ✅ Finished: list_skills (0ms)`);
-                    return res.json({
-                        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-                        isError: false
-                    });
-                } catch (error: any) {
-                    this.error('Skill listing failed', error);
-                    return res.status(500).json({
-                        isError: true,
-                        content: [{ type: 'text', text: `Error: ${error.message}` }]
-                    });
-                }
-            }
-
-            if (name === 'search_skills') {
-                try {
-                    const query = String(args?.query ?? '');
-                    const limit = typeof args?.limit === 'number' ? args.limit : 10;
-                    this.log(`   🚀 Executing: search_skills "${query}"`);
-                    const result = await this.skillManager.searchSkills(query, this.skillDirectories, limit);
-                    this.log(`   ✅ Finished: search_skills (Found ${result.length})`);
-                    return res.json({
-                        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-                        isError: false
-                    });
-                } catch (error: any) {
-                    this.error('Skill search failed', error);
-                    return res.status(500).json({
-                        isError: true,
-                        content: [{ type: 'text', text: `Error: ${error.message}` }]
-                    });
-                }
-            }
-
-            if (name === 'get_skill') {
-                try {
-                    this.log(`   🚀 Executing: get_skill`);
-                    const result = await this.skillManager.getSkillDetails({
-                        skill_id: args?.skill_id,
-                        skill_name: args?.skill_name
-                    }, this.skillDirectories);
-                    this.log(`   ✅ Finished: get_skill (${result.skill.id})`);
-                    return res.json({
-                        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-                        isError: false
-                    });
-                } catch (error: any) {
-                    this.error('Skill load failed', error);
-                    return res.status(500).json({
-                        isError: true,
-                        content: [{ type: 'text', text: `Error: ${error.message}` }]
-                    });
-                }
-            }
-
-            if (name === 'get_skill_resource') {
-                try {
-                    this.log(`   🚀 Executing: get_skill_resource`);
-                    const result = await this.skillManager.getSkillResource({
-                        skill_id: args?.skill_id,
-                        skill_name: args?.skill_name,
-                        resource_path: args?.resource_path
-                    }, this.skillDirectories);
-                    this.log(`   ✅ Finished: get_skill_resource (${result.resource_path})`);
-                    return res.json({
-                        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-                        isError: false
-                    });
-                } catch (error: any) {
-                    this.error('Skill resource load failed', error);
-                    return res.status(500).json({
-                        isError: true,
-                        content: [{ type: 'text', text: `Error: ${error.message}` }]
-                    });
-                }
-            }
-
-            if (name === 'get_project_rules') {
-                try {
-                    const documents = await this.readProjectRuleDocuments();
-                    const prompt = this.formatProjectRulesForPrompt(documents);
-                    this.log(`   🚀 Executing: get_project_rules (Found ${documents.length} files)`);
-                    this.log(`   ✅ Finished: get_project_rules`);
-                    return res.json({
-                        content: [{ type: 'text', text: prompt }],
-                        isError: false
-                    });
-                } catch (error: any) {
-                    this.error('Project rules load failed', error);
-                    return res.status(500).json({
-                        isError: true,
-                        content: [{ type: 'text', text: `Error: ${error.message}` }]
-                    });
-                }
-            }
-
-            if (name === 'list_terminal_sessions') {
-                const sessions = this.terminalSessionManager.listSessions();
-                return res.json({
-                    content: [{ type: 'text', text: JSON.stringify(sessions, null, 2) }],
-                    isError: false
-                });
-            }
-
-            if (name === 'get_terminal_session') {
-                try {
-                    const session = this.terminalSessionManager.getSession(String(args?.session_id ?? ''));
-                    return res.json({
-                        content: [{ type: 'text', text: JSON.stringify(session, null, 2) }],
-                        isError: false
-                    });
-                } catch (error: any) {
-                    return res.status(404).json({
-                        isError: true,
-                        content: [{ type: 'text', text: `Error: ${error.message}` }]
-                    });
-                }
-            }
-
-            if (name === 'read_terminal_output') {
-                try {
-                    const tailLines = typeof args?.tail_lines === 'number' ? args.tail_lines : 200;
-                    const result = this.terminalSessionManager.readSessionOutput(String(args?.session_id ?? ''), tailLines);
-                    return res.json({
-                        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-                        isError: false
-                    });
-                } catch (error: any) {
-                    return res.status(404).json({
-                        isError: true,
-                        content: [{ type: 'text', text: `Error: ${error.message}` }]
-                    });
-                }
-            }
-
-            if (name === 'stop_terminal_session') {
-                try {
-                    const session = this.terminalSessionManager.stopSession(String(args?.session_id ?? ''));
-                    return res.json({
-                        content: [{ type: 'text', text: JSON.stringify(session, null, 2) }],
-                        isError: false
-                    });
-                } catch (error: any) {
-                    return res.status(404).json({
-                        isError: true,
-                        content: [{ type: 'text', text: `Error: ${error.message}` }]
-                    });
-                }
             }
 
             const route = this.toolRouter.get(name);

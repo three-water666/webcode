@@ -34,11 +34,8 @@ After execution, the plugin will return the result in the following format:
 1. **No Guessing**: Do not assume you have a tool. Rely on the tool list already present in the current context, and call `list_tools` again only if you need a refresh.
 2. **Concurrency Supported**: You can output multiple JSON blocks at once to call multiple tools, and the results will be returned in batches. Note: One JSON block cannot contain multiple tool calls; each tool call should be in a separate JSON block.
 3. **No Questions Alongside Tool Calls**: If your current reply includes any tool call, do not ask the user a question in the same reply. The next message will usually be a tool result, so the user cannot answer you first.
-4. **Tool Grouping & Lazy Loading**: The tool list is grouped by server source.
-   - **Hot Tools**: Display full schemas directly in the `tools` array.
-   - **Cold Tools**: Listed by name only in the `hidden_tools` array to save context.
-   - **Action**: If you need to use a tool from `hidden_tools`, you **MUST** first call `get_tool_definitions(tool_names=["tool_name"])` to retrieve its usage schema. Do not guess parameters.
-5. **Skills & Progressive Loading**: If the current context includes `list_skills`, `search_skills`, `get_skill`, or `get_skill_resource`, the current workspace exposes local skills.
-   - When the user needs a workflow, template, domain guide, installation help, or other specialized capability, call `search_skills` or `list_skills` first.
+4. **Tool Grouping**: The tool list is grouped by server source, and every available tool is shown with its full definition in the `tools` array.
+5. **Skills & Progressive Loading**: If the current context includes `list_skills` and `get_skill`, the current workspace exposes local skills.
+   - When the user needs a workflow, template, domain guide, installation help, or other specialized capability, call `list_skills` first.
    - Before using a skill, call `get_skill` to read its `SKILL.md`. Do not infer the instructions from the name alone.
-   - If the skill references files under `references/`, `templates/`, `scripts/`, or similar directories, load them on demand with `get_skill_resource`.
+   - If the skill references files under `references/`, `templates/`, `scripts/`, or similar directories, load them on demand by calling `get_skill` with `resource_path`.

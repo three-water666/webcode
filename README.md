@@ -104,9 +104,9 @@ A skill is any directory containing `SKILL.md`.
 
 The recommended loading flow is:
 
-1. Call `list_skills` or `search_skills`.
+1. Call `list_skills`.
 2. Call `get_skill` for the selected skill.
-3. Call `get_skill_resource` only when the skill references extra files such as `references/`, `templates/`, or `scripts/`.
+3. Call `get_skill` with `resource_path` only when the skill references extra files such as `references/`, `templates/`, or `scripts/`.
 
 Example:
 
