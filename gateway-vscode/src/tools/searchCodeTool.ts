@@ -1,16 +1,22 @@
 import { spawn } from 'child_process';
 import * as fs from 'fs';
-import { createRequire } from 'module';
+import * as fsPromises from 'fs/promises';
 import * as path from 'path';
+import * as vscode from 'vscode';
 import type { LocalTool } from './types';
 import { textResult } from './result';
 import {
     DEFAULT_EXCLUDED_DIRECTORIES,
     getNumberArg,
     getStringArrayArg,
+    matchesPattern,
+    normalizeLineEndings,
     resolveWorkspaceDirectory,
-    toPosixPath
+    toPosixPath,
+    walkWorkspaceFiles
 } from './filesystemUtils';
+
+const MAX_FALLBACK_FILE_SIZE_BYTES = 1024 * 1024 * 2;
 
 export const searchCodeTool: LocalTool = {
     serverId: 'internal',
@@ -38,7 +44,7 @@ export const searchCodeTool: LocalTool = {
         const query = String(args.query);
         const maxResults = getNumberArg(args.max_results, 100);
         const excludePatterns = getStringArrayArg(args.exclude_patterns);
-        const matches = await runRipgrep({
+        const options = {
             searchRoot,
             workspaceRoot,
             query,
@@ -47,7 +53,8 @@ export const searchCodeTool: LocalTool = {
             excludePatterns,
             caseSensitive: args.case_sensitive === true,
             useRegex: args.use_regex === true
-        });
+        };
+        const matches = await runRipgrepWithFallback(options);
 
         return textResult(matches.length > 0 ? matches.join('\n') : 'No matches found.');
     }
@@ -73,10 +80,33 @@ type RipgrepMatchMessage = {
     };
 };
 
-const nodeRequire = createRequire(__filename);
+type RipgrepCommand = {
+    command: string;
+    source: string;
+    checkedLocations: string[];
+};
+
+class RipgrepUnavailableError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'RipgrepUnavailableError';
+    }
+}
+
+async function runRipgrepWithFallback(options: RipgrepOptions): Promise<string[]> {
+    try {
+        return await runRipgrep(options);
+    } catch (error) {
+        if (error instanceof RipgrepUnavailableError) {
+            return searchCodeInProcess(options);
+        }
+
+        throw error;
+    }
+}
 
 async function runRipgrep(options: RipgrepOptions): Promise<string[]> {
-    const rgPath = resolveRipgrepPath();
+    const rgCommand = resolveRipgrepCommand();
     const args = createRipgrepArgs(options);
     const matches: string[] = [];
     let limitReached = false;
@@ -84,10 +114,11 @@ async function runRipgrep(options: RipgrepOptions): Promise<string[]> {
     let stderr = '';
 
     return new Promise((resolve, reject) => {
-        const child = spawn(rgPath, args, {
+        const child = spawn(rgCommand.command, args, {
             cwd: options.searchRoot,
             windowsHide: true
         });
+        let spawnFailed = false;
 
         child.stdout.setEncoding('utf8');
         child.stdout.on('data', (chunk: string) => {
@@ -114,8 +145,14 @@ async function runRipgrep(options: RipgrepOptions): Promise<string[]> {
             stderr += chunk;
         });
 
-        child.on('error', reject);
+        child.on('error', error => {
+            spawnFailed = true;
+            reject(createRipgrepStartError(error, rgCommand));
+        });
         child.on('close', code => {
+            if (spawnFailed) {
+                return;
+            }
             if (stdoutBuffer.trim() && matches.length < options.maxResults) {
                 appendRipgrepMatch(stdoutBuffer, options, matches);
             }
@@ -130,29 +167,146 @@ async function runRipgrep(options: RipgrepOptions): Promise<string[]> {
     });
 }
 
-function resolveRipgrepPath(): string {
-    const bundledPath = path.join(__dirname, 'bin', process.platform === 'win32' ? 'rg.exe' : 'rg');
-    if (fs.existsSync(bundledPath)) {
-        return bundledPath;
+function resolveRipgrepCommand(): RipgrepCommand {
+    const checkedLocations: string[] = [];
+
+    const configuredPath = getConfiguredRipgrepPath();
+    if (configuredPath) {
+        checkedLocations.push(`webcodeGateway.ripgrep.path: ${configuredPath}`);
+        if (fs.existsSync(configuredPath)) {
+            return {
+                command: configuredPath,
+                source: 'webcodeGateway.ripgrep.path',
+                checkedLocations
+            };
+        }
+    } else {
+        checkedLocations.push('webcodeGateway.ripgrep.path: not set');
     }
 
-    const arch = process.env.npm_config_arch || process.arch;
-    const binaryName = process.platform === 'win32' ? 'rg.exe' : 'rg';
-    const platformPackage = `@vscode/ripgrep-${process.platform}-${arch}`;
+    const vscodeRipgrepCandidates = getVSCodeRipgrepCandidates();
 
-    try {
-        const ripgrepMain = nodeRequire.resolve('@vscode/ripgrep');
-        return createRequire(ripgrepMain).resolve(`${platformPackage}/bin/${binaryName}`);
-    } catch {
-        try {
-            return nodeRequire.resolve(`${platformPackage}/bin/${binaryName}`);
-        } catch {
-            throw new Error(
-                `Could not find ${platformPackage}. ` +
-                `Ensure @vscode/ripgrep optional dependencies are installed for this platform (${process.platform}-${arch}).`
-            );
+    for (const candidate of vscodeRipgrepCandidates) {
+        checkedLocations.push(`VS Code bundled ripgrep: ${candidate}`);
+        if (fs.existsSync(candidate)) {
+            return {
+                command: candidate,
+                source: 'VS Code bundled ripgrep',
+                checkedLocations
+            };
         }
     }
+
+    if (vscodeRipgrepCandidates.length === 0) {
+        checkedLocations.push('VS Code bundled ripgrep: vscode.env.appRoot is not available');
+    }
+
+    const pathCommand = getRipgrepBinaryName(process.platform);
+    checkedLocations.push(`PATH command: ${pathCommand}`);
+    return {
+        command: pathCommand,
+        source: 'PATH',
+        checkedLocations
+    };
+}
+
+function getVSCodeRipgrepCandidates(): string[] {
+    const binaryName = getRipgrepBinaryName(process.platform);
+    if (!vscode.env.appRoot) {
+        return [];
+    }
+
+    return [
+        path.join(vscode.env.appRoot, 'node_modules.asar.unpacked', '@vscode', 'ripgrep', 'bin', binaryName),
+        path.join(vscode.env.appRoot, 'node_modules', '@vscode', 'ripgrep', 'bin', binaryName),
+        path.join(vscode.env.appRoot, 'node_modules.asar.unpacked', 'vscode-ripgrep', 'bin', binaryName),
+        path.join(vscode.env.appRoot, 'node_modules', 'vscode-ripgrep', 'bin', binaryName)
+    ];
+}
+
+function getConfiguredRipgrepPath(): string | undefined {
+    const configuredPath = vscode.workspace
+        .getConfiguration('webcodeGateway')
+        .get<string>('ripgrep.path', '')
+        .trim();
+    return configuredPath || undefined;
+}
+
+function getRipgrepBinaryName(platform: string): string {
+    return platform === 'win32' ? 'rg.exe' : 'rg';
+}
+
+function createRipgrepStartError(error: Error, rgCommand: RipgrepCommand): Error {
+    const code = (error as NodeJS.ErrnoException).code;
+    const detail = code ? `${error.message} (${code})` : error.message;
+    return new RipgrepUnavailableError(
+        [
+            `search_code could not start ripgrep from ${rgCommand.source}: ${detail}`,
+            `Platform: ${process.platform}-${process.arch}`,
+            'Checked:',
+            ...rgCommand.checkedLocations.map(location => `- ${location}`),
+            'To enable search_code, install ripgrep so rg is on PATH, or set webcodeGateway.ripgrep.path to the absolute path of rg/rg.exe.'
+        ].join('\n')
+    );
+}
+
+async function searchCodeInProcess(options: RipgrepOptions): Promise<string[]> {
+    const matcher = createFallbackMatcher(options.query, {
+        caseSensitive: options.caseSensitive,
+        useRegex: options.useRegex
+    });
+    const matches: string[] = [];
+
+    await walkWorkspaceFiles(options.searchRoot, async (filePath, relativeToSearchRoot) => {
+        if (
+            options.includePattern &&
+            !matchesPattern(relativeToSearchRoot, options.includePattern) &&
+            !matchesPattern(path.basename(filePath), options.includePattern)
+        ) {
+            return false;
+        }
+
+        const stats = await fsPromises.stat(filePath);
+        if (stats.size > MAX_FALLBACK_FILE_SIZE_BYTES) {
+            return false;
+        }
+
+        const rawContent = await fsPromises.readFile(filePath, 'utf8').catch(() => null);
+        if (rawContent == null || rawContent.includes('\0')) {
+            return false;
+        }
+
+        const lines = normalizeLineEndings(rawContent).split('\n');
+        for (let index = 0; index < lines.length; index++) {
+            if (!matcher(lines[index])) {
+                continue;
+            }
+
+            const relativePath = toPosixPath(path.relative(options.workspaceRoot, filePath));
+            matches.push(`${relativePath}:${index + 1}: ${lines[index].trimEnd()}`);
+            if (matches.length >= options.maxResults) {
+                return true;
+            }
+        }
+
+        return false;
+    }, {
+        excludePatterns: options.excludePatterns,
+        includePattern: options.includePattern
+    });
+
+    return matches;
+}
+
+function createFallbackMatcher(query: string, options: { caseSensitive: boolean; useRegex: boolean }): (line: string) => boolean {
+    if (options.useRegex) {
+        const flags = options.caseSensitive ? '' : 'i';
+        const regex = new RegExp(query, flags);
+        return line => regex.test(line);
+    }
+
+    const needle = options.caseSensitive ? query : query.toLowerCase();
+    return line => (options.caseSensitive ? line : line.toLowerCase()).includes(needle);
 }
 
 function createRipgrepArgs(options: RipgrepOptions): string[] {

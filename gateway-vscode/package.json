@@ -121,6 +121,11 @@
           "default": "",
           "description": "Optional path to the POSIX shell used by execute_command and run_in_terminal. On Windows this should point to Git Bash bash.exe. Leave empty to auto-detect Git Bash on Windows or use the user/system POSIX shell on macOS and Linux."
         },
+        "webcodeGateway.ripgrep.path": {
+          "type": "string",
+          "default": "",
+          "description": "Optional absolute path to ripgrep for search_code. Leave empty to use VS Code's bundled ripgrep or rg from PATH."
+        },
         "webcodeGateway.skillDirectories": {
           "type": "array",
           "default": [
@@ -215,7 +220,6 @@
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
     "@types/vscode": "^1.106.1",
-    "@vscode/ripgrep": "^1.18.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.6.0",
