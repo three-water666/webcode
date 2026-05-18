@@ -40,7 +40,7 @@ export const searchFilesTool: LocalTool = {
         const uris = await vscode.workspace.findFiles(
             new vscode.RelativePattern(searchRoot, includePattern),
             excludePattern ? new vscode.RelativePattern(searchRoot, excludePattern) : undefined,
-            includePattern === '**/*' ? undefined : maxResults
+            maxResults
         );
 
         const matches: string[] = [];

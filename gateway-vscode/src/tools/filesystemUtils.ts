@@ -108,7 +108,11 @@ export async function walkWorkspaceFiles(
     } = {}
 ): Promise<void> {
     async function walk(currentPath: string): Promise<boolean> {
-        const entries = await fs.readdir(currentPath, { withFileTypes: true });
+        const entries = await fs.readdir(currentPath, { withFileTypes: true }).catch(() => null);
+        if (entries === null) {
+            // Skip directories that cannot be read (e.g. EACCES, ENOENT).
+            return false;
+        }
         for (const entry of entries) {
             const absolute = path.join(currentPath, entry.name);
             const relative = path.relative(rootPath, absolute);
