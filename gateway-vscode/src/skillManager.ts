@@ -157,22 +157,22 @@ export class SkillManager {
 
   private async scanSkills(customDirectories: string[]): Promise<SkillEntry[]> {
     const now = Date.now();
+    const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
+    if (workspaceFolders.length === 0) {
+      const clearedCount = this.clearCaches();
+      if (clearedCount > 0) {
+        this.log(`Workspace folders unavailable; cleared ${clearedCount} cached skills.`);
+      } else {
+        this.log('Workspace folders unavailable; no cached skills to clear.');
+      }
+      return [];
+    }
+
     const searchRoots = this.getSearchDirectories(customDirectories);
     const cacheKey = this.getCacheKey(searchRoots);
     const cache = this.getCache(cacheKey);
 
     if (now - cache.lastScanAt < CACHE_TTL_MS) {
-      return cache.entries;
-    }
-
-    const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
-    if (workspaceFolders.length === 0) {
-      cache.lastScanAt = now;
-      if (cache.entries.length > 0) {
-        this.log(`Workspace folders unavailable; reusing ${cache.entries.length} cached skills.`);
-      } else {
-        this.log('Workspace folders unavailable; no cached skills to reuse.');
-      }
       return cache.entries;
     }
 
@@ -198,6 +198,16 @@ export class SkillManager {
       this.caches.set(cacheKey, cache);
     }
     return cache;
+  }
+
+  private clearCaches(): number {
+    let clearedCount = 0;
+    for (const cache of this.caches.values()) {
+      clearedCount += cache.entries.length;
+      cache.entries = [];
+      cache.lastScanAt = 0;
+    }
+    return clearedCount;
   }
 
   private async collectSkillsFromDirectory(
