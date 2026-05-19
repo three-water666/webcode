@@ -67,12 +67,16 @@ export const searchFilesTool: LocalTool = {
     }
 };
 
-function createFileSearchIncludePattern(query: string): string {
+export function createFileSearchIncludePattern(query: string): string {
     if (hasGlobSyntax(query)) {
         return query.includes('/') ? query : `**/${query}`;
     }
 
-    return query.includes('/') ? '**/*' : `**/*${query}*`;
+    if (query.includes('/')) {
+        return `{**/*${query}*,**/*${query}*/**}`;
+    }
+
+    return `**/*${query}*`;
 }
 
 function createFindFilesExcludePattern(excludePatterns: string[]): string | undefined {
