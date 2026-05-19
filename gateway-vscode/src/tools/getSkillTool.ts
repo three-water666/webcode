@@ -18,8 +18,8 @@ export const getSkillTool: LocalTool = {
                 }
             },
             anyOf: [
-                { required: ['skill_id'] },
-                { required: ['skill_name'] }
+                { required: ['skill_id'], properties: { skill_id: {}, skill_name: {}, resource_path: {} } },
+                { required: ['skill_name'], properties: { skill_id: {}, skill_name: {}, resource_path: {} } }
             ]
         }
     },
