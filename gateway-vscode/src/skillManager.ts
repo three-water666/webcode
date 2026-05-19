@@ -104,12 +104,21 @@ export class SkillManager {
       throw new Error(`Resource path is outside the skill directory: ${requestedPath}`);
     }
 
-    const stat = await fs.stat(absolutePath).catch(() => null);
+    const realSkillRoot = await fs.realpath(skill.rootPath);
+    const realResourcePath = await fs.realpath(absolutePath).catch(() => null);
+    if (!realResourcePath) {
+      throw new Error(`Skill resource not found: ${requestedPath}`);
+    }
+    if (!this.isSubPath(realSkillRoot, realResourcePath)) {
+      throw new Error(`Resource path is outside the skill directory: ${requestedPath}`);
+    }
+
+    const stat = await fs.stat(realResourcePath).catch(() => null);
     if (!stat?.isFile()) {
       throw new Error(`Skill resource not found: ${requestedPath}`);
     }
 
-    const content = await fs.readFile(absolutePath, 'utf8');
+    const content = await fs.readFile(realResourcePath, 'utf8');
     return {
       skill: this.toSummary(skill),
       resource_path: this.normalizeRelativePath(path.relative(skill.rootPath, absolutePath)),
@@ -180,7 +189,10 @@ export class SkillManager {
 
     for (const folder of workspaceFolders) {
       for (const relativeDir of searchRoots) {
-        const absoluteDir = path.resolve(folder.uri.fsPath, relativeDir);
+        const absoluteDir = await this.resolveSkillSearchRoot(folder.uri.fsPath, relativeDir);
+        if (!absoluteDir) {
+          continue;
+        }
         await this.collectSkillsFromDirectory(folder, relativeDir, absoluteDir, found);
       }
     }
@@ -208,6 +220,21 @@ export class SkillManager {
       cache.lastScanAt = 0;
     }
     return clearedCount;
+  }
+
+  private async resolveSkillSearchRoot(workspaceRoot: string, relativeDir: string): Promise<string | null> {
+    const absoluteDir = path.resolve(workspaceRoot, relativeDir);
+    if (!this.isSubPath(workspaceRoot, absoluteDir)) {
+      return null;
+    }
+
+    const realWorkspaceRoot = await fs.realpath(workspaceRoot).catch(() => workspaceRoot);
+    const realDir = await fs.realpath(absoluteDir).catch(() => null);
+    if (!realDir || !this.isSubPath(realWorkspaceRoot, realDir)) {
+      return null;
+    }
+
+    return absoluteDir;
   }
 
   private async collectSkillsFromDirectory(
@@ -347,6 +374,7 @@ export class SkillManager {
   private async listSkillResources(skillRoot: string): Promise<string[]> {
     const resources: string[] = [];
     const stack = [skillRoot];
+    const realSkillRoot = await fs.realpath(skillRoot);
 
     while (stack.length > 0) {
       const currentDir = stack.pop();
@@ -355,8 +383,13 @@ export class SkillManager {
 
       for (const entry of entries) {
         const absolutePath = path.join(currentDir, entry.name);
+        const realPath = await fs.realpath(absolutePath).catch(() => null);
+        if (!realPath || !this.isSubPath(realSkillRoot, realPath)) {
+          continue;
+        }
+
         if (entry.isDirectory()) {
-          stack.push(absolutePath);
+          stack.push(realPath);
           continue;
         }
         if (entry.name === 'SKILL.md') {
@@ -392,7 +425,8 @@ export class SkillManager {
     return Array.from(new Set([...DEFAULT_SKILL_DIRECTORIES, ...customDirectories]
       .map((dir) => dir.trim())
       .filter(Boolean)
-      .map((dir) => dir.replace(/[\\/]+/g, '/').replace(/^\.\//, '').replace(/\/$/, ''))));
+      .map((dir) => dir.replace(/[\\/]+/g, '/').replace(/^\.\//, '').replace(/\/$/, ''))
+      .filter((dir) => this.isSafeWorkspaceRelativePath(dir))));
   }
 
   private getCacheKey(searchRoots: string[]): string {
@@ -412,6 +446,15 @@ export class SkillManager {
 
   private normalizeRelativePath(value: string): string {
     return value.replace(/[\\/]+/g, '/');
+  }
+
+  private isSafeWorkspaceRelativePath(value: string): boolean {
+    if (!value || value === '.' || path.isAbsolute(value) || /^[A-Za-z]:\//.test(value)) {
+      return false;
+    }
+
+    const normalized = path.posix.normalize(value);
+    return normalized !== '..' && !normalized.startsWith('../');
   }
 
   private isSubPath(parentPath: string, childPath: string): boolean {

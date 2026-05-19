@@ -1,7 +1,7 @@
 import { execFile } from 'child_process';
-import * as path from 'path';
 import type { LocalTool } from './types';
 import { errorResult, jsonResult } from './result';
+import { resolveWorkspaceDirectory } from './filesystemUtils';
 import {
     describeShellCommandPolicy,
     normalizeShellCommand,
@@ -45,7 +45,8 @@ export const executeCommandTool: LocalTool = {
         }
 
         try {
-            const cwd = resolveWorkspaceCwd(context.workspaceRoot, args.cwd);
+            const cwdArg = typeof args.cwd === 'string' && args.cwd.trim() === '' ? '.' : args.cwd ?? '.';
+            const cwd = await resolveWorkspaceDirectory(context.workspaceRoot, cwdArg);
             const timeout = typeof args.timeout === 'number' ? args.timeout : 60000;
             const execution = resolveShellExecutionPlan(commandLine, {
                 platform: process.platform,
@@ -72,26 +73,6 @@ export const executeCommandTool: LocalTool = {
     }
 };
 
-function resolveWorkspaceCwd(workspaceRoot: string, requestedCwd: unknown): string {
-    if (requestedCwd == null || requestedCwd === '') {
-        return workspaceRoot;
-    }
-    if (typeof requestedCwd !== 'string') {
-        throw new Error('cwd must be a string.');
-    }
-
-    const resolved = path.isAbsolute(requestedCwd)
-        ? path.normalize(requestedCwd)
-        : path.resolve(workspaceRoot, requestedCwd);
-    const relative = path.relative(workspaceRoot, resolved);
-    const isSubPath = relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
-
-    if (!isSubPath) {
-        throw new Error(`Permission denied: cwd must stay inside the workspace (${workspaceRoot}).`);
-    }
-
-    return resolved;
-}
 
 async function runCommand(
     file: string,
