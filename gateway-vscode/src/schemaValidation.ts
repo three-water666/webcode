@@ -153,11 +153,11 @@ function validateObjectMembers(value: JsonObject, schema: JsonObject, path: stri
             continue;
         }
 
-        if (additionalProperties === false) {
+        if (additionalProperties === false || additionalProperties === undefined) {
             errors.push(`${formatPath(path, key)} is not allowed by this tool's inputSchema.`);
             continue;
         }
-        if (additionalProperties === true || additionalProperties === undefined) {
+        if (additionalProperties === true) {
             continue;
         }
         if (isPlainObject(additionalProperties)) {
