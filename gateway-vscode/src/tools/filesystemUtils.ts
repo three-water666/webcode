@@ -88,6 +88,13 @@ export async function atomicWriteFile(filePath: string, content: string): Promis
     const tempPath = `${filePath}.${crypto.randomBytes(16).toString('hex')}.tmp`;
     await fs.writeFile(tempPath, content, 'utf8');
     try {
+        // Preserve original file permissions if the target already exists.
+        try {
+            const stat = await fs.stat(filePath);
+            await fs.chmod(tempPath, stat.mode);
+        } catch {
+            // File may not exist yet; keep default permissions.
+        }
         await fs.rename(tempPath, filePath);
     } catch (error) {
         try {

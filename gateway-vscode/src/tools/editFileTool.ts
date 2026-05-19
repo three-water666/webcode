@@ -75,14 +75,17 @@ export const editFileTool: LocalTool = {
     async execute(args, context) {
         const filePath = await resolveWorkspacePath(context.workspaceRoot, args.path);
         const dryRun = args.dryRun === true;
-        const originalContent = normalizeLineEndings(await fs.readFile(filePath, 'utf8'));
+        const rawContent = await fs.readFile(filePath, 'utf8');
+        const usesCRLF = rawContent.includes('\r\n');
+        const originalContent = normalizeLineEndings(rawContent);
         const modifiedContent = typeof args.patch === 'string'
             ? applyUnifiedPatch(originalContent, args.patch)
             : applyExactEdits(originalContent, args.edits as FileEdit[]);
 
         const diff = createUnifiedDiff(originalContent, modifiedContent, String(args.path));
         if (!dryRun && modifiedContent !== originalContent) {
-            await atomicWriteFile(filePath, modifiedContent);
+            const contentToWrite = usesCRLF ? modifiedContent.replace(/\n/g, '\r\n') : modifiedContent;
+            await atomicWriteFile(filePath, contentToWrite);
         }
 
         return textResult(diff);
