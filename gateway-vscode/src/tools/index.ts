@@ -1,7 +1,6 @@
 import type { LocalTool } from './types';
 import { editFileTool } from './editFileTool';
 import { executeCommandTool } from './executeCommandTool';
-import { getDiagnosticsTool } from './getDiagnosticsTool';
 import { getProjectRulesTool } from './getProjectRulesTool';
 import { getSkillTool } from './getSkillTool';
 import { listSkillsTool } from './listSkillsTool';
@@ -21,7 +20,6 @@ const LOCAL_TOOLS: LocalTool[] = [
     editFileTool,
     searchFilesTool,
     searchCodeTool,
-    getDiagnosticsTool,
     executeCommandTool,
     runInTerminalTool,
     terminalSessionTool,

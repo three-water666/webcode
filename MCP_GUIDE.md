@@ -2,7 +2,7 @@
 
 This guide explains how to configure third-party MCP servers in webcode, using `chrome-devtools-mcp` as an example.
 
-webcode already provides built-in local tools for files, search, diagnostics, and command execution through the VS Code extension. You do not need to configure extra MCP servers for those built-in capabilities. `webcodeGateway.servers` is only for optional third-party MCP servers.
+webcode already provides built-in local tools for files, search, and command execution through the VS Code extension. You do not need to configure extra MCP servers for those built-in capabilities. `webcodeGateway.servers` is only for optional third-party MCP servers.
 
 ## Configuration Location
 
@@ -193,7 +193,6 @@ The following capabilities are built into webcode and do not require third-party
 - `edit_file`
 - `search_files`
 - `search_code`
-- `get_diagnostics`
 - `execute_command`
 - `run_in_terminal`
 - `terminal_session`

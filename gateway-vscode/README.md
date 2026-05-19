@@ -53,7 +53,7 @@ You can override the scan paths with the setting `webcodeGateway.skillDirectorie
 
 The setting `webcodeGateway.servers` is now only for optional third-party MCP servers.
 
-- Built-in filesystem and diagnostics access is implemented directly by the VS Code extension as a small local tool set: read, write, edit, search files, search code, and diagnostics.
+- Built-in file and search access is implemented directly by the VS Code extension as a small local tool set: read, write, edit, search files, and search code.
 - Built-in command execution is implemented directly by the VS Code extension and uses POSIX/bash commands.
 - Third-party MCP tools are exposed as `serverId:toolName`; bare tool names are reserved for built-in local tools.
 - Legacy `filesystem` / `command` entries in user settings are ignored.

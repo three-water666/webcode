@@ -2,7 +2,7 @@
 
 本文说明如何在 webcode 中配置第三方 MCP server，例如 `chrome-devtools-mcp`。
 
-webcode 自带的文件、搜索、诊断、命令执行等能力已经由 VS Code 扩展内置实现，不需要再额外配置 MCP server。`webcodeGateway.servers` 只用于接入可选的第三方 MCP server。
+webcode 自带的文件、搜索、命令执行等能力已经由 VS Code 扩展内置实现，不需要再额外配置 MCP server。`webcodeGateway.servers` 只用于接入可选的第三方 MCP server。
 
 ## 配置入口
 
@@ -193,7 +193,6 @@ SSE 示例：
 - `edit_file`
 - `search_files`
 - `search_code`
-- `get_diagnostics`
 - `execute_command`
 - `run_in_terminal`
 - `terminal_session`
