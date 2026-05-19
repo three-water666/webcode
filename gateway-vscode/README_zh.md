@@ -53,6 +53,7 @@
 
 - 内置文件系统和 diagnostics 能力由 VS Code 插件直接实现，只暴露读、写、编辑、搜索文件名、搜索代码、读取诊断这几个工具。
 - 内置命令执行能力由 VS Code 插件直接实现，使用 POSIX/bash 命令。
+- 第三方 MCP 工具会以 `serverId:toolName` 暴露；裸工具名只保留给内置本地工具。
 - 用户设置里旧的 `filesystem` / `command` 项会被自动忽略。
 
 ## ❓ 常见问题

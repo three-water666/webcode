@@ -10,6 +10,7 @@
 ## 1. Gateway local tools
 
 这些工具由 `gateway-vscode/src/tools/` 直接实现，并注入到 `list_tools` 返回值的 `internal` 分组。文件能力不再通过 `@modelcontextprotocol/server-filesystem` 启动。
+裸工具名只属于这些本地工具；第三方 MCP server 暴露的工具会以 `serverId:toolName` 的形式出现在工具列表中。
 
 | 工具名 | 作用 |
 | --- | --- |
@@ -39,7 +40,7 @@
 ## 3. 不在本文档统计范围内的工具
 
 - 用户通过 `webcodeGateway.servers` 配置挂载的第三方 MCP servers。
-- 第三方 MCP server 提供的 Git、数据库、浏览器自动化、远程 API 等工具。
+- 第三方 MCP server 提供的 Git、数据库、浏览器自动化、远程 API 等工具。调用时使用 `serverId:toolName`，例如 `github:search_repositories`。
 - VS Code 命令面板命令、状态栏操作、浏览器插件 UI 操作。
 
 如果要看“当前运行时完整工具清单”，应以模型侧执行 `list_tools` 的返回结果为准。

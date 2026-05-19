@@ -55,6 +55,7 @@ The setting `webcodeGateway.servers` is now only for optional third-party MCP se
 
 - Built-in filesystem and diagnostics access is implemented directly by the VS Code extension as a small local tool set: read, write, edit, search files, search code, and diagnostics.
 - Built-in command execution is implemented directly by the VS Code extension and uses POSIX/bash commands.
+- Third-party MCP tools are exposed as `serverId:toolName`; bare tool names are reserved for built-in local tools.
 - Legacy `filesystem` / `command` entries in user settings are ignored.
 
 ## ❓ FAQ

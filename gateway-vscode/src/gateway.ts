@@ -51,10 +51,21 @@ interface StartResult {
     token: string;
 }
 
+type RemoteToolRoute = {
+    client: Client;
+    definition: ToolDefinition;
+    serverId: string;
+    toolName: string;
+};
+
+function getRemoteToolPublicName(serverId: string, toolName: string): string {
+    return `${serverId}:${toolName}`;
+}
+
 export class GatewayManager {
     private app: express.Express | null = null;
     private server: any = null;
-    private toolRouter = new Map<string, { client: Client; definition: ToolDefinition; serverId: string }>();
+    private toolRouter = new Map<string, RemoteToolRoute>();
     private connectedClients: { id: string; client: Client }[] = [];
     private localTools: Map<string, LocalTool> = createLocalToolMap();
 
@@ -233,10 +244,17 @@ export class GatewayManager {
                 this.log(`   ✅ [${serverId}] Connected. Loaded ${list.tools.length} tools.`);
 
                 list.tools.forEach((tool) => {
-                    if (this.toolRouter.has(tool.name)) {
-                        this.log(`   ⚠️ Warning: Tool '${tool.name}' overridden by ${serverId}.`);
+                    const toolName = tool.name;
+                    const publicName = getRemoteToolPublicName(serverId, toolName);
+                    if (this.toolRouter.has(publicName)) {
+                        this.log(`   ⚠️ Warning: Tool '${publicName}' overridden by ${serverId}.`);
                     }
-                    this.toolRouter.set(tool.name, { client, definition: tool as ToolDefinition, serverId });
+                    this.toolRouter.set(publicName, {
+                        client,
+                        definition: { ...tool, name: publicName } as ToolDefinition,
+                        serverId,
+                        toolName
+                    });
                 });
 
             } catch (err) {
@@ -515,6 +533,14 @@ export class GatewayManager {
                 }
             }
 
+            const route = this.toolRouter.get(name);
+            if (!route) {
+                return res.status(404).json({
+                    isError: true,
+                    content: [{ type: 'text', text: `Tool '${name}' not found. Third-party MCP tools must be called as 'server:tool'.` }]
+                });
+            }
+
             // Auto-resolve relative paths for external MCP tools known to operate on local files.
             // [Fix v2] Use Allowlist instead of Blocklist to avoid matching remote tools like 'get_file_contents'
             const localPathTools = [
@@ -523,9 +549,9 @@ export class GatewayManager {
                 'move_file', 'search_files', 'get_file_info', 'create_directory'
             ];
             // Git tools also operate on local filesystem
-            const isLocalTool = localPathTools.includes(name) || name.startsWith('git_');
+            const isLocalPathTool = localPathTools.includes(route.toolName) || route.toolName.startsWith('git_');
 
-            if (isLocalTool && args && vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+            if (isLocalPathTool && args && vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
                 const root = vscode.workspace.workspaceFolders[0].uri.fsPath;
                 const fixPath = (p: string) => {
                     if (typeof p === 'string' && !path.isAbsolute(p)) {
@@ -542,18 +568,10 @@ export class GatewayManager {
                 if (Array.isArray(args.paths)) {args.paths = args.paths.map((p: any) => fixPath(p));}
             }
 
-            const route = this.toolRouter.get(name);
-            if (!route) {
-                return res.status(404).json({
-                    isError: true,
-                    content: [{ type: 'text', text: `Tool '${name}' not found.` }]
-                });
-            }
-
             try {
                 const argsPreview = JSON.stringify(args ?? {}).slice(0, 50) + '...';
-                this.log(`   🚀 Executing: ${name} ${argsPreview}`);
-                const result = await route.client.callTool({ name, arguments: args ?? {} });
+                this.log(`   🚀 Executing MCP tool: ${name} ${argsPreview}`);
+                const result = await route.client.callTool({ name: route.toolName, arguments: args ?? {} });
                 const toolDuration = Date.now() - toolStart;
                 this.log(`   ✅ Finished: ${name} (${toolDuration}ms)`);
                 res.json(result);
