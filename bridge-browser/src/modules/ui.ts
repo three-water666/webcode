@@ -19,6 +19,36 @@ const AUTO_SEND_ACTIONS: AutoSendAction[] = [
   "enter",
   "ctrl-enter",
 ];
+const MODAL_EVENT_GUARD_TYPES = [
+  "beforeinput",
+  "change",
+  "click",
+  "compositionend",
+  "compositionstart",
+  "compositionupdate",
+  "contextmenu",
+  "cut",
+  "dblclick",
+  "input",
+  "keydown",
+  "keypress",
+  "keyup",
+  "mousedown",
+  "mouseup",
+  "paste",
+  "pointerdown",
+  "pointerup",
+  "touchend",
+  "touchstart",
+];
+const MODAL_FOCUS_RESTORE_TYPES = [
+  "beforeinput",
+  "compositionstart",
+  "compositionupdate",
+  "keydown",
+  "keypress",
+  "paste",
+];
 
 /**
  * 终止当前正在进行的自动发送轮询机制
@@ -30,6 +60,46 @@ export function cancelAutoSend() {
     autoSendTimer = null;
     Logger.log("🚫 Auto-send cancelled (New activity detected)", "warn");
   }
+}
+
+function installModalEventGuards(
+  host: HTMLElement,
+  shadow: ShadowRoot,
+  getFocusTarget?: (event: Event) => HTMLElement | null
+) {
+  const cleanupCallbacks: Array<() => void> = [];
+  const addGuard = (
+    target: EventTarget,
+    type: string,
+    listener: EventListener,
+    options?: AddEventListenerOptions | boolean
+  ) => {
+    target.addEventListener(type, listener, options);
+    cleanupCallbacks.push(() => target.removeEventListener(type, listener, options));
+  };
+
+  const restoreModalFocus = (event: Event) => {
+    const focusTarget = getFocusTarget?.(event);
+    if (!focusTarget || !isElementVisible(focusTarget)) {return;}
+    if (shadow.activeElement === focusTarget) {return;}
+    focusTarget.focus({ preventScroll: true });
+  };
+
+  const stopPagePropagation = (event: Event) => {
+    event.stopPropagation();
+  };
+
+  for (const type of MODAL_FOCUS_RESTORE_TYPES) {
+    addGuard(host, type, restoreModalFocus, true);
+  }
+
+  for (const type of MODAL_EVENT_GUARD_TYPES) {
+    addGuard(shadow, type, stopPagePropagation);
+  }
+
+  return () => {
+    cleanupCallbacks.forEach((cleanup) => cleanup());
+  };
 }
 
 // === 视觉标记 ===
@@ -674,7 +744,10 @@ export function showConfirmationModal(
     left: 0,
     width: "0",
     height: "0",
+    outline: "none",
   });
+  host.setAttribute("contenteditable", "plaintext-only");
+  host.setAttribute("spellcheck", "false");
   document.body.appendChild(host);
   const shadow = host.attachShadow({ mode: "open" });
 
@@ -825,10 +898,25 @@ export function showConfirmationModal(
   const btnAllowExact = card.querySelector<HTMLButtonElement>(".btn-allow-exact");
   const btnAllowExecutable = card.querySelector<HTMLButtonElement>(".btn-allow-executable");
   const btnAllowPrefix = card.querySelector<HTMLButtonElement>(".btn-allow-prefix");
+  const removeModalGuards = installModalEventGuards(host, shadow, (event) => {
+    if (inputReason.style.display === "none") {return null;}
+    const path = event.composedPath();
+    if (path.includes(inputReason) || shadow.activeElement === inputReason) {
+      return inputReason;
+    }
+    return null;
+  });
+  let isClosed = false;
+  const closeModal = () => {
+    if (isClosed) {return;}
+    isClosed = true;
+    removeModalGuards();
+    host.remove();
+  };
 
   // 1. Approve Once
   btnConfirm.onclick = () => {
-    document.body.removeChild(host);
+    closeModal();
     onConfirm(false);
   };
 
@@ -847,27 +935,27 @@ export function showConfirmationModal(
 
   // 2.1 Always Allow Confirm Action
   btnConfirmAlways.onclick = () => {
-      document.body.removeChild(host);
+      closeModal();
       onConfirm('exact');
   };
 
   if (btnAllowExact) {
     btnAllowExact.onclick = () => {
-      document.body.removeChild(host);
+      closeModal();
       onConfirm('exact');
     };
   }
 
   if (btnAllowExecutable) {
     btnAllowExecutable.onclick = () => {
-      document.body.removeChild(host);
+      closeModal();
       onConfirm('executable');
     };
   }
 
   if (btnAllowPrefix) {
     btnAllowPrefix.onclick = () => {
-      document.body.removeChild(host);
+      closeModal();
       onConfirm('prefix');
     };
   }
@@ -887,7 +975,7 @@ export function showConfirmationModal(
       btnBack.style.display = "inline-block";
     } else {
       const reason = inputReason.value.trim();
-      document.body.removeChild(host);
+      closeModal();
       onReject(reason);
     }
   };
@@ -914,7 +1002,11 @@ export function showConfirmationModal(
   };
 
   inputReason.onkeydown = (e) => {
-    if (e.key === "Enter") {btnReject.click();}
+    if (e.key === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
+      btnReject.click();
+    }
   };
   overlay.appendChild(card);
   shadow.appendChild(overlay);
