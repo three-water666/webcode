@@ -16,11 +16,11 @@ export const executeCommandTool: LocalTool = {
     serverId: 'internal',
     definition: {
         name: 'execute_command',
-        description: 'Execute a short-lived POSIX/bash shell command in the background and return stdout, stderr, and exitCode. On Windows this requires Git Bash and does not support cmd.exe or PowerShell syntax. For long-running commands or visible output, use run_in_terminal.',
+        description: 'Execute a short-lived POSIX/bash shell command in the background and return stdout, stderr, and exitCode. Use this for builds, tests, package managers, git, and project scripts. Do not use it to read or search files; use read_file, search_files, or search_code instead. On Windows this requires Git Bash and does not support cmd.exe or PowerShell syntax. For long-running commands or visible output, use run_in_terminal.',
         inputSchema: {
             type: 'object',
             properties: {
-                command: { type: 'string', minLength: 1, description: 'POSIX/bash command to execute, for example "git status" or "pnpm test".' },
+                command: { type: 'string', minLength: 1, description: 'POSIX/bash command to execute, for example "git status" or "pnpm test". Do not run grep, rg, find, cat, sed, awk, or nl just to inspect workspace files; use the dedicated file/search tools.' },
                 cwd: { type: 'string', description: 'Optional working directory inside the workspace. Defaults to the workspace root.' },
                 timeout: { type: 'integer', minimum: 1000, maximum: 120000, description: 'Timeout in milliseconds. Default: 60000.', default: 60000 }
             },

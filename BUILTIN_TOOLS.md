@@ -16,12 +16,12 @@
 | --- | --- |
 | `list_tools` | 返回当前可用工具列表，按 server 分组，每个工具都包含完整 schema。 |
 | `get_project_rules` | 读取 workspace 根目录中的 `USER_RULES.md`、`AGENTS.md` 或 `CLAUDE.md`。 |
-| `read_file` | 读取 workspace 内的 UTF-8 文本文件，可用 `head` 或 `tail` 只读取开头/结尾若干行。 |
+| `read_file` | 读取 workspace 内的 UTF-8 文本文件，可用 `head`、`tail`、`start_line`、`end_line`、`show_line_numbers` 读取指定范围并显示行号。未指定范围时会对大文件默认截断，可用 `force` 强制全量返回。 |
 | `write_file` | 创建或完全覆盖 workspace 内的 UTF-8 文本文件。 |
 | `edit_file` | 对 workspace 内文本文件做精确文本替换或应用 unified diff patch，可用 `dryRun` 返回 diff 预览。 |
 | `search_files` | 按文件名或相对路径搜索文件，基于 VS Code 文件搜索，支持简单 glob。 |
 | `search_code` | 基于 ripgrep 在 workspace 文本文件中搜索代码内容，返回相对路径、行号和命中行。 |
-| `execute_command` | 在后台执行短生命周期 POSIX/bash 命令并返回 stdout/stderr/exitCode。Windows 上要求 Git Bash；`cwd` 必须位于当前 workspace 内。 |
+| `execute_command` | 在后台执行短生命周期 POSIX/bash 命令并返回 stdout/stderr/exitCode，适用于构建、测试、git、包管理器和项目脚本。读取或搜索文件应优先使用 `read_file`、`search_files`、`search_code`。 |
 | `run_in_terminal` | 在 VS Code 可见终端会话中启动一条长时间运行的 POSIX shell 命令，立即返回 `session_id`，适合常驻任务或需要用户可见输出的任务。Windows 上要求 Git Bash，命令应使用 bash/POSIX 语法，而不是 cmd.exe 或 PowerShell 语法；明显破坏性、提权或 shell 逃逸类命令会在执行前被拒绝。 |
 | `terminal_session` | 管理由 `run_in_terminal` 创建的终端会话：`action=list` 查看状态，`action=read` 读取输出，`action=stop` 停止会话。 |
 | `list_skills` | 列出当前 workspace 中发现的本地 skills。 |
