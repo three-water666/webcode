@@ -16,7 +16,7 @@
 | --- | --- |
 | `list_tools` | 返回当前可用工具列表，按 server 分组，每个工具都包含完整 schema。 |
 | `get_project_rules` | 读取 workspace 根目录中的 `USER_RULES.md`、`AGENTS.md` 或 `CLAUDE.md`。 |
-| `read_file` | 读取 workspace 内的 UTF-8 文本文件，可用 `head`、`tail`、`start_line`、`end_line`、`show_line_numbers` 读取指定范围并显示行号。 |
+| `read_file` | 读取 workspace 内的 UTF-8 文本文件，可用 `head`、`tail`、`start_line`、`end_line`、`show_line_numbers` 读取指定范围并显示行号。未指定范围时会对大文件默认截断，可用 `force` 强制全量返回。 |
 | `write_file` | 创建或完全覆盖 workspace 内的 UTF-8 文本文件。 |
 | `edit_file` | 对 workspace 内文本文件做精确文本替换或应用 unified diff patch，可用 `dryRun` 返回 diff 预览。 |
 | `search_files` | 按文件名或相对路径搜索文件，基于 VS Code 文件搜索，支持简单 glob。 |

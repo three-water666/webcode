@@ -1,13 +1,15 @@
 import * as fs from 'fs/promises';
 import type { LocalTool } from './types';
-import { textResult } from './result';
 import { normalizeLineEndings, resolveWorkspacePath } from './filesystemUtils';
+
+const DEFAULT_AUTO_READ_MAX_BYTES = 64 * 1024;
+const DEFAULT_AUTO_READ_MAX_LINES = 400;
 
 export const readFileTool: LocalTool = {
     serverId: 'internal',
     definition: {
         name: 'read_file',
-        description: 'Read a UTF-8 text file inside the current VS Code workspace. Use head, tail, start_line/end_line, or show_line_numbers to inspect code without shell commands like cat, sed, or nl.',
+        description: 'Read a UTF-8 text file inside the current VS Code workspace. Large files are truncated by default unless head, tail, start_line/end_line, or force is provided. Use show_line_numbers to inspect code without shell commands like cat, sed, or nl.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -16,7 +18,8 @@ export const readFileTool: LocalTool = {
                 tail: { type: 'integer', minimum: 1, description: 'Optional number of lines to read from the end of the file.' },
                 start_line: { type: 'integer', minimum: 1, description: 'Optional 1-based first line to read. Must be used without head or tail.' },
                 end_line: { type: 'integer', minimum: 1, description: 'Optional 1-based last line to read, inclusive. Must be used without head or tail.' },
-                show_line_numbers: { type: 'boolean', description: 'Prefix each returned line with its 1-based line number. Default: false.', default: false }
+                show_line_numbers: { type: 'boolean', description: 'Prefix each returned line with its 1-based line number. Default: false.', default: false },
+                force: { type: 'boolean', description: 'If true, return the requested content even when the file exceeds the default automatic read limit. Default: false.', default: false }
             },
             required: ['path']
         },
@@ -24,23 +27,128 @@ export const readFileTool: LocalTool = {
     },
     async execute(args, context) {
         const filePath = await resolveWorkspacePath(context.workspaceRoot, args.path);
-        const content = normalizeLineEndings(await fs.readFile(filePath, 'utf8'));
-        return textResult(selectReadFileContent(content, args));
+        const fileStats = await fs.stat(filePath);
+        const result = await readFileContent(filePath, fileStats.size, args);
+        return {
+            content: [{ type: 'text', text: result.text }],
+            structuredContent: result.metadata
+        };
     }
 };
 
 export function selectReadFileContent(content: string, args: Record<string, unknown>): string {
-    const lines = content.split('\n');
-    const selection = resolveLineSelection(lines.length, args);
-    const showLineNumbers = args.show_line_numbers === true;
+    return selectReadFileResult(content, args).text;
+}
 
-    if (!selection && !showLineNumbers) {
-        return content;
+type ReadFileResult = {
+    text: string;
+    metadata: {
+        mode: 'full' | 'range' | 'truncated';
+        truncated: boolean;
+        lineCount?: number;
+        returnedLines: {
+            start: number;
+            end: number;
+        };
+        returnedBytes?: number;
+        fileBytes?: number;
+    };
+};
+
+async function readFileContent(
+    filePath: string,
+    fileBytes: number,
+    args: Record<string, unknown>
+): Promise<ReadFileResult> {
+    if (shouldReadFullContent(fileBytes, args)) {
+        return selectReadFileResult(normalizeLineEndings(await fs.readFile(filePath, 'utf8')), args, { fileBytes });
     }
 
-    const startIndex = selection?.startIndex ?? 0;
-    const endIndex = selection?.endIndex ?? lines.length;
-    return formatSelectedLines(lines.slice(startIndex, endIndex), startIndex + 1, showLineNumbers);
+    const content = normalizeLineEndings(await readFilePrefix(filePath, DEFAULT_AUTO_READ_MAX_BYTES));
+    return selectReadFileResult(content, args, {
+        fileBytes,
+        forceTruncated: true,
+        totalLineCountKnown: false
+    });
+}
+
+export function selectReadFileResult(
+    content: string,
+    args: Record<string, unknown>,
+    options: {
+        fileBytes?: number;
+        forceTruncated?: boolean;
+        totalLineCountKnown?: boolean;
+    } = {}
+): ReadFileResult {
+    const lines = splitLines(content);
+    const selection = resolveLineSelection(lines.length, args);
+    const showLineNumbers = args.show_line_numbers === true;
+    const forceTruncated = options.forceTruncated === true;
+    const totalLineCountKnown = options.totalLineCountKnown !== false;
+
+    if (selection) {
+        const selected = formatSelectedLines(
+            lines.slice(selection.startIndex, selection.endIndex),
+            selection.startIndex + 1,
+            showLineNumbers
+        );
+        return {
+            text: selected,
+            metadata: {
+                mode: 'range',
+                truncated: false,
+                lineCount: totalLineCountKnown ? lines.length : undefined,
+                returnedLines: {
+                    start: selection.startIndex + 1,
+                    end: selection.endIndex
+                },
+                fileBytes: options.fileBytes
+            }
+        };
+    }
+
+    if (!forceTruncated && shouldReturnFullContent(lines, args, options.fileBytes)) {
+        return {
+            text: showLineNumbers ? formatSelectedLines(lines, 1, true) : content,
+            metadata: {
+                mode: 'full',
+                truncated: false,
+                lineCount: lines.length,
+                returnedLines: {
+                    start: lines.length > 0 ? 1 : 0,
+                    end: lines.length
+                },
+                fileBytes: options.fileBytes
+            }
+        };
+    }
+
+    const truncatedLineCount = Math.min(lines.length, DEFAULT_AUTO_READ_MAX_LINES);
+    const truncatedLines = lines.slice(0, truncatedLineCount);
+    const text = appendTruncationNotice(
+        formatSelectedLines(truncatedLines, 1, showLineNumbers),
+        {
+            fileBytes: options.fileBytes,
+            returnedLines: truncatedLineCount,
+            lineCount: totalLineCountKnown ? lines.length : undefined
+        }
+    );
+
+    return {
+        text,
+        metadata: {
+            mode: 'truncated',
+            truncated: true,
+            lineCount: totalLineCountKnown ? lines.length : undefined,
+            returnedLines: {
+                start: truncatedLineCount > 0 ? 1 : 0,
+                end: truncatedLineCount
+            },
+            returnedBytes: Buffer.byteLength(text, 'utf8'),
+            fileBytes: options.fileBytes
+        }
+    };
 }
 
 type LineSelection = {
@@ -72,6 +180,22 @@ function resolveLineSelection(lineCount: number, args: Record<string, unknown>):
     }
 
     return null;
+}
+
+function shouldReadFullContent(fileBytes: number, args: Record<string, unknown>): boolean {
+    return args.force === true || hasExplicitLineSelection(args) || fileBytes <= DEFAULT_AUTO_READ_MAX_BYTES;
+}
+
+function hasExplicitLineSelection(args: Record<string, unknown>): boolean {
+    return args.head !== undefined ||
+        args.tail !== undefined ||
+        args.start_line !== undefined ||
+        args.end_line !== undefined;
+}
+
+function shouldReturnFullContent(lines: string[], args: Record<string, unknown>, fileBytes?: number): boolean {
+    return args.force === true ||
+        ((fileBytes === undefined || fileBytes <= DEFAULT_AUTO_READ_MAX_BYTES) && lines.length <= DEFAULT_AUTO_READ_MAX_LINES);
 }
 
 function assertCompatibleLineOptions(options: {
@@ -115,4 +239,51 @@ function formatSelectedLines(lines: string[], firstLineNumber: number, showLineN
     return lines
         .map((line, index) => `${firstLineNumber + index}: ${line}`)
         .join('\n');
+}
+
+async function readFilePrefix(filePath: string, maxBytes: number): Promise<string> {
+    const handle = await fs.open(filePath, 'r');
+    try {
+        const buffer = Buffer.alloc(maxBytes);
+        const { bytesRead } = await handle.read(buffer, 0, maxBytes, 0);
+        return buffer.subarray(0, bytesRead).toString('utf8');
+    } finally {
+        await handle.close();
+    }
+}
+
+function splitLines(content: string): string[] {
+    if (content === '') {
+        return [];
+    }
+    return content.split('\n');
+}
+
+function appendTruncationNotice(
+    content: string,
+    details: {
+        fileBytes?: number;
+        returnedLines: number;
+        lineCount?: number;
+    }
+): string {
+    const totalLinesText = details.lineCount === undefined ? '' : ` of ${details.lineCount}`;
+    const sizeText = details.fileBytes === undefined ? '' : ` File size: ${formatBytes(details.fileBytes)}.`;
+    const notice = [
+        '',
+        `[read_file] File is large; returned lines 1-${details.returnedLines}${totalLinesText} because no line range was provided.${sizeText}`,
+        `[read_file] Use start_line/end_line, head, tail, or force: true to read more.`
+    ].join('\n');
+
+    return content ? `${content}\n${notice}` : notice.trimStart();
+}
+
+function formatBytes(bytes: number): string {
+    if (bytes < 1024) {
+        return `${bytes} B`;
+    }
+    if (bytes < 1024 * 1024) {
+        return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
