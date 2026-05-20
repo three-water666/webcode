@@ -109,6 +109,7 @@ chrome.runtime.onMessage.addListener((request) => {
         await loadPromptsFromStorage();
 
         // Re-activate immediately
+        scheduleAutoInitCheck();
         runMainLoop();
       })();
     }
@@ -122,6 +123,16 @@ let autoInitListenerStarted = false;
 let autoInitModalOpen = false;
 let lastAutoInitPromptedText = "";
 
+const AUTO_INIT_CHECK_DELAYS_MS = [0, 50, 150, 350];
+const AUTO_INIT_EVENT_TYPES = [
+  "beforeinput",
+  "input",
+  "keyup",
+  "paste",
+  "compositionend",
+  "change",
+  "focusin",
+] as const;
 const AUTO_INIT_TRIGGER_TOKEN_RE = /(?:\/webcode|@webcode)(?=$|[\s\n.,，。!?！？:：;；])/gi;
 const AUTO_INIT_INVALID_PREFIX_RE = /[A-Za-z0-9_/@.]/;
 const AUTO_INIT_IGNORABLE_PREFIX_RE = /[\s\u00a0\uFEFF\u200B]/;
@@ -169,6 +180,7 @@ function initDOMConfig() {
           DOM = matchedSite.selectors;
           currentPlatform = matchedSite.name;
           setupAutoInitTrigger();
+          scheduleAutoInitCheck();
           startObserver();
         } else {
           console.log(`${BRANDING.productName}: Current site is not configured in VS Code. Idle.`);
@@ -182,22 +194,24 @@ function setupAutoInitTrigger() {
   if (autoInitListenerStarted) {return;}
   autoInitListenerStarted = true;
 
-  const scheduleCheck = () => {
+  for (const eventType of AUTO_INIT_EVENT_TYPES) {
+    document.addEventListener(eventType, scheduleAutoInitCheck, true);
+  }
+}
+
+function scheduleAutoInitCheck() {
+  for (const delay of AUTO_INIT_CHECK_DELAYS_MS) {
     setTimeout(() => {
       void maybePromptAutoInit();
-    }, 0);
-  };
-
-  document.addEventListener("input", scheduleCheck, true);
-  document.addEventListener("keyup", scheduleCheck, true);
-  document.addEventListener("paste", scheduleCheck, true);
+    }, delay);
+  }
 }
 
 async function maybePromptAutoInit() {
   if (!DOM || !isClientConnected || autoInitModalOpen) {return;}
 
-  const inputEl = document.querySelector<HTMLElement>(DOM.inputArea);
-  if (!inputEl || !isActiveInput(inputEl)) {return;}
+  const inputEl = findCurrentInputElement(true);
+  if (!inputEl) {return;}
 
   const currentText = getInputText(inputEl);
   const currentTrigger = findAutoInitTrigger(currentText);
@@ -217,7 +231,7 @@ async function maybePromptAutoInit() {
 
   if (!confirmed || !DOM) {return;}
 
-  const latestInput = document.querySelector<HTMLElement>(DOM.inputArea);
+  const latestInput = inputEl.isConnected ? inputEl : findCurrentInputElement(false);
   if (!latestInput) {return;}
 
   const latestText = getInputText(latestInput);
@@ -235,13 +249,37 @@ async function maybePromptAutoInit() {
   }
 }
 
+function findCurrentInputElement(requireActive: boolean): HTMLElement | null {
+  if (!DOM) {return null;}
+
+  const candidates = Array.from(document.querySelectorAll<HTMLElement>(DOM.inputArea));
+  if (candidates.length === 0) {return null;}
+
+  const activeInput = candidates.find((candidate) => isActiveInput(candidate));
+  if (activeInput) {return activeInput;}
+
+  if (requireActive) {return null;}
+  return candidates.find((candidate) => isVisibleElement(candidate)) ?? candidates[0] ?? null;
+}
+
 function isActiveInput(inputEl: HTMLElement): boolean {
   const activeEl = document.activeElement;
   return activeEl === inputEl || Boolean(activeEl) && inputEl.contains(activeEl);
 }
 
 function getInputText(inputEl: HTMLElement | HTMLInputElement | HTMLTextAreaElement): string {
-  return (inputEl as HTMLInputElement).value ?? inputEl.innerText ?? "";
+  if (inputEl instanceof HTMLInputElement || inputEl instanceof HTMLTextAreaElement) {
+    return inputEl.value;
+  }
+  return inputEl.innerText ?? inputEl.textContent ?? "";
+}
+
+function isVisibleElement(element: HTMLElement): boolean {
+  const style = window.getComputedStyle(element);
+  if (style.display === "none" || style.visibility === "hidden") {return false;}
+
+  const rect = element.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
 }
 
 chrome.storage.onChanged.addListener((changes, namespace) => {
@@ -270,7 +308,9 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
       Logger.log(t("config_updated"), "action");
     }
     if (changes[promptKey] || changes[trainKey] || changes[errorKey] || changes[initKey] || changes[oversizeKey]) {
-      loadPromptsFromStorage();
+      void loadPromptsFromStorage().then(() => {
+        scheduleAutoInitCheck();
+      });
     }
   }
 });
@@ -702,6 +742,7 @@ function startObserver() {
       }
       await loadPromptsFromStorage();
       Logger.log(`${BRANDING.productName} activated for ${currentPlatform} (Connected)`, "info");
+      scheduleAutoInitCheck();
       runMainLoop();
     } else {
       isClientConnected = false;
