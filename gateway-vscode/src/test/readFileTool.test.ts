@@ -138,13 +138,35 @@ suite('Read File Tool', () => {
             assert.strictEqual(await readFilePrefix(filePath, 7), 'abcd你');
         });
     });
+
+    test('keeps invalid continuation bytes at the prefix boundary', async () => {
+        await withTempFileBytes(Buffer.from([0x80, 0x80, 0x80, 0x80]), async filePath => {
+            assert.strictEqual(await readFilePrefix(filePath, 4), '\uFFFD\uFFFD\uFFFD\uFFFD');
+        });
+    });
+
+    test('keeps invalid lead bytes at the prefix boundary', async () => {
+        await withTempFileBytes(Buffer.from([0x61, 0xFF, 0x80, 0x80]), async filePath => {
+            assert.strictEqual(await readFilePrefix(filePath, 4), 'a\uFFFD\uFFFD\uFFFD');
+        });
+    });
+
+    test('keeps invalid lead-like bytes at the prefix boundary', async () => {
+        await withTempFileBytes(Buffer.from([0x61, 0xC0]), async filePath => {
+            assert.strictEqual(await readFilePrefix(filePath, 2), 'a\uFFFD');
+        });
+    });
 });
 
 async function withTempFile<T>(content: string, callback: (filePath: string) => Promise<T>): Promise<T> {
+    return withTempFileBytes(Buffer.from(content, 'utf8'), callback);
+}
+
+async function withTempFileBytes<T>(content: Buffer, callback: (filePath: string) => Promise<T>): Promise<T> {
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'read-file-tool-'));
     const filePath = path.join(tempDir, 'sample.txt');
     try {
-        await fs.writeFile(filePath, content, 'utf8');
+        await fs.writeFile(filePath, content);
         return await callback(filePath);
     } finally {
         await fs.rm(tempDir, { recursive: true, force: true });
