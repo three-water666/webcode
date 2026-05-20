@@ -1,1 +1,1 @@
-The result of the tool execution exceeds the character limit. It has been attached as a text file. Please read the attached file for the full details.
+The tool execution result exceeds the message box character limit, so it has been saved as a txt file and sent.
