@@ -43,9 +43,7 @@
 只要目录中存在 `SKILL.md`，就会被暴露为本地 skill。随后模型可以通过以下工具渐进式读取：
 
 - `list_skills`
-- `search_skills`
 - `get_skill`
-- `get_skill_resource`
 
 您也可以通过设置项 `webcodeGateway.skillDirectories` 覆盖默认扫描路径。
 
@@ -53,8 +51,9 @@
 
 现在 `webcodeGateway.servers` 只用于配置可选的第三方 MCP server。
 
-- 内置文件系统能力会直接从插件自带的本地依赖启动，不再依赖 `npx`。
-- 内置命令执行能力默认启用。
+- 内置文件和搜索能力由 VS Code 插件直接实现，只暴露读、写、编辑、搜索文件名、搜索代码这几个工具。
+- 内置命令执行能力由 VS Code 插件直接实现，使用 POSIX/bash 命令。
+- 第三方 MCP 工具会以 `serverId:toolName` 暴露；裸工具名只保留给内置本地工具。
 - 用户设置里旧的 `filesystem` / `command` 项会被自动忽略。
 
 ## ❓ 常见问题

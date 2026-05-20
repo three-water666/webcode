@@ -300,6 +300,19 @@ export const Logger = {
     if (this.panelEl) {
       this.panelEl.classList.toggle("minimized", minimized);
     }
+    // After restoring, re-clamp left so the full-size window stays inside the viewport.
+    if (!minimized && this.el) {
+      requestAnimationFrame(() => {
+        if (!this.el) {return;}
+        const rect = this.el.getBoundingClientRect();
+        const currentLeft = parseFloat(this.el.style.left) || rect.left;
+        const clampedLeft = Math.max(0, Math.min(currentLeft, window.innerWidth - rect.width));
+        if (clampedLeft !== currentLeft) {
+          this.el.style.left = clampedLeft + "px";
+          this.el.style.right = "auto";
+        }
+      });
+    }
   },
 
   makeDraggable(headerEl: HTMLElement) {
@@ -323,8 +336,8 @@ export const Logger = {
         const rect = this.el.getBoundingClientRect();
         let left = iLeft + e.clientX - startX;
         let top = iTop + e.clientY - startY;
-        // Keep at least half the width and the full header (32px) within the viewport
-        left = Math.max(-rect.width / 2, Math.min(left, window.innerWidth - rect.width / 2));
+        // Keep the full window within the viewport horizontally, and at least the header (32px) vertically
+        left = Math.max(0, Math.min(left, window.innerWidth - rect.width));
         top = Math.max(0, Math.min(top, window.innerHeight - 32));
         this.el.style.left = left + "px";
         this.el.style.top = top + "px";

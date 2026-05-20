@@ -11,14 +11,13 @@ const extensionConfig = {
   target: 'node',
   mode: 'none',
   entry: {
-    extension: './src/extension.ts',
-    commandServer: './src/servers/command.ts',
-    filesystemServer: './node_modules/@modelcontextprotocol/server-filesystem/dist/index.js'
+    extension: './src/extension.ts'
   },
   output: {
     path: path.resolve(__dirname, 'dist'),
     filename: '[name].js',
-    libraryTarget: 'commonjs2'
+    libraryTarget: 'commonjs2',
+    clean: true
   },
   externals: {
     vscode: 'commonjs vscode'

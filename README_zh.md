@@ -104,9 +104,9 @@ webcode 可以把当前 VS Code 工作区中的本地技能暴露给网页模型
 
 推荐的加载流程是：
 
-1. 先调用 `list_skills` 或 `search_skills`
+1. 先调用 `list_skills`
 2. 再对目标技能调用 `get_skill`
-3. 只有当技能引用了 `references/`、`templates/`、`scripts/` 等额外资源时，再调用 `get_skill_resource`
+3. 只有当技能引用了 `references/`、`templates/`、`scripts/` 等额外资源时，再调用 `get_skill` 并传入 `resource_path`
 
 示例结构：
 

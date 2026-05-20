@@ -9,7 +9,7 @@ const DEFAULT_SKILL_DIRECTORIES = [
 ];
 
 const MAX_SCAN_DEPTH = 8;
-const CACHE_TTL_MS = 3000;
+const CACHE_TTL_MS = 30000;
 
 export interface SkillSummary {
   id: string;
@@ -31,16 +31,21 @@ interface ParsedSkillFile {
   body: string;
 }
 
+interface SkillCacheRecord {
+  entries: SkillEntry[];
+  lastScanAt: number;
+}
+
 export class SkillManager {
-  private cache: SkillEntry[] = [];
-  private lastScanAt = 0;
+  private readonly caches = new Map<string, SkillCacheRecord>();
 
   constructor(private readonly outputChannel: vscode.OutputChannel) {}
 
   invalidateCache(reason = 'manual refresh') {
-    this.cache = [];
-    this.lastScanAt = 0;
-    this.log(`Cache invalidated: ${reason}`);
+    for (const cache of this.caches.values()) {
+      cache.lastScanAt = 0;
+    }
+    this.log(`Cache marked stale: ${reason}`);
   }
 
   async listSkills(customDirectories: string[] = []): Promise<SkillSummary[]> {
@@ -99,12 +104,21 @@ export class SkillManager {
       throw new Error(`Resource path is outside the skill directory: ${requestedPath}`);
     }
 
-    const stat = await fs.stat(absolutePath).catch(() => null);
+    const realSkillRoot = await fs.realpath(skill.rootPath);
+    const realResourcePath = await fs.realpath(absolutePath).catch(() => null);
+    if (!realResourcePath) {
+      throw new Error(`Skill resource not found: ${requestedPath}`);
+    }
+    if (!this.isSubPath(realSkillRoot, realResourcePath)) {
+      throw new Error(`Resource path is outside the skill directory: ${requestedPath}`);
+    }
+
+    const stat = await fs.stat(realResourcePath).catch(() => null);
     if (!stat?.isFile()) {
       throw new Error(`Skill resource not found: ${requestedPath}`);
     }
 
-    const content = await fs.readFile(absolutePath, 'utf8');
+    const content = await fs.readFile(realResourcePath, 'utf8');
     return {
       skill: this.toSummary(skill),
       resource_path: this.normalizeRelativePath(path.relative(skill.rootPath, absolutePath)),
@@ -152,31 +166,75 @@ export class SkillManager {
 
   private async scanSkills(customDirectories: string[]): Promise<SkillEntry[]> {
     const now = Date.now();
-    if (now - this.lastScanAt < CACHE_TTL_MS) {
-      return this.cache;
-    }
-
     const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
     if (workspaceFolders.length === 0) {
-      this.cache = [];
-      this.lastScanAt = now;
-      return this.cache;
+      const clearedCount = this.clearCaches();
+      if (clearedCount > 0) {
+        this.log(`Workspace folders unavailable; cleared ${clearedCount} cached skills.`);
+      } else {
+        this.log('Workspace folders unavailable; no cached skills to clear.');
+      }
+      return [];
     }
 
     const searchRoots = this.getSearchDirectories(customDirectories);
+    const cacheKey = this.getCacheKey(searchRoots);
+    const cache = this.getCache(cacheKey);
+
+    if (now - cache.lastScanAt < CACHE_TTL_MS) {
+      return cache.entries;
+    }
+
     const found = new Map<string, SkillEntry>();
 
     for (const folder of workspaceFolders) {
       for (const relativeDir of searchRoots) {
-        const absoluteDir = path.resolve(folder.uri.fsPath, relativeDir);
+        const absoluteDir = await this.resolveSkillSearchRoot(folder.uri.fsPath, relativeDir);
+        if (!absoluteDir) {
+          continue;
+        }
         await this.collectSkillsFromDirectory(folder, relativeDir, absoluteDir, found);
       }
     }
 
-    this.cache = Array.from(found.values()).sort((a, b) => a.id.localeCompare(b.id));
-    this.lastScanAt = now;
-    this.log(`Indexed ${this.cache.length} workspace skills.`);
-    return this.cache;
+    cache.entries = Array.from(found.values()).sort((a, b) => a.id.localeCompare(b.id));
+    cache.lastScanAt = now;
+    this.log(`Indexed ${cache.entries.length} workspace skills.`);
+    return cache.entries;
+  }
+
+  private getCache(cacheKey: string): SkillCacheRecord {
+    let cache = this.caches.get(cacheKey);
+    if (!cache) {
+      cache = { entries: [], lastScanAt: 0 };
+      this.caches.set(cacheKey, cache);
+    }
+    return cache;
+  }
+
+  private clearCaches(): number {
+    let clearedCount = 0;
+    for (const cache of this.caches.values()) {
+      clearedCount += cache.entries.length;
+      cache.entries = [];
+      cache.lastScanAt = 0;
+    }
+    return clearedCount;
+  }
+
+  private async resolveSkillSearchRoot(workspaceRoot: string, relativeDir: string): Promise<string | null> {
+    const absoluteDir = path.resolve(workspaceRoot, relativeDir);
+    if (!this.isSubPath(workspaceRoot, absoluteDir)) {
+      return null;
+    }
+
+    const realWorkspaceRoot = await fs.realpath(workspaceRoot).catch(() => workspaceRoot);
+    const realDir = await fs.realpath(absoluteDir).catch(() => null);
+    if (!realDir || !this.isSubPath(realWorkspaceRoot, realDir)) {
+      return null;
+    }
+
+    return absoluteDir;
   }
 
   private async collectSkillsFromDirectory(
@@ -316,6 +374,7 @@ export class SkillManager {
   private async listSkillResources(skillRoot: string): Promise<string[]> {
     const resources: string[] = [];
     const stack = [skillRoot];
+    const realSkillRoot = await fs.realpath(skillRoot);
 
     while (stack.length > 0) {
       const currentDir = stack.pop();
@@ -324,8 +383,13 @@ export class SkillManager {
 
       for (const entry of entries) {
         const absolutePath = path.join(currentDir, entry.name);
+        const realPath = await fs.realpath(absolutePath).catch(() => null);
+        if (!realPath || !this.isSubPath(realSkillRoot, realPath)) {
+          continue;
+        }
+
         if (entry.isDirectory()) {
-          stack.push(absolutePath);
+          stack.push(realPath);
           continue;
         }
         if (entry.name === 'SKILL.md') {
@@ -361,7 +425,12 @@ export class SkillManager {
     return Array.from(new Set([...DEFAULT_SKILL_DIRECTORIES, ...customDirectories]
       .map((dir) => dir.trim())
       .filter(Boolean)
-      .map((dir) => dir.replace(/[\\/]+/g, '/').replace(/^\.\//, '').replace(/\/$/, ''))));
+      .map((dir) => dir.replace(/[\\/]+/g, '/').replace(/^\.\//, '').replace(/\/$/, ''))
+      .filter((dir) => this.isSafeWorkspaceRelativePath(dir))));
+  }
+
+  private getCacheKey(searchRoots: string[]): string {
+    return searchRoots.join('\0');
   }
 
   private toSummary(entry: SkillEntry): SkillSummary {
@@ -377,6 +446,15 @@ export class SkillManager {
 
   private normalizeRelativePath(value: string): string {
     return value.replace(/[\\/]+/g, '/');
+  }
+
+  private isSafeWorkspaceRelativePath(value: string): boolean {
+    if (!value || value === '.' || path.isAbsolute(value) || /^[A-Za-z]:\//.test(value)) {
+      return false;
+    }
+
+    const normalized = path.posix.normalize(value);
+    return normalized !== '..' && !normalized.startsWith('../');
   }
 
   private isSubPath(parentPath: string, childPath: string): boolean {

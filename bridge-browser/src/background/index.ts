@@ -314,9 +314,13 @@ async function executeTool(request: any, tabId: number | null | undefined) {
     });
     if (response.ok) {
       const resJson = await response.json();
-      const textContent = resJson.content
-        ? resJson.content.map((c: any) => c.text).join("\n")
-        : JSON.stringify(resJson);
+      const textContent = formatGatewayToolContent(resJson);
+      if (resJson?.isError === true) {
+        return {
+          success: false,
+          error: textContent || "Tool execution failed.",
+        };
+      }
       return { success: true, data: textContent };
     }
     if (response.status === 403) {
@@ -332,11 +336,18 @@ async function executeTool(request: any, tabId: number | null | undefined) {
   }
 }
 
+function formatGatewayToolContent(result: any): string {
+  if (Array.isArray(result?.content)) {
+    return result.content.map((item: any) => item?.text ?? "").filter(Boolean).join("\n");
+  }
+  return JSON.stringify(result);
+}
+
 async function readGatewayError(response: Response): Promise<string> {
   try {
     const resJson = await response.json();
     if (Array.isArray(resJson?.content)) {
-      return resJson.content.map((item: any) => item?.text ?? "").filter(Boolean).join("\n");
+      return formatGatewayToolContent(resJson);
     }
     if (typeof resJson?.error === "string") {
       return resJson.error;

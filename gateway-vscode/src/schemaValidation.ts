@@ -1,9 +1,5 @@
 type JsonObject = Record<string, unknown>;
 
-interface ValidationContext {
-    strictObjectProperties: boolean;
-}
-
 const MAX_SCHEMA_HINT_LENGTH = 12000;
 
 export function validateToolArguments(args: unknown, schema: unknown): string[] {
@@ -15,7 +11,7 @@ export function validateToolArguments(args: unknown, schema: unknown): string[] 
         return ['This tool does not expose an inputSchema, so webcode cannot validate its arguments strictly.'];
     }
 
-    return validateValue(args, schema, 'arguments', { strictObjectProperties: true });
+    return validateValue(args, schema, 'arguments');
 }
 
 export function formatToolArgumentValidationError(toolName: string, schema: unknown, errors: string[]): string {
@@ -50,8 +46,8 @@ export function formatToolArgumentValidationError(toolName: string, schema: unkn
     ].join('\n');
 }
 
-function validateValue(value: unknown, schema: JsonObject, path: string, context: ValidationContext): string[] {
-    const compositeErrors = validateCompositeSchemas(value, schema, path, context);
+function validateValue(value: unknown, schema: JsonObject, path: string): string[] {
+    const compositeErrors = validateCompositeSchemas(value, schema, path);
     if (compositeErrors) {
         return compositeErrors;
     }
@@ -73,10 +69,10 @@ function validateValue(value: unknown, schema: JsonObject, path: string, context
 
     const errors: string[] = [];
     if (shouldValidateObjectMembers(value, schema)) {
-        errors.push(...validateObjectMembers(value as JsonObject, schema, path, context));
+        errors.push(...validateObjectMembers(value as JsonObject, schema, path));
     }
     if (Array.isArray(value)) {
-        errors.push(...validateArrayMembers(value, schema, path, context));
+        errors.push(...validateArrayMembers(value, schema, path));
     }
     errors.push(...validateScalarConstraints(value, schema, path));
     return errors;
@@ -85,12 +81,11 @@ function validateValue(value: unknown, schema: JsonObject, path: string, context
 function validateCompositeSchemas(
     value: unknown,
     schema: JsonObject,
-    path: string,
-    context: ValidationContext
+    path: string
 ): string[] | null {
     const allOf = asSchemaArray(schema.allOf);
     if (allOf) {
-        const errors = allOf.flatMap(subSchema => validateValue(value, subSchema, path, context));
+        const errors = allOf.flatMap(subSchema => validateValue(value, subSchema, path));
         if (errors.length > 0) {
             return errors;
         }
@@ -98,7 +93,7 @@ function validateCompositeSchemas(
 
     const anyOf = asSchemaArray(schema.anyOf);
     if (anyOf) {
-        if (anyOf.some(subSchema => validateValue(value, subSchema, path, context).length === 0)) {
+        if (anyOf.some(subSchema => validateValue(value, subSchema, path).length === 0)) {
             return null;
         }
         return [`${path} does not match any allowed schema variant.`];
@@ -106,7 +101,7 @@ function validateCompositeSchemas(
 
     const oneOf = asSchemaArray(schema.oneOf);
     if (oneOf) {
-        const matchCount = oneOf.filter(subSchema => validateValue(value, subSchema, path, context).length === 0).length;
+        const matchCount = oneOf.filter(subSchema => validateValue(value, subSchema, path).length === 0).length;
         return matchCount === 1 ? null : [`${path} must match exactly one allowed schema variant; matched ${matchCount}.`];
     }
 
@@ -139,7 +134,7 @@ function validateType(value: unknown, schema: JsonObject, path: string): string[
     return [`${path} must be ${formatTypeList(expectedTypes)}, got ${getJsonType(value)}.`];
 }
 
-function validateObjectMembers(value: JsonObject, schema: JsonObject, path: string, context: ValidationContext): string[] {
+function validateObjectMembers(value: JsonObject, schema: JsonObject, path: string): string[] {
     const errors: string[] = [];
     const properties = getObjectMap(schema.properties);
     const required = Array.isArray(schema.required) ? schema.required.filter((item): item is string => typeof item === 'string') : [];
@@ -154,26 +149,26 @@ function validateObjectMembers(value: JsonObject, schema: JsonObject, path: stri
     for (const key of Object.keys(value)) {
         const propertySchema = properties[key];
         if (isPlainObject(propertySchema)) {
-            errors.push(...validateValue(value[key], propertySchema, formatPath(path, key), context));
+            errors.push(...validateValue(value[key], propertySchema, formatPath(path, key)));
             continue;
         }
 
+        if (additionalProperties === false || additionalProperties === undefined) {
+            errors.push(`${formatPath(path, key)} is not allowed by this tool's inputSchema.`);
+            continue;
+        }
         if (additionalProperties === true) {
             continue;
         }
         if (isPlainObject(additionalProperties)) {
-            errors.push(...validateValue(value[key], additionalProperties, formatPath(path, key), context));
-            continue;
-        }
-        if (context.strictObjectProperties) {
-            errors.push(`${formatPath(path, key)} is not allowed by this tool's inputSchema.`);
+            errors.push(...validateValue(value[key], additionalProperties, formatPath(path, key)));
         }
     }
 
     return errors;
 }
 
-function validateArrayMembers(value: unknown[], schema: JsonObject, path: string, context: ValidationContext): string[] {
+function validateArrayMembers(value: unknown[], schema: JsonObject, path: string): string[] {
     const errors: string[] = [];
     if (typeof schema.minItems === 'number' && value.length < schema.minItems) {
         errors.push(`${path} must contain at least ${schema.minItems} item(s).`);
@@ -184,7 +179,7 @@ function validateArrayMembers(value: unknown[], schema: JsonObject, path: string
 
     if (isPlainObject(schema.items)) {
         value.forEach((item, index) => {
-            errors.push(...validateValue(item, schema.items as JsonObject, `${path}[${index}]`, context));
+            errors.push(...validateValue(item, schema.items as JsonObject, `${path}[${index}]`));
         });
     }
 
@@ -312,7 +307,32 @@ function formatValue(value: unknown): string {
 }
 
 function deepEqualJson(left: unknown, right: unknown): boolean {
-    return JSON.stringify(left) === JSON.stringify(right);
+    if (left === right) {
+        return true;
+    }
+
+    if (Array.isArray(left) || Array.isArray(right)) {
+        return Array.isArray(left)
+            && Array.isArray(right)
+            && left.length === right.length
+            && left.every((item, index) => deepEqualJson(item, right[index]));
+    }
+
+    if (isPlainObject(left) || isPlainObject(right)) {
+        if (!isPlainObject(left) || !isPlainObject(right)) {
+            return false;
+        }
+
+        const leftKeys = Object.keys(left);
+        const rightKeys = Object.keys(right);
+        return leftKeys.length === rightKeys.length
+            && leftKeys.every(key => (
+                Object.prototype.hasOwnProperty.call(right, key)
+                && deepEqualJson(left[key], right[key])
+            ));
+    }
+
+    return false;
 }
 
 function isPlainObject(value: unknown): value is JsonObject {
