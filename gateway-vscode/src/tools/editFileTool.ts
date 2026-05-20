@@ -30,7 +30,8 @@ export const editFileTool: LocalTool = {
     serverId: 'internal',
     definition: {
         name: 'edit_file',
-        description: 'Edit a UTF-8 text file inside the workspace. Use either exact text replacements or a unified diff patch. Returns a unified diff.',
+        description: 'Edit a UTF-8 text file inside the workspace. Use either exact text replacements or a unified diff patch. ' +
+            'If prior read_file output included line numbers such as "12: code", do not include those line number prefixes in edits or patches.',
         inputSchema: {
             oneOf: [
                 {
@@ -43,8 +44,15 @@ export const editFileTool: LocalTool = {
                             items: {
                                 type: 'object',
                                 properties: {
-                                    oldText: { type: 'string', minLength: 1, description: 'Text to replace. Must match exactly.' },
-                                    newText: { type: 'string', description: 'Replacement text.' },
+                                    oldText: {
+                                        type: 'string',
+                                        minLength: 1,
+                                        description: 'Text to replace. Must match exactly and must not include read_file line number prefixes.'
+                                    },
+                                    newText: {
+                                        type: 'string',
+                                        description: 'Replacement text. Do not include read_file line number prefixes as file content.'
+                                    },
                                     replaceAll: { type: 'boolean', description: 'If true, replace every occurrence of oldText. Default: false.' }
                                 },
                                 required: ['oldText', 'newText']
@@ -62,7 +70,8 @@ export const editFileTool: LocalTool = {
                         patch: {
                             type: 'string',
                             minLength: 1,
-                            description: 'Unified diff patch for this file. Include @@ hunks with context, removed (-), and added (+) lines.'
+                            description: 'Unified diff patch for this file. Include @@ hunks with context, removed (-), and added (+) lines. ' +
+                                'Do not include read_file line number prefixes as patch content.'
                         },
                         dryRun: { type: 'boolean', description: 'If true, return the diff without writing the file.', default: false }
                     },
