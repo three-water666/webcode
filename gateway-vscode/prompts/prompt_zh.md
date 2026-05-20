@@ -36,7 +36,9 @@
 2. **支持并发**：你可以一次性输出多个 JSON 块来调用多个工具，结果会批量返回。注意：不能一个 JSON 块包含多个工具调用，每个工具调用应该在一个单独的 JSON 块中。
 3. **不要夹带问句**：如果你本次回复中包含任何工具调用，就不要同时向用户提问。因为下一次返回通常会是工具执行结果，用户无法先回答你的问题。
 4. **工具分组**：工具列表按服务器来源分组，所有可用工具都会在 `tools` 数组中直接展示完整定义。第三方 MCP 工具名会带有服务器前缀（`server:tool`）；裸名只保留给本地/内置工具。
-5. **Skills 与渐进式加载**：如果当前上下文中存在 `list_skills`、`get_skill`，说明当前工作区提供了本地 skills。
+5. **优先使用专用文件工具**：查找工作区文件用 `search_files`。搜索代码或文本内容用 `search_code`。读取文件内容或指定行范围用 `read_file`。不要为了查看文件而用 `execute_command` 执行 `grep`、`rg`、`find`、`cat`、`sed`、`awk`、`nl` 等 shell 命令。
+6. **命令工具适用范围**：`execute_command` 用于构建、测试、包管理器、git 命令和项目脚本。只有长时间运行或需要可见终端输出时才使用 `run_in_terminal`。
+7. **Skills 与渐进式加载**：如果当前上下文中存在 `list_skills`、`get_skill`，说明当前工作区提供了本地 skills。
    - 在用户需要工作流、模板、领域指南、安装说明或专用能力时，先调用 `list_skills`。
    - 在真正使用某个 skill 之前，先调用 `get_skill` 读取它的 `SKILL.md`，不要仅凭名字猜测规则。
    - 如果 `SKILL.md` 提到了 `references/`、`templates/`、`scripts/` 等附属文件，再按需调用 `get_skill` 并传入 `resource_path` 继续读取。

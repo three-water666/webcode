@@ -36,7 +36,9 @@ After execution, the plugin will return the result in the following format:
 2. **Concurrency Supported**: You can output multiple JSON blocks at once to call multiple tools, and the results will be returned in batches. Note: One JSON block cannot contain multiple tool calls; each tool call should be in a separate JSON block.
 3. **No Questions Alongside Tool Calls**: If your current reply includes any tool call, do not ask the user a question in the same reply. The next message will usually be a tool result, so the user cannot answer you first.
 4. **Tool Grouping**: The tool list is grouped by server source, and every available tool is shown with its full definition in the `tools` array. Third-party MCP tool names include their server prefix (`server:tool`); bare names are reserved for local/internal tools.
-5. **Skills & Progressive Loading**: If the current context includes `list_skills` and `get_skill`, the current workspace exposes local skills.
+5. **Prefer Dedicated File Tools**: For workspace file discovery, use `search_files`. For code or text search, use `search_code`. For reading file content or specific line ranges, use `read_file`. Do not use `execute_command` with shell commands such as `grep`, `rg`, `find`, `cat`, `sed`, `awk`, or `nl` just to inspect files.
+6. **Command Tool Scope**: Use `execute_command` for builds, tests, package managers, git commands, and project scripts. Use `run_in_terminal` only for long-running or visible terminal work.
+7. **Skills & Progressive Loading**: If the current context includes `list_skills` and `get_skill`, the current workspace exposes local skills.
    - When the user needs a workflow, template, domain guide, installation help, or other specialized capability, call `list_skills` first.
    - Before using a skill, call `get_skill` to read its `SKILL.md`. Do not infer the instructions from the name alone.
    - If the skill references files under `references/`, `templates/`, `scripts/`, or similar directories, load them on demand by calling `get_skill` with `resource_path`.
