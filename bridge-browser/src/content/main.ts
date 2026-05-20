@@ -28,8 +28,8 @@ let currentWorkspaceId = "global";
 
 let allowedTools = new Set<string>();
 let allowedCommandRules = new Set<string>();
-const confirmationQueue: ToolExecutionPayload[] = [];
-let isPopupOpen = false;
+const toolExecutionQueue: ToolExecutionPayload[] = [];
+let isToolExecutionQueueRunning = false;
 const COMMAND_APPROVAL_TOOLS = new Set(["execute_command", "run_in_terminal"]);
 
 // === 加载资源 (Prompt/Hints) ===
@@ -715,9 +715,36 @@ initDOMConfig();
 
 // === 执行工具 ===
 function executeTool(payload: ToolExecutionPayload) {
+  toolExecutionQueue.push(payload);
+  void processToolExecutionQueue();
+}
+
+async function processToolExecutionQueue() {
+  if (isToolExecutionQueueRunning) {return;}
+
+  isToolExecutionQueueRunning = true;
+  try {
+    while (toolExecutionQueue.length > 0) {
+      const payload = toolExecutionQueue.shift();
+      if (!payload) {continue;}
+      try {
+        await runQueuedTool(payload);
+      } catch (error: unknown) {
+        failQueuedTool(payload, error);
+      }
+    }
+  } finally {
+    isToolExecutionQueueRunning = false;
+    if (toolExecutionQueue.length > 0) {
+      void processToolExecutionQueue();
+    }
+  }
+}
+
+async function runQueuedTool(payload: ToolExecutionPayload) {
   // 虚拟工具：系统初始化
   if (payload.name === PROTOCOL.initToolName) {
-    void initializeWebcode(payload);
+    await initializeWebcode(payload);
     return;
   }
 
@@ -729,13 +756,21 @@ function executeTool(payload: ToolExecutionPayload) {
 
   if (!isPayloadApproved(payload)) {
     Logger.log(`${t("hitl_intercept")}: ${payload.name}`, "warn");
-    (payload as any).request_id = (payload as any).request_id ?? "unknown_id";
-    confirmationQueue.push(payload);
-    processConfirmationQueue();
-    return;
+    payload.request_id = payload.request_id ?? "unknown_id";
+    const approved = await requestToolApproval(payload);
+    if (!approved) {return;}
   }
 
-  performExecution(payload);
+  await performExecution(payload);
+}
+
+function failQueuedTool(payload: ToolExecutionPayload, error: unknown) {
+  const requestId = payload.request_id ?? "unknown_id";
+  const message = error instanceof Error ? error.message : String(error);
+  activeExecutions.delete(requestId);
+  Logger.log(`${t("exec_fail")}: ${message}`, "error");
+  saveToBuffer(requestId, message || "Tool execution failed.", true);
+  setTimeout(runMainLoop, 50);
 }
 
 async function initializeWebcode(payload: ToolExecutionPayload) {
@@ -802,71 +837,105 @@ function executeInitToolCall(name: string): Promise<string> {
   });
 }
 
-function performExecution(payload: any) {
-  chrome.runtime.sendMessage(
-    { type: "EXECUTE_TOOL", payload: payload },
-    (response) => {
-      activeExecutions.delete(payload.request_id);
-      let outputContent = "";
-      let isError = false;
-      if (response?.success) {
-        Logger.log(`${t("exec_success")}: ${payload.name}`, "success");
-        let finalData = response.data;
-        if (payload.name === "list_tools") {
-          try {
-            const groups = JSON.parse(finalData);
+function performExecution(payload: ToolExecutionPayload): Promise<void> {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(
+      { type: "EXECUTE_TOOL", payload: payload },
+      (response: { success?: boolean; data?: unknown; error?: string } | undefined) => {
+        const requestId = payload.request_id ?? "unknown_id";
+        activeExecutions.delete(requestId);
 
-            // 1. Inject Virtual Client Tools
-            let clientGroup = groups.find((g: any) => g.server === "client");
-            if (!clientGroup) {
-              clientGroup = { server: "client", tools: [] };
-              groups.push(clientGroup);
-            }
-            clientGroup.tools.push({
-              name: "task_completion_notification",
-              description:
-                "Notify the user that a long-running task or a series of complex operations is complete. Use this when you need the user's attention to review your work or provide new instructions. Calling this will trigger a system notification on the user's device.",
-              inputSchema: {
-                type: "object",
-                properties: { message: { type: "string" } },
-                required: ["message"],
-              },
-            });
-
-            // 2. Update Output
-            finalData = JSON.stringify(groups, null, 2);
-          } catch (e) {
-            console.error("Tool list processing error", e);
-          }
+        const runtimeError = chrome.runtime.lastError?.message;
+        if (runtimeError) {
+          Logger.log(`${t("exec_fail")}: ${runtimeError}`, "error");
+          saveToBuffer(requestId, runtimeError, true);
+          setTimeout(runMainLoop, 50);
+          resolve();
+          return;
         }
-        outputContent = finalData;
-      } else {
-        Logger.log(`${t("exec_fail")}: ${response.error}`, "error");
-        outputContent = response.error ?? "Tool execution failed.";
-        isError = true;
-      }
-      saveToBuffer(payload.request_id, outputContent, isError);
 
-      // [Fix 5] Manual check required: Tool completion doesn't trigger MutationObserver.
-      setTimeout(runMainLoop, 50);
-    }
-  );
+        let outputContent: string;
+        let isError = false;
+        if (response?.success) {
+          Logger.log(`${t("exec_success")}: ${payload.name}`, "success");
+          let finalData = formatToolResponseData(response.data);
+          if (payload.name === "list_tools") {
+            try {
+              const groups = JSON.parse(finalData) as Array<{ server: string; tools: unknown[] }>;
+
+              // 1. Inject Virtual Client Tools
+              let clientGroup = groups.find((group) => group.server === "client");
+              if (!clientGroup) {
+                clientGroup = { server: "client", tools: [] };
+                groups.push(clientGroup);
+              }
+              clientGroup.tools.push({
+                name: "task_completion_notification",
+                description:
+                  "Notify the user that a long-running task or a series of complex operations is complete. Use this when you need the user's attention to review your work or provide new instructions. Calling this will trigger a system notification on the user's device.",
+                inputSchema: {
+                  type: "object",
+                  properties: { message: { type: "string" } },
+                  required: ["message"],
+                },
+              });
+
+              // 2. Update Output
+              finalData = JSON.stringify(groups, null, 2);
+            } catch (e) {
+              console.error("Tool list processing error", e);
+            }
+          }
+          outputContent = finalData;
+        } else {
+          Logger.log(`${t("exec_fail")}: ${response?.error}`, "error");
+          outputContent = response?.error ?? "Tool execution failed.";
+          isError = true;
+        }
+        saveToBuffer(requestId, outputContent, isError);
+
+        // [Fix 5] Manual check required: Tool completion doesn't trigger MutationObserver.
+        setTimeout(runMainLoop, 50);
+        resolve();
+      }
+    );
+  });
 }
 
-function finishVirtualTool(payload: any) {
-  const msg = payload.arguments?.message ?? "Task Completed";
+function finishVirtualTool(payload: ToolExecutionPayload) {
+  const requestId = payload.request_id ?? "unknown_id";
+  const args = payload.arguments as { message?: unknown } | undefined;
+  const msg = typeof args?.message === "string"
+    ? args.message
+    : "Task Completed";
   Logger.log(`🔔 Notification: ${msg}`, "action");
-  chrome.runtime.sendMessage({
+  void chrome.runtime.sendMessage({
     type: "SHOW_NOTIFICATION",
     title: `${BRANDING.productName} Task Finished`,
     message: msg,
   });
-  activeExecutions.delete(payload.request_id);
-  resultBuffer.set(payload.request_id, "");
+  activeExecutions.delete(requestId);
+  resultBuffer.set(requestId, "");
+}
+
+function formatToolResponseData(data: unknown): string {
+  if (typeof data === "string") {return data;}
+  if (data === null || data === undefined) {return "";}
+  if (typeof data === "number" || typeof data === "boolean" || typeof data === "bigint") {
+    return String(data);
+  }
+  return JSON.stringify(data) ?? "";
 }
 
 function saveToBuffer(requestId: string, content: string, isError = false) {
-  const responseJson: any = {
+  const responseJson: {
+    mcp_action: "result";
+    request_id: string;
+    status: "success" | "error";
+    output?: string;
+    error?: string;
+    system_note?: string;
+  } = {
     mcp_action: "result",
     request_id: requestId,
     status: isError ? "error" : "success",
@@ -891,61 +960,46 @@ function saveToBuffer(requestId: string, content: string, isError = false) {
   resultBuffer.set(requestId, jsonString);
 }
 
-// === 审批队列处理 ===
-function processConfirmationQueue() {
-  if (isPopupOpen || confirmationQueue.length === 0) { return; }
+// === 审批处理 ===
+function requestToolApproval(payload: ToolExecutionPayload): Promise<boolean> {
+  return new Promise((resolve) => {
+    UI.showConfirmationModal(
+      payload,
+      (scope) => {
+        focusInputArea();
 
-  while (confirmationQueue.length > 0 && isPayloadApproved(confirmationQueue[0])) {
-    const approvedPayload = confirmationQueue.shift();
-    if (!approvedPayload) { return; }
-    Logger.log(`Approval already saved for '${getApprovalLabel(approvedPayload)}'; skipping confirmation`, "action");
-    performExecution(approvedPayload);
-  }
+        if (scope) {
+          persistApprovalRule(payload, scope);
+          const key = `allowed_tools_${currentWorkspaceId}`;
+          void chrome.storage.local.set({
+            [key]: buildStoredApprovalEntries(),
+          });
+          Logger.log(`⚡ Approval saved for '${getApprovalLabel(payload, scope)}' in this workspace`, "action");
+        }
 
-  if (confirmationQueue.length === 0) { return; }
-
-  const payload = confirmationQueue[0] as any;
-  isPopupOpen = true;
-
-  UI.showConfirmationModal(
-    payload,
-    (scope) => {
-      confirmationQueue.shift();
-      isPopupOpen = false;
-      if (DOM) {
-        const inputEl = document.querySelector(DOM.inputArea) as HTMLElement;
-        if (inputEl) { inputEl.focus(); }
+        resolve(true);
+      },
+      (reason) => {
+        const requestId = payload.request_id ?? "unknown_id";
+        activeExecutions.delete(requestId);
+        focusInputArea();
+        Logger.log(`${t("hitl_rejected")}: ${payload.name}`, "error");
+        saveToBuffer(
+          requestId,
+          `User rejected execution. Reason: ${reason ?? "No reason provided."}`,
+          true
+        );
+        setTimeout(runMainLoop, 50);
+        resolve(false);
       }
+    );
+  });
+}
 
-      if (scope) {
-        persistApprovalRule(payload, scope);
-        const key = `allowed_tools_${currentWorkspaceId}`;
-        chrome.storage.local.set({
-          [key]: buildStoredApprovalEntries(),
-        });
-        Logger.log(`⚡ Approval saved for '${getApprovalLabel(payload, scope)}' in this workspace`, "action");
-      }
-
-      performExecution(payload);
-      processConfirmationQueue();
-    },
-    (reason) => {
-      confirmationQueue.shift();
-      isPopupOpen = false;
-      activeExecutions.delete(payload.request_id);
-      if (DOM) {
-        const inputEl = document.querySelector(DOM.inputArea) as HTMLElement;
-        if (inputEl) { inputEl.focus(); }
-      }
-      Logger.log(`${t("hitl_rejected")}: ${payload.name}`, "error");
-      saveToBuffer(
-        payload.request_id,
-        `User rejected execution. Reason: ${reason ?? "No reason provided."}`,
-        true
-      );
-      processConfirmationQueue();
-    }
-  );
+function focusInputArea() {
+  if (!DOM) {return;}
+  const inputEl = document.querySelector(DOM.inputArea) as HTMLElement;
+  if (inputEl) { inputEl.focus(); }
 }
 
 function isPayloadApproved(payload: ToolExecutionPayload): boolean {

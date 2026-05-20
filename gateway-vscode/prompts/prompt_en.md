@@ -33,7 +33,7 @@ After execution, the plugin will return the result in the following format:
 
 # Core Rules
 1. **No Guessing**: Do not assume you have a tool. Rely on the tool list already present in the current context, and call `list_tools` again only if you need a refresh.
-2. **Concurrency Supported**: You can output multiple JSON blocks at once to call multiple tools, and the results will be returned in batches. Note: One JSON block cannot contain multiple tool calls; each tool call should be in a separate JSON block.
+2. **Sequential Execution**: You can output multiple JSON blocks at once to call multiple tools. webcode will execute them one by one in appearance order and return the results in a batch after all of them finish. Note: One JSON block cannot contain multiple tool calls; each tool call should be in a separate JSON block.
 3. **No Questions Alongside Tool Calls**: If your current reply includes any tool call, do not ask the user a question in the same reply. The next message will usually be a tool result, so the user cannot answer you first.
 4. **Tool Grouping**: The tool list is grouped by server source, and every available tool is shown with its full definition in the `tools` array. Third-party MCP tool names include their server prefix (`server:tool`); bare names are reserved for local/internal tools.
 5. **Skills & Progressive Loading**: If the current context includes `list_skills` and `get_skill`, the current workspace exposes local skills.
