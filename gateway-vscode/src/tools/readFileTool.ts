@@ -250,15 +250,69 @@ function formatSelectedLines(lines: string[], firstLineNumber: number, showLineN
         .join('\n');
 }
 
-async function readFilePrefix(filePath: string, maxBytes: number): Promise<string> {
+export async function readFilePrefix(filePath: string, maxBytes: number, readChunkBytes = maxBytes): Promise<string> {
     const handle = await fs.open(filePath, 'r');
     try {
         const buffer = Buffer.alloc(maxBytes);
-        const { bytesRead } = await handle.read(buffer, 0, maxBytes, 0);
-        return buffer.subarray(0, bytesRead).toString('utf8');
+        let totalBytesRead = 0;
+
+        while (totalBytesRead < maxBytes) {
+            const bytesToRead = Math.min(readChunkBytes, maxBytes - totalBytesRead);
+            const { bytesRead } = await handle.read(buffer, totalBytesRead, bytesToRead, totalBytesRead);
+            if (bytesRead === 0) {
+                break;
+            }
+            totalBytesRead += bytesRead;
+        }
+
+        const boundary = totalBytesRead === maxBytes
+            ? getUtf8PrefixBoundary(buffer, totalBytesRead)
+            : totalBytesRead;
+        return buffer.subarray(0, boundary).toString('utf8');
     } finally {
         await handle.close();
     }
+}
+
+function getUtf8PrefixBoundary(buffer: Buffer, length: number): number {
+    if (length <= 0) {
+        return 0;
+    }
+
+    let leadIndex = length - 1;
+    while (leadIndex >= 0 && isUtf8ContinuationByte(buffer[leadIndex])) {
+        leadIndex--;
+    }
+    if (leadIndex < 0) {
+        return 0;
+    }
+
+    const sequenceLength = getUtf8SequenceLength(buffer[leadIndex]);
+    if (sequenceLength === 0) {
+        return leadIndex;
+    }
+
+    return length - leadIndex >= sequenceLength ? length : leadIndex;
+}
+
+function isUtf8ContinuationByte(byte: number): boolean {
+    return (byte & 0b11000000) === 0b10000000;
+}
+
+function getUtf8SequenceLength(byte: number): number {
+    if ((byte & 0b10000000) === 0) {
+        return 1;
+    }
+    if ((byte & 0b11100000) === 0b11000000) {
+        return 2;
+    }
+    if ((byte & 0b11110000) === 0b11100000) {
+        return 3;
+    }
+    if ((byte & 0b11111000) === 0b11110000) {
+        return 4;
+    }
+    return 0;
 }
 
 function splitLines(content: string): string[] {

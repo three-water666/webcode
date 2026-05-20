@@ -1,5 +1,8 @@
+import * as fs from 'fs/promises';
 import * as assert from 'assert';
-import { selectReadFileContent, selectReadFileResult } from '../tools/readFileTool';
+import * as os from 'os';
+import * as path from 'path';
+import { readFilePrefix, selectReadFileContent, selectReadFileResult } from '../tools/readFileTool';
 
 suite('Read File Tool', () => {
     const content = ['alpha', 'bravo', 'charlie', 'delta'].join('\n');
@@ -87,4 +90,33 @@ suite('Read File Tool', () => {
         assert.strictEqual(result.metadata.truncated, false);
         assert.strictEqual(result.text, largeContent);
     });
+
+    test('reads prefix until the requested byte count is filled', async () => {
+        await withTempFile('abcdef', async filePath => {
+            assert.strictEqual(await readFilePrefix(filePath, 5, 2), 'abcde');
+        });
+    });
+
+    test('preserves utf-8 boundary when byte limit splits a character', async () => {
+        await withTempFile('abcd你xyz', async filePath => {
+            assert.strictEqual(await readFilePrefix(filePath, 6), 'abcd');
+        });
+    });
+
+    test('keeps utf-8 character when byte limit ends on a boundary', async () => {
+        await withTempFile('abcd你xyz', async filePath => {
+            assert.strictEqual(await readFilePrefix(filePath, 7), 'abcd你');
+        });
+    });
 });
+
+async function withTempFile<T>(content: string, callback: (filePath: string) => Promise<T>): Promise<T> {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'read-file-tool-'));
+    const filePath = path.join(tempDir, 'sample.txt');
+    try {
+        await fs.writeFile(filePath, content, 'utf8');
+        return await callback(filePath);
+    } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+    }
+}
