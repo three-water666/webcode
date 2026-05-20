@@ -1,6 +1,7 @@
 import * as fs from 'fs/promises';
 import type { LocalTool } from './types';
 import { normalizeLineEndings, resolveWorkspacePath } from './filesystemUtils';
+import { readSelectedFileLines, type LineSelectionOptions } from './readFileLineStream';
 
 const DEFAULT_AUTO_READ_MAX_BYTES = 64 * 1024;
 const DEFAULT_AUTO_READ_MAX_LINES = 400;
@@ -55,13 +56,19 @@ type ReadFileResult = {
     };
 };
 
-async function readFileContent(
+export async function readFileContent(
     filePath: string,
     fileBytes: number,
     args: Record<string, unknown>
 ): Promise<ReadFileResult> {
-    if (shouldReadFullContent(fileBytes, args)) {
+    const lineOptions = getLineSelectionOptions(args);
+
+    if (args.force === true || fileBytes <= DEFAULT_AUTO_READ_MAX_BYTES) {
         return selectReadFileResult(normalizeLineEndings(await fs.readFile(filePath, 'utf8')), args, { fileBytes });
+    }
+
+    if (hasLineSelection(lineOptions)) {
+        return readSelectedFileContent(filePath, args, lineOptions, fileBytes);
     }
 
     const content = normalizeLineEndings(await readFilePrefix(filePath, DEFAULT_AUTO_READ_MAX_BYTES));
@@ -154,11 +161,7 @@ type LineSelection = {
 };
 
 function resolveLineSelection(lineCount: number, args: Record<string, unknown>): LineSelection | null {
-    const head = getPositiveIntegerArg(args.head);
-    const tail = getPositiveIntegerArg(args.tail);
-    const startLine = getPositiveIntegerArg(args.start_line);
-    const endLine = getPositiveIntegerArg(args.end_line);
-    assertCompatibleLineOptions({ head, tail, startLine, endLine });
+    const { head, tail, startLine, endLine } = getLineSelectionOptions(args);
 
     if (head !== undefined) {
         return { startIndex: 0, endIndex: Math.min(head, lineCount) };
@@ -180,10 +183,6 @@ function resolveLineSelection(lineCount: number, args: Record<string, unknown>):
     return null;
 }
 
-function shouldReadFullContent(fileBytes: number, args: Record<string, unknown>): boolean {
-    return args.force === true || hasExplicitLineSelection(args) || fileBytes <= DEFAULT_AUTO_READ_MAX_BYTES;
-}
-
 function getReturnedLineRange(selection: LineSelection): { start: number; end: number } {
     if (selection.startIndex >= selection.endIndex) {
         return { start: 0, end: 0 };
@@ -195,11 +194,47 @@ function getReturnedLineRange(selection: LineSelection): { start: number; end: n
     };
 }
 
-function hasExplicitLineSelection(args: Record<string, unknown>): boolean {
-    return args.head !== undefined ||
-        args.tail !== undefined ||
-        args.start_line !== undefined ||
-        args.end_line !== undefined;
+async function readSelectedFileContent(
+    filePath: string,
+    args: Record<string, unknown>,
+    options: LineSelectionOptions,
+    fileBytes: number
+): Promise<ReadFileResult> {
+    const selected = await readSelectedFileLines(filePath, options);
+    const showLineNumbers = args.show_line_numbers === true;
+    const text = formatSelectedLines(selected.lines, selected.startLine, showLineNumbers);
+
+    return {
+        text,
+        metadata: {
+            mode: 'range',
+            truncated: false,
+            lineCount: selected.lineCount,
+            returnedLines: {
+                start: selected.lines.length > 0 ? selected.startLine : 0,
+                end: selected.lines.length > 0 ? selected.startLine + selected.lines.length - 1 : 0
+            },
+            fileBytes
+        }
+    };
+}
+
+function getLineSelectionOptions(args: Record<string, unknown>): LineSelectionOptions {
+    const options = {
+        head: getPositiveIntegerArg(args.head),
+        tail: getPositiveIntegerArg(args.tail),
+        startLine: getPositiveIntegerArg(args.start_line),
+        endLine: getPositiveIntegerArg(args.end_line)
+    };
+    assertCompatibleLineOptions(options);
+    return options;
+}
+
+function hasLineSelection(options: LineSelectionOptions): boolean {
+    return options.head !== undefined ||
+        options.tail !== undefined ||
+        options.startLine !== undefined ||
+        options.endLine !== undefined;
 }
 
 function shouldReturnFullContent(lines: string[], args: Record<string, unknown>, fileBytes?: number): boolean {

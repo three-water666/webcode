@@ -2,7 +2,7 @@ import * as fs from 'fs/promises';
 import * as assert from 'assert';
 import * as os from 'os';
 import * as path from 'path';
-import { readFilePrefix, selectReadFileContent, selectReadFileResult } from '../tools/readFileTool';
+import { readFileContent, readFilePrefix, selectReadFileContent, selectReadFileResult } from '../tools/readFileTool';
 
 suite('Read File Tool', () => {
     const content = ['alpha', 'bravo', 'charlie', 'delta'].join('\n');
@@ -89,6 +89,36 @@ suite('Read File Tool', () => {
         assert.strictEqual(result.metadata.mode, 'full');
         assert.strictEqual(result.metadata.truncated, false);
         assert.strictEqual(result.text, largeContent);
+    });
+
+    test('streams line ranges from large files instead of loading full content', async () => {
+        const largeContent = Array.from({ length: 2000 }, (_, index) => {
+            const lineNumber = index + 1;
+            return `line ${lineNumber.toString().padStart(4, '0')} ${'x'.repeat(80)}`;
+        }).join('\n');
+
+        await withTempFile(largeContent, async filePath => {
+            const fileStats = await fs.stat(filePath);
+            const result = await readFileContent(filePath, fileStats.size, {
+                start_line: 1200,
+                end_line: 1202,
+                show_line_numbers: true
+            });
+
+            assert.strictEqual(
+                result.text,
+                [
+                    `1200: line 1200 ${'x'.repeat(80)}`,
+                    `1201: line 1201 ${'x'.repeat(80)}`,
+                    `1202: line 1202 ${'x'.repeat(80)}`
+                ].join('\n')
+            );
+            assert.deepStrictEqual(result.metadata.returnedLines, {
+                start: 1200,
+                end: 1202
+            });
+            assert.strictEqual(result.metadata.lineCount, undefined);
+        });
     });
 
     test('reads prefix until the requested byte count is filled', async () => {
