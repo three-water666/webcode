@@ -265,7 +265,7 @@ export function getStringArrayArg(value: unknown): string[] {
 }
 
 function hasGlobSyntax(value: string): boolean {
-    return /[*?[\]]/.test(value);
+    return /[*?]/.test(value);
 }
 
 async function getAllowedWorkspaceDirectories(workspaceRoot: string): Promise<string[]> {

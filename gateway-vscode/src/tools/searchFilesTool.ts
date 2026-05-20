@@ -72,11 +72,12 @@ export function createFileSearchIncludePattern(query: string): string {
         return query.includes('/') ? query : `**/${query}`;
     }
 
+    const escapedQuery = escapeFindFilesLiteral(query);
     if (query.includes('/')) {
-        return `{**/*${query}*,**/*${query}*/**}`;
+        return `{**/*${escapedQuery}*,**/*${escapedQuery}*/**}`;
     }
 
-    return `**/*${query}*`;
+    return `**/*${escapedQuery}*`;
 }
 
 function createFindFilesExcludePattern(excludePatterns: string[]): string | undefined {
@@ -96,5 +97,9 @@ function createFindFilesExcludePattern(excludePatterns: string[]): string | unde
 }
 
 function hasGlobSyntax(value: string): boolean {
-    return /[*?[\]{}]/.test(value);
+    return /[*?{}]/.test(value);
+}
+
+function escapeFindFilesLiteral(value: string): string {
+    return value.replace(/[\[\]]/g, character => (character === '[' ? '[[]' : '[]]'));
 }
