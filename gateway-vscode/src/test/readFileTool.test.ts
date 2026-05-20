@@ -25,6 +25,26 @@ suite('Read File Tool', () => {
         );
     });
 
+    test('clamps head metadata to the available line count', () => {
+        const result = selectReadFileResult(content, { head: 20 });
+
+        assert.strictEqual(result.text, content);
+        assert.deepStrictEqual(result.metadata.returnedLines, {
+            start: 1,
+            end: 4
+        });
+    });
+
+    test('returns an empty range when start_line is past EOF', () => {
+        const result = selectReadFileResult(content, { start_line: 20 });
+
+        assert.strictEqual(result.text, '');
+        assert.deepStrictEqual(result.metadata.returnedLines, {
+            start: 0,
+            end: 0
+        });
+    });
+
     test('rejects mixed head and range selectors', () => {
         assert.throws(
             () => selectReadFileContent(content, { head: 2, start_line: 2 }),

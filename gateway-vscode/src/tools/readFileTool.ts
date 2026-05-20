@@ -99,10 +99,7 @@ export function selectReadFileResult(
                 mode: 'range',
                 truncated: false,
                 lineCount: totalLineCountKnown ? lines.length : undefined,
-                returnedLines: {
-                    start: selection.startIndex + 1,
-                    end: selection.endIndex
-                },
+                returnedLines: getReturnedLineRange(selection),
                 fileBytes: options.fileBytes
             }
         };
@@ -164,7 +161,7 @@ function resolveLineSelection(lineCount: number, args: Record<string, unknown>):
     assertCompatibleLineOptions({ head, tail, startLine, endLine });
 
     if (head !== undefined) {
-        return { startIndex: 0, endIndex: head };
+        return { startIndex: 0, endIndex: Math.min(head, lineCount) };
     }
 
     if (tail !== undefined) {
@@ -173,8 +170,9 @@ function resolveLineSelection(lineCount: number, args: Record<string, unknown>):
     }
 
     if (startLine !== undefined || endLine !== undefined) {
+        const startIndex = Math.min(Math.max((startLine ?? 1) - 1, 0), lineCount);
         return {
-            startIndex: Math.max((startLine ?? 1) - 1, 0),
+            startIndex,
             endIndex: Math.min(endLine ?? lineCount, lineCount)
         };
     }
@@ -184,6 +182,17 @@ function resolveLineSelection(lineCount: number, args: Record<string, unknown>):
 
 function shouldReadFullContent(fileBytes: number, args: Record<string, unknown>): boolean {
     return args.force === true || hasExplicitLineSelection(args) || fileBytes <= DEFAULT_AUTO_READ_MAX_BYTES;
+}
+
+function getReturnedLineRange(selection: LineSelection): { start: number; end: number } {
+    if (selection.startIndex >= selection.endIndex) {
+        return { start: 0, end: 0 };
+    }
+
+    return {
+        start: selection.startIndex + 1,
+        end: selection.endIndex
+    };
 }
 
 function hasExplicitLineSelection(args: Record<string, unknown>): boolean {
