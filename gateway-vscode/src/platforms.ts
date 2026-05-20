@@ -6,7 +6,7 @@ export interface AISiteConfig {
     selectors?: Partial<SiteSelectors>;
 }
 
-export type BuiltinPlatformId = 'chatgpt' | 'gemini' | 'aistudio' | 'deepseek' | 'glm';
+export type BuiltinPlatformId = 'chatgpt' | 'gemini' | 'aistudio' | 'deepseek' | 'glm' | 'claude';
 
 export interface SiteSelectors {
     messageBlocks: string;
@@ -34,7 +34,7 @@ const BUILTIN_PLATFORMS: BuiltinPlatformDefinition[] = [
         },
         addressIncludes: ['chatgpt.com', 'openai.com'],
         selectors: {
-            messageBlocks: 'div[data-message-author-role="assistant"]',
+            messageBlocks: '.agent-turn',
             codeBlocks: 'pre code',
             inputArea: '#prompt-textarea',
             sendButton: 'button[data-testid="send-button"]',
@@ -104,6 +104,22 @@ const BUILTIN_PLATFORMS: BuiltinPlatformDefinition[] = [
             sendButton: '.enter.is-main-chat.m-three-row',
             stopButton: '.enter.is-main-chat.searching',
             maxInlineChars: 20000
+        }
+    },
+    {
+        id: 'claude',
+        defaultSite: {
+            name: 'Claude',
+            address: 'https://claude.ai/',
+            showQuickLaunch: true
+        },
+        addressIncludes: ['claude.ai'],
+        selectors: {
+            messageBlocks: '.font-claude-response',
+            codeBlocks: 'pre code',
+            inputArea: 'div[contenteditable="true"]',
+            sendButton: 'button[aria-label="Send message"]',
+            stopButton: 'button[aria-label="Stop response"]',
         }
     }
 ];
