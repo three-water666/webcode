@@ -53,7 +53,14 @@ export function createToolCallHandler(options: ToolCallHandlerOptions): express.
             );
         }
 
-        resolveLocalPathArguments(route, parsed.args, options.getWorkspaceRoot());
+        try {
+            resolveLocalPathArguments(route, parsed.args, options.getWorkspaceRoot());
+        } catch (error: unknown) {
+            const errorText = getErrorMessage(error);
+            options.log(`   ⛔ Rejected unsafe local path arguments for ${parsed.name}: ${errorText}`);
+            return sendToolError(res, 400, errorText);
+        }
+
         return executeRemoteTool(route, parsed, toolStart, res, options);
     };
 }

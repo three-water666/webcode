@@ -7,6 +7,7 @@ import type { GatewayLogger } from './types';
 
 type BridgeRouteOptions = {
     getPort: () => number;
+    getAllowedOrigins: () => readonly string[];
     getWorkspaceRoot: () => string | null;
     log: GatewayLogger;
 };
@@ -21,29 +22,31 @@ function createWorkspaceId(workspaceRoot: string | null): string {
 
 export function registerBridgeRoute(app: express.Express, options: BridgeRouteOptions): void {
     app.get('/bridge', (req, res) => {
-        const target = req.query.target as string || getDefaultBridgeTarget();
-        const token = req.query.token as string;
+        const rawTarget = getSingleQueryValue(req.query.target) ?? getDefaultBridgeTarget();
+        const target = resolveAllowedBridgeTarget(rawTarget, options.getAllowedOrigins());
+        if (!target) {
+            options.log(`⛔ Rejected bridge target: ${rawTarget}`);
+            res.status(400).send(renderInvalidBridgePage());
+            return;
+        }
+
         const port = options.getPort();
         const releaseUrl = `${BRANDING.repositoryUrl}/releases`;
         const workspaceId = createWorkspaceId(options.getWorkspaceRoot());
 
         options.log(`🌉 Bridge handshake requested for workspace [${workspaceId}].`);
 
-        res.send(renderBridgePage({ target, token, port, workspaceId, releaseUrl }));
+        res.send(renderBridgePage({ port, workspaceId, releaseUrl }));
     });
 }
 
 type BridgePageOptions = {
-    target: string;
-    token: string;
     port: number;
     workspaceId: string;
     releaseUrl: string;
 };
 
 function renderBridgePage({
-    target,
-    token,
     port,
     workspaceId,
     releaseUrl
@@ -55,7 +58,7 @@ function renderBridgePage({
                 <body>
                     ${renderMainCard()}
 
-                    <div id="mcp-data" data-port="${port}" data-token="${token}" data-target="${target}" data-workspace-id="${workspaceId}" style="display:none;"></div>
+                    ${renderBridgeData({ port, workspaceId })}
 
                     ${renderInstallGuide(releaseUrl)}
 
@@ -63,6 +66,42 @@ function renderBridgePage({
                 </body>
                 </html>
             `;
+}
+
+export function resolveAllowedBridgeTarget(rawTarget: string, allowedOrigins: readonly string[]): string | null {
+    let parsedTarget: URL;
+    try {
+        parsedTarget = new URL(rawTarget);
+    } catch {
+        return null;
+    }
+
+    if (parsedTarget.protocol !== 'https:' && parsedTarget.protocol !== 'http:') {
+        return null;
+    }
+
+    const allowedOriginSet = new Set(allowedOrigins);
+    if (!allowedOriginSet.has(parsedTarget.origin)) {
+        return null;
+    }
+
+    return parsedTarget.href;
+}
+
+function getSingleQueryValue(value: unknown): string | null {
+    if (typeof value === 'string') {
+        return value;
+    }
+
+    if (Array.isArray(value) && typeof value[0] === 'string') {
+        return value[0];
+    }
+
+    return null;
+}
+
+function renderBridgeData(options: Pick<BridgePageOptions, 'port' | 'workspaceId'>): string {
+    return `<script id="mcp-data" type="application/json">${escapeHtmlText(JSON.stringify(options))}</script>`;
 }
 
 function renderBridgeHead(): string {
@@ -97,7 +136,7 @@ function renderInstallGuide(releaseUrl: string): string {
                         <div style="background:#333; padding:10px; border-radius:6px; margin-bottom:20px; font-weight:bold; color:#fff">
                             🧩 ${BRANDING.bridgeName}
                         </div>
-                        <a id="install-button" href="${releaseUrl}" target="_blank" rel="noopener noreferrer" onclick="alert(window.__bridgeI18n?.installAlert || 'Please download the browser extension from GitHub Releases: ${releaseUrl}');" style="display:inline-block; background:#e74c3c; color:white; padding:10px 20px; text-decoration:none; border-radius:4px; font-weight:bold;">
+                        <a id="install-button" href="${escapeHtmlAttr(releaseUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block; background:#e74c3c; color:white; padding:10px 20px; text-decoration:none; border-radius:4px; font-weight:bold;">
                             Get Browser Extension
                         </a>
                         <p id="install-warn" class="warn" style="margin-top:15px; font-size:12px">Already installed? Try reloading this page.</p>
@@ -106,23 +145,25 @@ function renderInstallGuide(releaseUrl: string): string {
 
 function renderBridgeScript(releaseUrl: string): string {
     return `<script>
+                        const productName = ${toSafeScriptJson(BRANDING.productName)};
+                        const releaseUrl = ${toSafeScriptJson(releaseUrl)};
                         const isZh = navigator.language.toLowerCase().startsWith('zh');
                         const bridgeI18n = isZh ? {
-                            connectingTitle: '正在连接 ${BRANDING.productName}...',
+                            connectingTitle: '正在连接 ' + productName + '...',
                             connectingStatus: '正在与 VS Code 同步...',
                             installTitle: '需要浏览器扩展',
                             installDesc: '要启用自动连接，您需要先安装配套的浏览器扩展：',
                             installButton: '前往下载浏览器扩展',
                             installWarn: '如果已经安装，请尝试刷新当前页面。',
-                            installAlert: '请前往 GitHub Releases 下载浏览器插件：${releaseUrl}'
+                            installAlert: '请前往 GitHub Releases 下载浏览器插件：' + releaseUrl
                         } : {
-                            connectingTitle: 'Connecting to ${BRANDING.productName}...',
+                            connectingTitle: 'Connecting to ' + productName + '...',
                             connectingStatus: 'Synchronizing with VS Code...',
                             installTitle: 'Browser Extension Required',
                             installDesc: 'To enable auto-connection, you need the companion browser extension:',
                             installButton: 'Download Browser Extension',
                             installWarn: 'Already installed? Try reloading this page.',
-                            installAlert: 'Please download the browser extension from GitHub Releases: ${releaseUrl}'
+                            installAlert: 'Please download the browser extension from GitHub Releases: ' + releaseUrl
                         };
                         window.__bridgeI18n = bridgeI18n;
                         document.getElementById('bridge-title').textContent = bridgeI18n.connectingTitle;
@@ -130,6 +171,7 @@ function renderBridgeScript(releaseUrl: string): string {
                         document.getElementById('install-title').textContent = bridgeI18n.installTitle;
                         document.getElementById('install-desc').textContent = bridgeI18n.installDesc;
                         document.getElementById('install-button').textContent = bridgeI18n.installButton;
+                        document.getElementById('install-button').addEventListener('click', () => alert(bridgeI18n.installAlert));
                         document.getElementById('install-warn').textContent = bridgeI18n.installWarn;
 
                         // 检测逻辑：等待 1.5 秒
@@ -148,4 +190,36 @@ function renderBridgeScript(releaseUrl: string): string {
                             }
                         }, 1500);
                     </script>`;
+}
+
+function renderInvalidBridgePage(): string {
+    return `<!DOCTYPE html>
+                <html>
+                ${renderBridgeHead()}
+                <body>
+                    <div class="card" id="main-card">
+                        <h2 id="bridge-title">Invalid bridge target</h2>
+                        <p id="bridge-status">This bridge link does not match a configured AI site.</p>
+                    </div>
+                </body>
+                </html>`;
+}
+
+function escapeHtmlAttr(value: string): string {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+function escapeHtmlText(value: string): string {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+function toSafeScriptJson(value: unknown): string {
+    return JSON.stringify(value).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
 }

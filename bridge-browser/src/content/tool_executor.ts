@@ -145,6 +145,14 @@ export class ToolExecutor {
         const requestId = getRequestId(payload);
         this.options.requestRegistry.markSettled(requestId);
 
+        if (chrome.runtime.lastError) {
+          const errorMessage = chrome.runtime.lastError.message ?? "Tool execution failed.";
+          Logger.log(`${t("exec_fail")}: ${errorMessage}`, "error");
+          this.options.requestRegistry.saveToolResult(requestId, errorMessage, true);
+          this.options.scheduleMainLoop(50);
+          return;
+        }
+
         const result = normalizeToolResponse(response);
         if (result.success) {
           Logger.log(`${t("exec_success")}: ${payload.name}`, "success");

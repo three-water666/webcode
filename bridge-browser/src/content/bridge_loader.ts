@@ -41,8 +41,7 @@ import { BRANDING } from '@webcode/shared';
     const target = params.get("target");
     const portStr = window.location.port;
 
-    const dataEl = document.getElementById("mcp-data");
-    const workspaceId = dataEl ? dataEl.getAttribute("data-workspace-id") : "global";
+    const workspaceId = readWorkspaceId();
 
     const loader = document.getElementById("loader");
     const statusText = document.querySelector("p") as HTMLElement | null;
@@ -141,5 +140,23 @@ import { BRANDING } from '@webcode/shared';
     window.addEventListener("DOMContentLoaded", startHandshake);
   } else {
     startHandshake();
+  }
+
+  function readWorkspaceId(): string {
+    const dataEl = document.getElementById("mcp-data");
+    const rawData = dataEl?.textContent ?? "";
+    try {
+      const parsed: unknown = JSON.parse(rawData);
+      if (isRecord(parsed) && typeof parsed.workspaceId === "string" && parsed.workspaceId) {
+        return parsed.workspaceId;
+      }
+    } catch {
+    }
+
+    return "global";
+  }
+
+  function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null;
   }
 })();

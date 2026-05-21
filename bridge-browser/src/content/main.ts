@@ -265,7 +265,7 @@ function runMainLoop() {
     // 只有本轮所有待回填工具都完成后，才合并结果；否则继续等待，避免分批打断 AI 上下文。
     if (unflushedBatch.isComplete) {
       // 如果页面仍有 Stop 按钮，说明 AI 还在生成回复。推迟回填，避免和模型输出竞争输入区。
-      if (UI.hasStopButton(DOM)) {
+      if (UI.isStopButtonVisible(DOM)) {
         // AI 停止生成时不一定有 DOM 变化可监听，所以这里主动安排一次延迟检查。
         scheduleMainLoop(1000);
         return;

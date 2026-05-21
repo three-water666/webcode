@@ -1,8 +1,10 @@
 export { cancelAutoSend, triggerAutoSend } from "./auto_send";
 export { showAutoInitConfirm } from "./auto_init_confirm";
 export {
-  showConfirmationModal,
   type CommandApprovalScope,
+} from "./command_approval";
+export {
+  showConfirmationModal,
 } from "./approval_modal";
 export {
   deliverResult,
@@ -14,6 +16,7 @@ export {
   getInputAreaCandidates,
   getLatestResponseCodeBlocks,
   hasStopButton,
+  isStopButtonVisible,
 } from "./page_selectors";
 export {
   clearVisualState,

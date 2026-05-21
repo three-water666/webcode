@@ -100,6 +100,14 @@ const I18N_MESSAGES: Record<string, { en: string; zh: string }> = {
     en: "Any command starting with this normalized prefix will be auto-approved.",
     zh: "只要以这个归一化前缀开头的命令都会被自动放行。",
   },
+  cmd_scope_executable_blocked: {
+    en: "Executable-wide approval is disabled for shells, interpreters, and package managers. Use exact command approval or a narrower prefix.",
+    zh: "Shell、解释器和包管理器不允许按可执行文件永久放行。请使用精确命令或更窄的前缀。",
+  },
+  cmd_scope_prefix_warning: {
+    en: "This prefix starts with a shell, interpreter, or package manager and can still cover many commands.",
+    zh: "此前缀以 Shell、解释器或包管理器开头，仍可能覆盖大量命令。",
+  },
 };
 
 export function t(key: string): string {

@@ -1,4 +1,10 @@
-import type { CommandApprovalScope } from "../modules/ui";
+import {
+  getCommandExecutable,
+  getCommandPrefix,
+  isCommandApprovalScopeAllowed,
+  normalizeCommandValue,
+  type CommandApprovalScope,
+} from "../modules/command_approval";
 import type { ToolExecutionPayload } from "../types";
 
 const COMMAND_APPROVAL_TOOLS = new Set(["execute_command", "run_in_terminal"]);
@@ -96,14 +102,18 @@ function getCommandApprovalRule(
     return `command-exact:${payload.name}:${command}`;
   }
 
-  const executable = getNormalizedCommandExecutable(command);
+  if (!isCommandApprovalScopeAllowed(command, scope)) {
+    return null;
+  }
+
+  const executable = getCommandExecutable(command);
   if (!executable) {return null;}
 
   if (scope === "executable") {
     return `command-executable:${payload.name}:${executable}`;
   }
 
-  const prefix = getNormalizedCommandPrefix(command);
+  const prefix = getCommandPrefix(command);
   return prefix ? `command-prefix:${payload.name}:${prefix}` : null;
 }
 
@@ -111,76 +121,6 @@ function getPayloadCommand(payload: ToolExecutionPayload): string | null {
   const args: unknown = payload.arguments;
   if (!isRecord(args)) {return null;}
   return normalizeCommandValue(args.command);
-}
-
-function normalizeCommandValue(command: unknown): string | null {
-  if (typeof command !== "string") {return null;}
-  const normalized = command.trim().replace(/\s+/g, " ");
-  return normalized || null;
-}
-
-function getNormalizedCommandExecutable(command: string): string | null {
-  const tokens = tokenizeCommandLine(command);
-  return tokens[0] || null;
-}
-
-function getNormalizedCommandPrefix(command: string): string | null {
-  const tokens = tokenizeCommandLine(command);
-  if (tokens.length === 0) {return null;}
-  if (tokens.length === 1) {return tokens[0];}
-  return `${tokens[0]} ${tokens[1]}`;
-}
-
-function tokenizeCommandLine(command: string): string[] {
-  const tokens: string[] = [];
-  let current = "";
-  let quote: '"' | "'" | null = null;
-  let escaping = false;
-
-  for (let i = 0; i < command.length; i += 1) {
-    const char = command[i];
-
-    if (escaping) {
-      current += char;
-      escaping = false;
-      continue;
-    }
-
-    if (char === "\\" && quote !== "'") {
-      escaping = true;
-      continue;
-    }
-
-    if (quote) {
-      if (char === quote) {
-        quote = null;
-      } else {
-        current += char;
-      }
-      continue;
-    }
-
-    if (char === '"' || char === "'") {
-      quote = char;
-      continue;
-    }
-
-    if (/\s/.test(char)) {
-      if (current) {
-        tokens.push(current);
-        current = "";
-      }
-      continue;
-    }
-
-    current += char;
-  }
-
-  if (current) {
-    tokens.push(current);
-  }
-
-  return tokens;
 }
 
 function upgradeLegacyCommandRule(entry: string): string {

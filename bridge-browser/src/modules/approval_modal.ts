@@ -1,8 +1,13 @@
 import { type ToolExecutionPayload } from "../types";
+import {
+  getCommandExecutable,
+  getCommandPrefix,
+  isBroadCommandExecutable,
+  normalizeCommandValue,
+  type CommandApprovalScope,
+} from "./command_approval";
 import { isElementVisible } from "./dom_helpers";
 import { t } from "./i18n";
-
-export type CommandApprovalScope = false | 'exact' | 'executable' | 'prefix';
 
 const MODAL_EVENT_GUARD_TYPES = [
   "beforeinput",
@@ -129,9 +134,13 @@ export function showConfirmationModal(
           .btn-back:hover { background: #5a6268; }
           .approval-options { display: grid; gap: 10px; margin-top: 14px; text-align: left; }
           .approval-option { border: 1px solid #d7dce2; border-radius: 8px; padding: 12px; background: #f8f9fa; }
+          .approval-option.warning { border-color: #f59e0b; background: #fff7ed; }
+          .approval-option.disabled { border-color: #fca5a5; background: #fff1f2; }
           .approval-option strong { display: block; color: #1f2937; margin-bottom: 4px; }
           .approval-option code { display: block; margin-top: 6px; padding: 8px; border-radius: 6px; background: #eef2f7; color: #1d4ed8; word-break: break-all; }
           .approval-option button { margin-top: 10px; width: 100%; }
+          .scope-warning { color: #b45309; font-size: 12px; font-weight: 600; margin-top: 8px; }
+          button:disabled { cursor: not-allowed; opacity: 0.65; transform: none; box-shadow: none; }
           input.reason { width: 100%; box-sizing: border-box; padding: 10px; margin-top: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; display: none; }
           input.reason:focus { outline: none; border-color: #dc3545; }
       `;
@@ -155,9 +164,7 @@ export function showConfirmationModal(
   const safeArgs = escapeHtml(JSON.stringify(payload.arguments ?? {}, null, 2));
   const safeName = escapeHtml(payload.name);
   const safePurpose = escapeHtml((payload as any).purpose ?? "No purpose provided.");
-  const commandValue = typeof payload.arguments?.command === "string"
-    ? payload.arguments.command.trim().replace(/\s+/g, " ")
-    : "";
+  const commandValue = normalizeCommandValue(payload.arguments?.command) ?? "";
   const isCommandScopedApproval = (payload.name === "execute_command" || payload.name === "run_in_terminal") && Boolean(commandValue);
   const safeAlwaysTarget = escapeHtml(isCommandScopedApproval ? commandValue : payload.name);
   const alwaysTitle = isCommandScopedApproval
@@ -167,10 +174,19 @@ export function showConfirmationModal(
     ? t("cmd_always_desc")
     : t("always_desc_2");
   const exactKey = isCommandScopedApproval ? escapeHtml(`command-exact:${payload.name}:${commandValue}`) : "";
-  const executableValue = isCommandScopedApproval ? getCommandExecutable(commandValue) : "";
-  const executableKey = executableValue ? escapeHtml(`command-executable:${payload.name}:${executableValue}`) : "";
-  const prefixValue = isCommandScopedApproval ? getCommandPrefix(commandValue) : "";
+  const executableValue = isCommandScopedApproval ? getCommandExecutable(commandValue) ?? "" : "";
+  const isBroadExecutable = Boolean(executableValue && isBroadCommandExecutable(executableValue));
+  const executableKey = executableValue && !isBroadExecutable
+    ? escapeHtml(`command-executable:${payload.name}:${executableValue}`)
+    : "";
+  const prefixValue = isCommandScopedApproval ? getCommandPrefix(commandValue) ?? "" : "";
   const prefixKey = prefixValue ? escapeHtml(`command-prefix:${payload.name}:${prefixValue}`) : "";
+  const executableOptionHtml = executableValue
+    ? renderExecutableApprovalOption(executableKey, isBroadExecutable)
+    : "";
+  const prefixOptionHtml = prefixValue
+    ? renderPrefixApprovalOption(prefixKey, isBroadExecutable)
+    : "";
   const alwaysOptionsHtml = isCommandScopedApproval
     ? `
           <div class="approval-options">
@@ -181,20 +197,8 @@ export function showConfirmationModal(
                   <code>${exactKey}</code>
                   <button class="btn-allow-exact btn-scope-approve">${t("btn_allow_exact")}</button>
               </div>
-              <div class="approval-option">
-                  <strong>${t("cmd_scope_executable_title")}</strong>
-                  <div>${t("cmd_scope_executable_desc")}</div>
-                  <div class="label">${t("label_rule_key")}</div>
-                  <code>${executableKey}</code>
-                  <button class="btn-allow-executable btn-scope-approve">${t("btn_allow_executable")}</button>
-              </div>
-              <div class="approval-option">
-                  <strong>${t("cmd_scope_prefix_title")}</strong>
-                  <div>${t("cmd_scope_prefix_desc")}</div>
-                  <div class="label">${t("label_rule_key")}</div>
-                  <code>${prefixKey}</code>
-                  <button class="btn-allow-prefix btn-scope-approve">${t("btn_allow_prefix")}</button>
-              </div>
+              ${executableOptionHtml}
+              ${prefixOptionHtml}
           </div>
       `
     : "";
@@ -298,14 +302,14 @@ export function showConfirmationModal(
     };
   }
 
-  if (btnAllowExecutable) {
+  if (btnAllowExecutable && executableKey) {
     btnAllowExecutable.onclick = () => {
       closeModal();
       onConfirm('executable');
     };
   }
 
-  if (btnAllowPrefix) {
+  if (btnAllowPrefix && prefixKey) {
     btnAllowPrefix.onclick = () => {
       closeModal();
       onConfirm('prefix');
@@ -364,83 +368,42 @@ export function showConfirmationModal(
   shadow.appendChild(overlay);
 }
 
-/**
- * 从一行待审批执行的命令中获取它的第一段程序名称
- * @param command 带有参数的执行命令
- * @returns 基础可执行文件名称
- */
-function getCommandExecutable(command: string): string {
-  const tokens = tokenizeCommandLine(command);
-  return tokens[0] || command;
+function renderExecutableApprovalOption(executableKey: string, isBroadExecutable: boolean): string {
+  if (isBroadExecutable) {
+    return `
+              <div class="approval-option disabled">
+                  <strong>${t("cmd_scope_executable_title")}</strong>
+                  <div>${t("cmd_scope_executable_desc")}</div>
+                  <div class="scope-warning">${t("cmd_scope_executable_blocked")}</div>
+                  <button class="btn-allow-executable btn-scope-approve" disabled>${t("btn_allow_executable")}</button>
+              </div>
+          `;
+  }
+
+  return `
+              <div class="approval-option">
+                  <strong>${t("cmd_scope_executable_title")}</strong>
+                  <div>${t("cmd_scope_executable_desc")}</div>
+                  <div class="label">${t("label_rule_key")}</div>
+                  <code>${executableKey}</code>
+                  <button class="btn-allow-executable btn-scope-approve">${t("btn_allow_executable")}</button>
+              </div>
+          `;
 }
 
-/**
- * 从一行待审批执行的命令中获取命令的主体及其第一个参数的前缀模式
- * @param command 带有参数的执行命令
- * @returns 基础可执行文件名称+第一项参数的前两截，例如：`git commit` 或者 `npm install`
- */
-function getCommandPrefix(command: string): string {
-  const tokens = tokenizeCommandLine(command);
-  if (tokens.length <= 1) {
-    return command;
-  }
+function renderPrefixApprovalOption(prefixKey: string, isBroadExecutable: boolean): string {
+  const warning = isBroadExecutable
+    ? `<div class="scope-warning">${t("cmd_scope_prefix_warning")}</div>`
+    : "";
 
-  return tokens.slice(0, 2).join(" ");
-}
-
-/**
- * 提供将长段带有各种空格与引号的命令行文字转为单词数组
- * @param command 将被切分的命令行语句
- * @returns 参数字符串切片的 Token 数组
- */
-function tokenizeCommandLine(command: string): string[] {
-  const tokens: string[] = [];
-  let current = "";
-  let quote: '"' | "'" | null = null;
-  let escaping = false;
-
-  for (let i = 0; i < command.length; i += 1) {
-    const char = command[i];
-
-    if (escaping) {
-      current += char;
-      escaping = false;
-      continue;
-    }
-
-    if (char === "\\" && quote !== "'") {
-      escaping = true;
-      continue;
-    }
-
-    if (quote) {
-      if (char === quote) {
-        quote = null;
-      } else {
-        current += char;
-      }
-      continue;
-    }
-
-    if (char === '"' || char === "'") {
-      quote = char;
-      continue;
-    }
-
-    if (/\s/.test(char)) {
-      if (current) {
-        tokens.push(current);
-        current = "";
-      }
-      continue;
-    }
-
-    current += char;
-  }
-
-  if (current) {
-    tokens.push(current);
-  }
-
-  return tokens;
+  return `
+              <div class="approval-option${isBroadExecutable ? " warning" : ""}">
+                  <strong>${t("cmd_scope_prefix_title")}</strong>
+                  <div>${t("cmd_scope_prefix_desc")}</div>
+                  ${warning}
+                  <div class="label">${t("label_rule_key")}</div>
+                  <code>${prefixKey}</code>
+                  <button class="btn-allow-prefix btn-scope-approve">${t("btn_allow_prefix")}</button>
+              </div>
+          `;
 }

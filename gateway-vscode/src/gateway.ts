@@ -134,6 +134,7 @@ export class GatewayManager {
         registerConfigRoutes(this.app, config, BUILTIN_SELECTORS, this.log.bind(this));
         registerBridgeRoute(this.app, {
             getPort: () => this.getServerPort(),
+            getAllowedOrigins: () => config.allowedOrigins,
             getWorkspaceRoot: () => this.getPrimaryWorkspaceRoot(),
             log: this.log.bind(this)
         });

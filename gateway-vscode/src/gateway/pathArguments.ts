@@ -13,8 +13,8 @@ export function resolveLocalPathArguments(
     }
 
     const fixPath = (p: unknown) => {
-        if (typeof p === 'string' && !path.isAbsolute(p)) {
-            return path.join(workspaceRoot, p);
+        if (typeof p === 'string') {
+            return resolveInsideWorkspace(workspaceRoot, p);
         }
         return p;
     };
@@ -25,4 +25,19 @@ export function resolveLocalPathArguments(
     if (args.source) {args.source = fixPath(args.source);}
     if (args.destination) {args.destination = fixPath(args.destination);}
     if (Array.isArray(args.paths)) {args.paths = args.paths.map(p => fixPath(p));}
+}
+
+export function resolveInsideWorkspace(workspaceRoot: string, inputPath: string): string {
+    if (inputPath.includes('\0')) {
+        throw new Error(`Path contains null bytes: ${inputPath}`);
+    }
+
+    const root = path.resolve(workspaceRoot);
+    const resolved = path.resolve(root, inputPath);
+    const relative = path.relative(root, resolved);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+        throw new Error(`Path escapes workspace: ${inputPath}`);
+    }
+
+    return resolved;
 }
