@@ -746,8 +746,6 @@ export function showConfirmationModal(
     height: "0",
     outline: "none",
   });
-  host.setAttribute("contenteditable", "plaintext-only");
-  host.setAttribute("spellcheck", "false");
   document.body.appendChild(host);
   const shadow = host.attachShadow({ mode: "open" });
 
