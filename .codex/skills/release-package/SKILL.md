@@ -31,6 +31,8 @@ Follow this sequence end-to-end unless the user explicitly asks to stop earlier.
    - Start each file with `# v<version> (YYYY-MM-DD)`, followed by the release notes body.
    - Keep English and Chinese content semantically aligned.
    - Group entries by user-facing categories such as Features, Improvements, Fixes, and Engineering. Do not paste raw commit logs.
+   - When a changelog entry summarizes work merged through one or more pull requests, append the PR number(s), such as `(#16)` or `(#16, #20)`. Use merge commits in the release range to identify PR numbers.
+   - When a PR description, merge commit, or commit message clearly indicates that an issue was closed, fixed, or resolved, include the issue reference alongside the PR number, such as `(#16, closes #12)`. Do not infer issue links without explicit evidence.
 
 5. Ask the user to review the changelog.
    - Show the generated English and Chinese changelog summaries to the user, or point them to the exact files if the content is long.
