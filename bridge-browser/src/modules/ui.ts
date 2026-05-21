@@ -1,4 +1,5 @@
-import { Logger, t, i18n } from './utils';
+import { i18n, t } from './i18n';
+import { Logger } from './logger';
 import { type ToolExecutionPayload } from '../types';
 import { type SiteSelectors } from './config';
 import { BRANDING } from '@webcode/shared';

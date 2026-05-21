@@ -2,7 +2,8 @@ import { BRANDING, PROTOCOL } from "@webcode/shared";
 import type { SiteSelectors } from "../modules/config";
 import type { CommandApprovalScope } from "../modules/ui";
 import * as UI from "../modules/ui";
-import { Logger, i18n, t } from "../modules/utils";
+import { i18n, t } from "../modules/i18n";
+import { Logger } from "../modules/logger";
 import type { ToolExecutionPayload } from "../types";
 import {
   buildStoredApprovalEntries,

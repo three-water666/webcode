@@ -1,5 +1,6 @@
 import { BRANDING, PROTOCOL } from "@webcode/shared";
-import { Logger, i18n } from "../modules/utils";
+import { i18n } from "../modules/i18n";
+import { Logger } from "../modules/logger";
 import * as UI from "../modules/ui";
 import { ToolCallProtocolError, type ParsedToolCallPayload } from "../modules/toolCallProtocol";
 import type { ToolExecutionPayload } from "../types";

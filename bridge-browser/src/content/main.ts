@@ -1,4 +1,5 @@
-import { Logger, t } from "../modules/utils";
+import { t } from "../modules/i18n";
+import { Logger } from "../modules/logger";
 import * as UI from "../modules/ui";
 import { type SiteSelectors } from "../modules/config";
 import { looksLikeToolCall, parseToolCall } from "../modules/toolCallProtocol";

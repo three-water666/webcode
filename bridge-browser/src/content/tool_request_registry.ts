@@ -1,5 +1,5 @@
 import { type McpResponse } from "@webcode/shared";
-import { i18n } from "../modules/utils";
+import { i18n } from "../modules/i18n";
 
 /**
  * 当前页面扫描轮次中，仍需要等待或回填的一组 request_id。

@@ -1,5 +1,6 @@
 import type { SiteSelectors } from "../modules/config";
-import { Logger, i18n } from "../modules/utils";
+import { i18n } from "../modules/i18n";
+import { Logger } from "../modules/logger";
 import * as UI from "../modules/ui";
 
 interface AutoInitPromptControllerOptions {

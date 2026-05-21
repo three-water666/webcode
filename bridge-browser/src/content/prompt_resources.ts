@@ -1,4 +1,4 @@
-import { i18n } from "../modules/utils";
+import { i18n } from "../modules/i18n";
 
 const lang = i18n.lang;
 
