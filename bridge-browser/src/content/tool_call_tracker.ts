@@ -1,0 +1,248 @@
+import { BRANDING, PROTOCOL } from "@webcode/shared";
+import { Logger, i18n } from "../modules/utils";
+import * as UI from "../modules/ui";
+import { ToolCallProtocolError, type ParsedToolCallPayload } from "../modules/toolCallProtocol";
+import type { ToolExecutionPayload } from "../types";
+import { type ToolRequestRegistry } from "./tool_request_registry";
+
+interface BlockState {
+  text: string;
+  time: number;
+  errorNotified: boolean;
+}
+
+interface ToolCallTrackerOptions {
+  requestRegistry: ToolRequestRegistry;
+  scheduleMainLoop: (delayMs: number) => void;
+}
+
+const STABILIZATION_TIMEOUT_MS = 3000;
+
+export class ToolCallTracker {
+  private readonly blockStates = new WeakMap<Element, BlockState>();
+  private readonly protocolErrorFeedbackRequests = new Set<string>();
+
+  public constructor(private readonly options: ToolCallTrackerOptions) {}
+
+  public ensurePayloadRequestId(
+    payload: ParsedToolCallPayload,
+    codeEl: HTMLElement,
+    messageIndex: number
+  ): string {
+    const explicitRequestId = normalizeRequestId(payload.request_id);
+    if (explicitRequestId) {
+      codeEl.dataset.mcpRequestId = explicitRequestId;
+      delete codeEl.dataset.mcpCallSignature;
+      payload.request_id = explicitRequestId;
+      return explicitRequestId;
+    }
+
+    const signature = buildToolCallSignature(payload);
+    const cachedRequestId = codeEl.dataset.mcpRequestId;
+    const cachedSignature = codeEl.dataset.mcpCallSignature;
+    const syntheticRequestId = cachedRequestId && cachedSignature === signature
+      ? cachedRequestId
+      : `req_auto_${messageIndex}_${hashStableString(signature)}`;
+
+    codeEl.dataset.mcpRequestId = syntheticRequestId;
+    codeEl.dataset.mcpCallSignature = signature;
+    payload.request_id = syntheticRequestId;
+    return syntheticRequestId;
+  }
+
+  public clearProtocolErrorFeedbackState(requestId: string): void {
+    if (!this.protocolErrorFeedbackRequests.delete(requestId)) {return;}
+    this.options.requestRegistry.clearProtocolFeedbackResult(requestId);
+  }
+
+  public handleProtocolErrorBlock(
+    codeEl: HTMLElement,
+    textContent: string,
+    messageIndex: number,
+    error: unknown
+  ): string | null {
+    const now = Date.now();
+    const state = this.blockStates.get(codeEl);
+    const requestId = getProtocolErrorRequestId(textContent, codeEl, messageIndex);
+
+    if (state?.text !== textContent) {
+      this.blockStates.set(codeEl, {
+        text: textContent,
+        time: now,
+        errorNotified: false,
+      });
+      if (codeEl.dataset.mcpState === "error") {
+        UI.clearVisualState(codeEl);
+      }
+      this.scheduleStabilizationCheck();
+      return null;
+    }
+
+    if (!state.errorNotified && now - state.time <= STABILIZATION_TIMEOUT_MS) {
+      this.scheduleStabilizationCheck();
+      return null;
+    }
+
+    if (!state.errorNotified) {
+      this.notifyProtocolError(codeEl, requestId, error);
+      state.errorNotified = true;
+      this.blockStates.set(codeEl, state);
+    }
+
+    return requestId;
+  }
+
+  private notifyProtocolError(codeEl: HTMLElement, requestId: string, error: unknown): void {
+    const message = buildProtocolErrorMessage(error);
+    Logger.log(`Tool call protocol error: ${message}`, "error");
+    UI.markVisualError(codeEl);
+    void chrome.runtime.sendMessage({
+      type: "SHOW_NOTIFICATION",
+      title: `${BRANDING.productName} Error`,
+      message: "Invalid tool call format. Returned guidance to the model.",
+    });
+
+    if (!this.options.requestRegistry.hasSeen(requestId) && !this.protocolErrorFeedbackRequests.has(requestId)) {
+      this.protocolErrorFeedbackRequests.add(requestId);
+      this.options.requestRegistry.saveToolResult(requestId, message, true);
+    }
+  }
+
+  /**
+   * 为解析失败的代码块安排一次稳定性复查。
+   *
+   * AI 流式输出 JSON 时，代码块经常会短暂处于不完整状态；如果立刻回填协议错误，会把仍在生成
+   * 的工具调用误判为失败。这里通过主循环调度入口延迟到稳定窗口之后再扫描一次，届时文本如果
+   * 没再变化，handleProtocolErrorBlock 才会真正写入协议错误反馈。
+   */
+  private scheduleStabilizationCheck(): void {
+    this.options.scheduleMainLoop(STABILIZATION_TIMEOUT_MS + 50);
+  }
+}
+
+export function logToolSummary(payload: ToolExecutionPayload): void {
+  const purpose = typeof payload.purpose === "string" && payload.purpose.trim()
+    ? payload.purpose.trim().replace(/\s+/g, " ")
+    : (i18n.lang === "zh" ? "未提供 purpose" : "No purpose provided");
+  Logger.log(`${payload.name} | purpose: ${purpose}`, "summary");
+}
+
+function normalizeRequestId(value: unknown): string | null {
+  if (typeof value !== "string") {return null;}
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function buildToolCallSignature(payload: ToolExecutionPayload): string {
+  const payloadArguments: unknown = payload.arguments;
+  return stableStringify({
+    name: payload.name,
+    arguments: payloadArguments ?? {},
+  });
+}
+
+function stableStringify(value: unknown): string {
+  if (value === null) {return "null";}
+
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(",")}]`;
+  }
+
+  if (typeof value === "object") {
+    return stableStringifyObject(value as Record<string, unknown>);
+  }
+
+  return stableStringifyPrimitive(value);
+}
+
+function stableStringifyObject(record: Record<string, unknown>): string {
+  return `{${Object.keys(record)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
+    .join(",")}}`;
+}
+
+function stableStringifyPrimitive(value: unknown): string {
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return JSON.stringify(value) ?? "";
+  }
+  if (typeof value === "bigint") {return `${value.toString()}n`;}
+  if (typeof value === "symbol") {return value.description ? `symbol:${value.description}` : "symbol";}
+  if (typeof value === "function") {return `function:${value.name}`;}
+  return "undefined";
+}
+
+function hashStableString(value: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function getProtocolErrorRequestId(
+  textContent: string,
+  codeEl: HTMLElement,
+  messageIndex: number
+): string {
+  const explicitRequestId = extractRequestIdCandidate(textContent);
+  if (explicitRequestId) {
+    codeEl.dataset.mcpRequestId = explicitRequestId;
+    return explicitRequestId;
+  }
+
+  const cachedRequestId = codeEl.dataset.mcpRequestId;
+  if (cachedRequestId?.startsWith("req_invalid_")) {
+    return cachedRequestId;
+  }
+
+  const syntheticRequestId = `req_invalid_${messageIndex}_${hashStableString(textContent)}`;
+  codeEl.dataset.mcpRequestId = syntheticRequestId;
+  return syntheticRequestId;
+}
+
+function extractRequestIdCandidate(textContent: string): string | null {
+  const match = /["']request_id["']\s*:\s*["']([^"']+)["']/.exec(textContent);
+  return normalizeRequestId(match?.[1]);
+}
+
+function buildProtocolErrorMessage(error: unknown): string {
+  const issues = error instanceof ToolCallProtocolError
+    ? error.issues
+    : [error instanceof Error ? error.message : String(error)];
+  const intro = i18n.lang === "zh"
+    ? "工具调用已被 webcode 拒绝，未请求 VS Code，也未执行任何工具。"
+    : "The tool call was rejected by webcode before contacting VS Code. No tool was executed.";
+  const nextStep = i18n.lang === "zh"
+    ? "请重新输出一个新的 JSON 工具调用代码块。顶层只能包含 mcp_action、name、purpose、arguments、request_id；name 和 purpose 必填。当前工具有入参时，arguments 必须严格匹配该工具的 inputSchema。"
+    : "Regenerate a new JSON tool-call code block. Top-level fields may only be mcp_action, name, purpose, arguments, and request_id; name and purpose are required. When the selected tool has inputs, arguments must exactly match that tool's inputSchema.";
+  const issueList = issues.map((issue) => `- ${issue}`).join("\n");
+  const formatHint = getDefaultProtocolErrorHint();
+  return `${intro}\n\nProblems:\n${issueList}\n\n${nextStep}\n\n${formatHint}`;
+}
+
+function getDefaultProtocolErrorHint(): string {
+  return `Standard tool format:
+\`\`\`json
+{
+  "mcp_action": "call",
+  "name": "tool_name",
+  "purpose": "Brief justification for this action",
+  "arguments": {
+    "key": "value"
+  },
+  "request_id": "step_1"
+}
+\`\`\`
+
+Initialization tool format:
+\`\`\`json
+{
+  "mcp_action": "call",
+  "name": "${PROTOCOL.initToolName}",
+  "purpose": "Initialize webcode for this conversation",
+  "request_id": "step_1"
+}
+\`\`\``;
+}
