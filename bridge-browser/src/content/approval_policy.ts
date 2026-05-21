@@ -8,6 +8,7 @@ import {
 import type { ToolExecutionPayload } from "../types";
 
 const COMMAND_APPROVAL_TOOLS = new Set(["execute_command", "run_in_terminal"]);
+const COMMAND_RULE_PREFIXES = ["command-exact:", "command-executable:", "command-prefix:"];
 
 export interface ApprovalState {
   allowedTools: Set<string>;
@@ -29,12 +30,12 @@ export function parseStoredApprovalEntries(rawEntries: unknown): ApprovalState {
 
   for (const entry of rawEntries) {
     if (typeof entry !== "string") {continue;}
-    if (entry.startsWith("command:")) {
-      approvalState.allowedCommandRules.add(upgradeLegacyCommandRule(entry));
-    } else if (entry.startsWith("tool:")) {
-      approvalState.allowedTools.add(entry.slice("tool:".length));
+    const normalizedEntry = normalizeStoredApprovalEntry(entry);
+    if (!normalizedEntry) {continue;}
+    if (isCommandRuleEntry(normalizedEntry)) {
+      approvalState.allowedCommandRules.add(normalizedEntry);
     } else {
-      approvalState.allowedTools.add(entry);
+      approvalState.allowedTools.add(normalizedEntry);
     }
   }
 
@@ -129,6 +130,19 @@ function upgradeLegacyCommandRule(entry: string): string {
   }
 
   return entry.replace(/^command:/, "command-exact:");
+}
+
+function normalizeStoredApprovalEntry(entry: string): string | null {
+  if (entry.startsWith("tool:")) {
+    const toolEntry = entry.slice("tool:".length);
+    return toolEntry ? upgradeLegacyCommandRule(toolEntry) : null;
+  }
+
+  return upgradeLegacyCommandRule(entry);
+}
+
+function isCommandRuleEntry(entry: string): boolean {
+  return COMMAND_RULE_PREFIXES.some((prefix) => entry.startsWith(prefix));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
