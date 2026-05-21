@@ -235,8 +235,7 @@ export class ToolExecutor {
     const selectors = this.options.getSelectors();
     if (!selectors) {return;}
 
-    const inputEl = document.querySelector<HTMLElement>(selectors.inputArea);
-    inputEl?.focus();
+    UI.focusInputArea(selectors);
   }
 }
 

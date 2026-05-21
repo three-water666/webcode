@@ -190,22 +190,17 @@ function scheduleMainLoop(delayMs: number): void {
  * 4. 当前轮次所有工具都有结果后，按页面顺序合并结果并写回输入框。
  * 5. 如果 AI 还在输出、工具还没完成、或 JSON 还没稳定，则安排下一次检查。
  */
-// eslint-disable-next-line complexity
 function runMainLoop() {
 
   // 进入实际扫描后释放调度锁；本轮扫描期间如果还需要等待，会重新调用 scheduleMainLoop。
   isCheckScheduled = false;
   if (!DOM || !isClientConnected) { return; }
 
-  // 页面里可能有多轮历史对话。这里只取最后一个 AI 消息块，工具执行始终绑定当前轮次。
-  const messages = document.querySelectorAll(DOM.messageBlocks);
-  if (messages.length === 0) { return; }
+  // UI 层统一按 VS Code 下发的选择器定位最新响应块和其中的 JSON 代码块。
+  const latestCodeBlocks = UI.getLatestResponseCodeBlocks(DOM);
+  if (!latestCodeBlocks) { return; }
 
-  const messageIndex = messages.length - 1;
-  const lastMessage = messages[messageIndex];
-
-  // 最新消息中可能有多个 JSON 代码块；其中只有符合工具协议形状的块会继续解析。
-  const codeElements = lastMessage.querySelectorAll(DOM.codeBlocks);
+  const { messageIndex, codeElements } = latestCodeBlocks;
 
   // 当前轮次对象只记录本次扫描看到的 request_id；去重、排序和已回填过滤由 registry 统一处理。
   const currentTurn = requestRegistry.createTurn();
@@ -270,10 +265,7 @@ function runMainLoop() {
     // 只有本轮所有待回填工具都完成后，才合并结果；否则继续等待，避免分批打断 AI 上下文。
     if (unflushedBatch.isComplete) {
       // 如果页面仍有 Stop 按钮，说明 AI 还在生成回复。推迟回填，避免和模型输出竞争输入区。
-      const stopBtn = DOM.stopButton
-        ? document.querySelector(DOM.stopButton)
-        : null;
-      if (stopBtn) {
+      if (UI.hasStopButton(DOM)) {
         // AI 停止生成时不一定有 DOM 变化可监听，所以这里主动安排一次延迟检查。
         scheduleMainLoop(1000);
         return;

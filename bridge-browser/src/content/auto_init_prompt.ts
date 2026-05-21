@@ -124,7 +124,7 @@ export class AutoInitPromptController {
     const selectors = this.options.getSelectors();
     if (!selectors) {return null;}
 
-    const candidates = Array.from(document.querySelectorAll<HTMLElement>(selectors.inputArea));
+    const candidates = UI.getInputAreaCandidates(selectors);
     if (candidates.length === 0) {return null;}
 
     const activeInput = candidates.find((candidate) => isActiveInput(candidate));
