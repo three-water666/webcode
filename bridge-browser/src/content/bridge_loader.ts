@@ -1,3 +1,4 @@
+/* eslint-disable max-lines-per-function */
 import { type HandshakeResponse } from '../types';
 import { BRANDING } from '@webcode/shared';
 
