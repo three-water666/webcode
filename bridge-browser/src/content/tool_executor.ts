@@ -216,9 +216,7 @@ export class ToolExecutor {
     const requestId = getRequestId(payload);
     const msg = getPayloadMessage(payload) ?? "Task Completed";
     const notificationResult = await sendTaskCompletionNotification(msg);
-    if (notificationResult === "skipped") {
-      Logger.log("Notification skipped: browser window is not in background", "info");
-    } else if (notificationResult === "failed") {
+    if (notificationResult === "failed") {
       Logger.log("Notification request failed", "info");
     } else {
       Logger.log(`🔔 Notification: ${msg}`, "action");
@@ -340,7 +338,6 @@ function getTaskCompletionNotificationDescription(): string {
       "适合在代码审查、需求实现、提交代码、执行 skill 工作流、长时间任务或一系列复杂工具操作完成后，",
       "于最终答复前调用一次。",
       "不要用于普通沟通、简单查询、单个快速检查、中间步骤，或同一用户请求中的重复通知。",
-      "扩展可能会自动抑制用户正在前台观看时的冗余通知。",
     ].join("");
   }
 
@@ -350,7 +347,6 @@ function getTaskCompletionNotificationDescription(): string {
     "a skill workflow, a long-running task, or a series of complex tool operations.",
     "Do not use it for ordinary conversation, simple lookups, one quick check, intermediate progress,",
     "or repeated notifications for the same user request.",
-    "The extension may suppress redundant notifications while the user is already watching the page.",
   ].join(" ");
 }
 
@@ -360,7 +356,7 @@ function getTaskCompletionNotificationMessageDescription(): string {
     : "Brief summary of the completed unit of work, for example: Code review complete; found 2 issues.";
 }
 
-function sendTaskCompletionNotification(message: string): Promise<"sent" | "skipped" | "failed"> {
+function sendTaskCompletionNotification(message: string): Promise<"sent" | "failed"> {
   return new Promise((resolve) => {
     try {
       chrome.runtime.sendMessage(
@@ -368,17 +364,17 @@ function sendTaskCompletionNotification(message: string): Promise<"sent" | "skip
           type: "SHOW_NOTIFICATION",
           title: `${BRANDING.productName} Task Finished`,
           message,
-          onlyWhenWindowInBackground: true,
         },
         (response: unknown) => {
-          // Notification delivery is best-effort; background decides whether foreground notifications are suppressed.
+          void response;
+          // Notification delivery is best-effort.
           const runtimeError = chrome.runtime.lastError;
           if (runtimeError) {
             resolve("failed");
             return;
           }
 
-          resolve(isSkippedNotificationResponse(response) ? "skipped" : "sent");
+          resolve("sent");
         }
       );
     } catch {
@@ -414,10 +410,6 @@ function normalizeToolResponse(response: unknown): ToolExecutionResponse {
     error: typeof response.error === "string" ? response.error : undefined,
     data: response.data,
   };
-}
-
-function isSkippedNotificationResponse(value: unknown): boolean {
-  return isRecord(value) && value.skipped === true;
 }
 
 function stringifyToolData(data: unknown, fallback: string): string {
