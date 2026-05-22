@@ -52,6 +52,7 @@ const messages = {
         open_browser_failed: 'Failed to open browser: {message}',
         browser_extension_missing: 'Built-in browser extension is missing. Run the browser build first or reinstall the VS Code extension.',
         browser_not_found: '{browser} was not found. Install it or choose another browser mode.',
+        isolated_chrome_configured_path_missing: 'Configured Chrome for Testing path does not exist: {path}. Update webcodeGateway.isolatedChrome.executablePath or clear it.',
         isolated_chrome_requires_cft: 'Chrome isolated mode requires Chrome for Testing or Chromium because Google Chrome no longer supports automatic unpacked extension loading. Install Chrome for Testing, set webcodeGateway.isolatedChrome.executablePath, or use Edge isolated mode.',
         user_profile_browser_running: '{browser} is already running. Fully quit it, including background processes, then use user profile keepalive mode so anti-freeze flags can take effect.',
     },
@@ -101,6 +102,7 @@ const messages = {
         open_browser_failed: '打开浏览器失败：{message}',
         browser_extension_missing: '内置浏览器插件目录不存在。请先构建浏览器插件，或重新安装 VS Code 插件。',
         browser_not_found: '未找到 {browser}。请安装该浏览器，或选择其他浏览器模式。',
+        isolated_chrome_configured_path_missing: '配置的 Chrome for Testing 路径不存在：{path}。请更新 webcodeGateway.isolatedChrome.executablePath，或清空该配置。',
         isolated_chrome_requires_cft: 'Chrome 独立模式需要 Chrome for Testing 或 Chromium，因为 Google Chrome 已不再支持自动加载未打包扩展。请安装 Chrome for Testing，设置 webcodeGateway.isolatedChrome.executablePath，或改用 Edge 独立保活模式。',
         user_profile_browser_running: '{browser} 正在运行。请完全退出它（包括后台进程）后再使用用户配置保活模式，这样防冻结参数才能生效。',
     }

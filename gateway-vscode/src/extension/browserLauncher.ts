@@ -1,4 +1,4 @@
-import { exec, execFile, spawn } from 'child_process';
+import { exec, spawn } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 
 import { t } from '../i18n';
 import { getConfiguredAiSites } from '../platforms';
+import { isBrowserProcessRunning } from './processDetection';
 import type { AISiteConfig } from './types';
 
 interface LaunchBridgeOptions {
@@ -27,7 +28,7 @@ export function launchBridge(options: LaunchBridgeOptions): void {
     const bridgeUrl = buildBridgeUrl(options.currentPort, options.currentToken, options.targetUrl);
     const finalBrowser = resolveBrowser(options.targetUrl, options.browserMode);
 
-    void openBrowser(bridgeUrl, finalBrowser, options.context);
+    openBrowser(bridgeUrl, finalBrowser, options.context);
 }
 
 function buildBridgeUrl(currentPort: number, currentToken: string, targetUrl: string): string {
@@ -53,9 +54,15 @@ function resolveBrowser(targetUrl: string, browserMode: string): string {
     return config.get<string>('browser') ?? 'default';
 }
 
-async function openBrowser(url: string, browserType: string, context: vscode.ExtensionContext): Promise<void> {
+function openBrowser(url: string, browserType: string, context: vscode.ExtensionContext): void {
+    void openBrowserAsync(url, browserType, context).catch(error => {
+        void vscode.window.showErrorMessage(t('open_browser_failed', { message: getErrorMessage(error) }));
+    });
+}
+
+async function openBrowserAsync(url: string, browserType: string, context: vscode.ExtensionContext): Promise<void> {
     if (browserType === 'default') {
-        void vscode.env.openExternal(vscode.Uri.parse(url));
+        await vscode.env.openExternal(vscode.Uri.parse(url));
         return;
     }
 
@@ -99,6 +106,16 @@ function openIsolatedBrowser(url: string, browserFamily: BrowserFamily, context:
     }
 
     const browserArgs = buildIsolatedBrowserArgs(url, profileDir, extensionPath);
+    if (browserFamily === 'chrome') {
+        const invalidConfiguredPath = getInvalidConfiguredChromeForTestingPath();
+        if (invalidConfiguredPath) {
+            void vscode.window.showErrorMessage(t('isolated_chrome_configured_path_missing', {
+                path: invalidConfiguredPath
+            }));
+            return;
+        }
+    }
+
     const launchCommands = getBrowserLaunchCommands(browserFamily, os.platform());
     if (launchCommands.length === 0 && browserFamily === 'chrome') {
         void vscode.window.showErrorMessage(t('isolated_chrome_requires_cft'));
@@ -338,52 +355,6 @@ function getUserProfileBrowserDisplayName(browserFamily: BrowserFamily): string 
     return browserFamily === 'edge' ? 'Microsoft Edge' : 'Google Chrome';
 }
 
-async function isBrowserProcessRunning(browserFamily: BrowserFamily): Promise<boolean> {
-    const platform = os.platform();
-
-    if (platform === 'win32') {
-        const imageName = browserFamily === 'edge' ? 'msedge.exe' : 'chrome.exe';
-        const output = await execFileText('tasklist', ['/FI', `IMAGENAME eq ${imageName}`, '/FO', 'CSV', '/NH']);
-        return output.toLowerCase().includes(`"${imageName.toLowerCase()}"`);
-    }
-
-    const processNames = getBrowserProcessNames(browserFamily, platform);
-    const results = await Promise.all(processNames.map(name => isProcessNameRunning(name)));
-    return results.some(Boolean);
-}
-
-function getBrowserProcessNames(browserFamily: BrowserFamily, platform: NodeJS.Platform): string[] {
-    if (platform === 'darwin') {
-        return browserFamily === 'edge' ? ['Microsoft Edge'] : ['Google Chrome', 'Google Chrome Helper'];
-    }
-
-    return browserFamily === 'edge'
-        ? ['msedge', 'microsoft-edge', 'microsoft-edge-stable']
-        : ['chrome', 'google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser'];
-}
-
-async function isProcessNameRunning(processName: string): Promise<boolean> {
-    try {
-        await execFileText('pgrep', ['-x', processName]);
-        return true;
-    } catch {
-        return false;
-    }
-}
-
-function execFileText(command: string, args: string[]): Promise<string> {
-    return new Promise((resolve, reject) => {
-        execFile(command, args, (error, stdout) => {
-            if (error) {
-                reject(new Error(error.message));
-                return;
-            }
-
-            resolve(stdout);
-        });
-    });
-}
-
 function getConfiguredChromeForTestingPath(): string | null {
     const configuredPath = vscode.workspace
         .getConfiguration('webcodeGateway')
@@ -395,6 +366,20 @@ function getConfiguredChromeForTestingPath(): string | null {
     }
 
     return configuredPath;
+}
+
+function getInvalidConfiguredChromeForTestingPath(): string | null {
+    const configuredPath = getConfiguredChromeForTestingPath();
+    if (!configuredPath) {
+        return null;
+    }
+
+    const expandedPath = expandHomePath(configuredPath);
+    if (path.isAbsolute(expandedPath) && !fs.existsSync(expandedPath)) {
+        return configuredPath;
+    }
+
+    return null;
 }
 
 function expandHomePath(filePath: string): string {
