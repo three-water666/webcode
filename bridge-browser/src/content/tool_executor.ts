@@ -1,6 +1,5 @@
 import { BRANDING, PROTOCOL } from "@webcode/shared";
 import type { SiteSelectors } from "../modules/config";
-import type { CommandApprovalScope } from "../modules/ui";
 import * as UI from "../modules/ui";
 import { i18n, t } from "../modules/i18n";
 import { Logger } from "../modules/logger";
@@ -35,14 +34,42 @@ interface ToolGroup {
 }
 
 export class ToolExecutor {
-  private readonly confirmationQueue: ToolExecutionPayload[] = [];
-  private isPopupOpen = false;
+  private readonly toolExecutionQueue: ToolExecutionPayload[] = [];
+  private isToolExecutionQueueRunning = false;
 
   public constructor(private readonly options: ToolExecutorOptions) {}
 
   public execute(payload: ToolExecutionPayload): void {
+    this.toolExecutionQueue.push(payload);
+    void this.processToolExecutionQueue();
+  }
+
+  private async processToolExecutionQueue(): Promise<void> {
+    if (this.isToolExecutionQueueRunning) {return;}
+
+    this.isToolExecutionQueueRunning = true;
+    try {
+      while (this.toolExecutionQueue.length > 0) {
+        const payload = this.toolExecutionQueue.shift();
+        if (!payload) {continue;}
+
+        try {
+          await this.runQueuedTool(payload);
+        } catch (error) {
+          this.failQueuedTool(payload, error);
+        }
+      }
+    } finally {
+      this.isToolExecutionQueueRunning = false;
+      if (this.toolExecutionQueue.length > 0) {
+        void this.processToolExecutionQueue();
+      }
+    }
+  }
+
+  private async runQueuedTool(payload: ToolExecutionPayload): Promise<void> {
     if (payload.name === PROTOCOL.initToolName) {
-      void this.initializeWebcode(payload);
+      await this.initializeWebcode(payload);
       return;
     }
 
@@ -54,12 +81,20 @@ export class ToolExecutor {
     if (!isPayloadApproved(payload, this.options.getApprovalState())) {
       Logger.log(`${t("hitl_intercept")}: ${payload.name}`, "warn");
       payload.request_id = payload.request_id ?? "unknown_id";
-      this.confirmationQueue.push(payload);
-      this.processConfirmationQueue();
-      return;
+      const approved = await this.requestToolApproval(payload);
+      if (!approved) {return;}
     }
 
-    this.performExecution(payload);
+    await this.performExecution(payload);
+  }
+
+  private failQueuedTool(payload: ToolExecutionPayload, error: unknown): void {
+    const requestId = getRequestId(payload);
+    const message = getErrorMessage(error) || "Tool execution failed.";
+    this.options.requestRegistry.markSettled(requestId);
+    Logger.log(`${t("exec_fail")}: ${message}`, "error");
+    this.options.requestRegistry.saveToolResult(requestId, message, true);
+    this.options.scheduleMainLoop(50);
   }
 
   /**
@@ -138,35 +173,43 @@ export class ToolExecutor {
    * 自动变化。这里先把 request_id 标记为已结束，再把成功或失败结果写入 registry，
    * 最后通过 scheduleMainLoop 通知主循环重新计算当前轮次是否已经全部完成。
    */
-  private performExecution(payload: ToolExecutionPayload): void {
-    chrome.runtime.sendMessage(
-      { type: "EXECUTE_TOOL", payload },
-      (response: unknown) => {
-        const requestId = getRequestId(payload);
-        this.options.requestRegistry.markSettled(requestId);
+  private performExecution(payload: ToolExecutionPayload): Promise<void> {
+    return new Promise((resolve, reject) => {
+      try {
+        chrome.runtime.sendMessage(
+          { type: "EXECUTE_TOOL", payload },
+          (response: unknown) => {
+            const requestId = getRequestId(payload);
+            this.options.requestRegistry.markSettled(requestId);
 
-        if (chrome.runtime.lastError) {
-          const errorMessage = chrome.runtime.lastError.message ?? "Tool execution failed.";
-          Logger.log(`${t("exec_fail")}: ${errorMessage}`, "error");
-          this.options.requestRegistry.saveToolResult(requestId, errorMessage, true);
-          this.options.scheduleMainLoop(50);
-          return;
-        }
+            if (chrome.runtime.lastError) {
+              const errorMessage = chrome.runtime.lastError.message ?? "Tool execution failed.";
+              Logger.log(`${t("exec_fail")}: ${errorMessage}`, "error");
+              this.options.requestRegistry.saveToolResult(requestId, errorMessage, true);
+              this.options.scheduleMainLoop(50);
+              resolve();
+              return;
+            }
 
-        const result = normalizeToolResponse(response);
-        if (result.success) {
-          Logger.log(`${t("exec_success")}: ${payload.name}`, "success");
-          const outputContent = formatSuccessfulResult(payload.name, result.data);
-          this.options.requestRegistry.saveToolResult(requestId, outputContent);
-        } else {
-          Logger.log(`${t("exec_fail")}: ${result.error}`, "error");
-          this.options.requestRegistry.saveToolResult(requestId, result.error ?? "Tool execution failed.", true);
-        }
+            const result = normalizeToolResponse(response);
+            if (result.success) {
+              Logger.log(`${t("exec_success")}: ${payload.name}`, "success");
+              const outputContent = formatSuccessfulResult(payload.name, result.data);
+              this.options.requestRegistry.saveToolResult(requestId, outputContent);
+            } else {
+              Logger.log(`${t("exec_fail")}: ${result.error}`, "error");
+              this.options.requestRegistry.saveToolResult(requestId, result.error ?? "Tool execution failed.", true);
+            }
 
-        // 工具完成不会触发 MutationObserver，需要主动安排一次扫描来推动批量回填。
-        this.options.scheduleMainLoop(50);
+            // 工具完成不会触发 MutationObserver，需要主动安排一次扫描来推动批量回填。
+            this.options.scheduleMainLoop(50);
+            resolve();
+          }
+        );
+      } catch (error) {
+        reject(toError(error));
       }
-    );
+    });
   }
 
   private finishVirtualTool(payload: ToolExecutionPayload): void {
@@ -180,63 +223,41 @@ export class ToolExecutor {
     });
     this.options.requestRegistry.markSettled(requestId);
     this.options.requestRegistry.saveRawResult(requestId, "");
+    this.options.scheduleMainLoop(50);
   }
 
-  private processConfirmationQueue(): void {
-    if (this.isPopupOpen || this.confirmationQueue.length === 0) {return;}
+  private requestToolApproval(payload: ToolExecutionPayload): Promise<boolean> {
+    return new Promise((resolve) => {
+      UI.showConfirmationModal(
+        payload,
+        (scope) => {
+          this.focusInput();
 
-    while (this.confirmationQueue.length > 0 && isPayloadApproved(this.confirmationQueue[0], this.options.getApprovalState())) {
-      const approvedPayload = this.confirmationQueue.shift();
-      if (!approvedPayload) {return;}
-      Logger.log(`Approval already saved for '${getApprovalLabel(approvedPayload)}'; skipping confirmation`, "action");
-      this.performExecution(approvedPayload);
-    }
+          if (scope) {
+            persistApprovalRule(payload, scope, this.options.getApprovalState());
+            void chrome.storage.local.set({
+              [`allowed_tools_${this.options.getWorkspaceId()}`]: buildStoredApprovalEntries(this.options.getApprovalState()),
+            });
+            Logger.log(`⚡ Approval saved for '${getApprovalLabel(payload, scope)}' in this workspace`, "action");
+          }
 
-    if (this.confirmationQueue.length === 0) {return;}
-    this.showNextConfirmation();
-  }
-
-  private showNextConfirmation(): void {
-    const payload = this.confirmationQueue[0];
-    if (!payload) {return;}
-    this.isPopupOpen = true;
-
-    UI.showConfirmationModal(
-      payload,
-      (scope) => this.confirmExecution(payload, scope),
-      (reason) => this.rejectExecution(payload, reason)
-    );
-  }
-
-  private confirmExecution(payload: ToolExecutionPayload, scope: CommandApprovalScope): void {
-    this.confirmationQueue.shift();
-    this.isPopupOpen = false;
-    this.focusInput();
-
-    if (scope) {
-      persistApprovalRule(payload, scope, this.options.getApprovalState());
-      void chrome.storage.local.set({
-        [`allowed_tools_${this.options.getWorkspaceId()}`]: buildStoredApprovalEntries(this.options.getApprovalState()),
-      });
-      Logger.log(`⚡ Approval saved for '${getApprovalLabel(payload, scope)}' in this workspace`, "action");
-    }
-
-    this.performExecution(payload);
-    this.processConfirmationQueue();
-  }
-
-  private rejectExecution(payload: ToolExecutionPayload, reason: string): void {
-    this.confirmationQueue.shift();
-    this.isPopupOpen = false;
-    this.options.requestRegistry.markSettled(getRequestId(payload));
-    this.focusInput();
-    Logger.log(`${t("hitl_rejected")}: ${payload.name}`, "error");
-    this.options.requestRegistry.saveToolResult(
-      getRequestId(payload),
-      `User rejected execution. Reason: ${reason || "No reason provided."}`,
-      true
-    );
-    this.processConfirmationQueue();
+          resolve(true);
+        },
+        (reason) => {
+          const requestId = getRequestId(payload);
+          this.options.requestRegistry.markSettled(requestId);
+          this.focusInput();
+          Logger.log(`${t("hitl_rejected")}: ${payload.name}`, "error");
+          this.options.requestRegistry.saveToolResult(
+            requestId,
+            `User rejected execution. Reason: ${reason || "No reason provided."}`,
+            true
+          );
+          this.options.scheduleMainLoop(50);
+          resolve(false);
+        }
+      );
+    });
   }
 
   private focusInput(): void {
@@ -344,6 +365,10 @@ function getPayloadMessage(payload: ToolExecutionPayload): string | null {
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function toError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
 }
 
 function isToolGroup(value: unknown): value is ToolGroup {
