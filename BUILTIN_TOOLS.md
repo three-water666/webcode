@@ -34,7 +34,7 @@
 | 工具名 | 作用 |
 | --- | --- |
 | `webcode_init` | 初始化虚拟工具。浏览器捕获后会调用 `list_tools` 和 `list_skills`，把系统 prompt、工具列表和 skill 列表回填到对话框。实际名称来自 `shared/src/index.ts` 的 `PROTOCOL.initToolName`。 |
-| `task_completion_notification` | 浏览器在处理 `list_tools` 结果时注入到 `client` 分组。调用后触发系统通知，提醒用户任务完成或需要回来查看。 |
+| `task_completion_notification` | 浏览器在处理 `list_tools` 结果时注入到 `client` 分组。完成一整件需要用户回来查看的工作后、最终文字答复前调用一次，例如 CR、需求实现、提交代码、skill 工作流、长时间任务或复杂工具链；普通沟通、简单查询、中间步骤或同一请求内不要重复通知。 |
 
 ## 3. 不在本文档统计范围内的工具
 

@@ -317,16 +317,47 @@ function injectClientTools(toolListJson: string): string {
   const clientGroup = getClientGroup(groups);
   clientGroup.tools.push({
     name: "task_completion_notification",
-    description:
-      "Notify the user that a long-running task or a series of complex operations is complete. The extension may suppress redundant foreground notifications.",
+    description: getTaskCompletionNotificationDescription(),
     inputSchema: {
       type: "object",
-      properties: { message: { type: "string" } },
+      properties: {
+        message: {
+          type: "string",
+          description: getTaskCompletionNotificationMessageDescription(),
+        },
+      },
       required: ["message"],
     },
   });
 
   return JSON.stringify(groups, null, 2);
+}
+
+function getTaskCompletionNotificationDescription(): string {
+  if (i18n.lang === "zh") {
+    return [
+      "在完成一整件需要用户回来查看的工作时通知用户。",
+      "适合在代码审查、需求实现、提交代码、执行 skill 工作流、长时间任务或一系列复杂工具操作完成后，",
+      "于最终答复前调用一次。",
+      "不要用于普通沟通、简单查询、单个快速检查、中间步骤，或同一用户请求中的重复通知。",
+      "扩展可能会自动抑制用户正在前台观看时的冗余通知。",
+    ].join("");
+  }
+
+  return [
+    "Notify the user when a complete unit of work is ready for them to review.",
+    "Call this once before the final answer after completing code review, a requested implementation, a code commit,",
+    "a skill workflow, a long-running task, or a series of complex tool operations.",
+    "Do not use it for ordinary conversation, simple lookups, one quick check, intermediate progress,",
+    "or repeated notifications for the same user request.",
+    "The extension may suppress redundant notifications while the user is already watching the page.",
+  ].join(" ");
+}
+
+function getTaskCompletionNotificationMessageDescription(): string {
+  return i18n.lang === "zh"
+    ? "简短说明已完成的整件工作，例如：CR 完成，发现 2 个问题。"
+    : "Brief summary of the completed unit of work, for example: Code review complete; found 2 issues.";
 }
 
 function sendTaskCompletionNotification(message: string): Promise<"sent" | "skipped" | "failed"> {
