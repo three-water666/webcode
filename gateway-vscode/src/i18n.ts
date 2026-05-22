@@ -36,6 +36,9 @@ const messages = {
         custom_step1: 'Step 1: Select AI Platform',
         browser_chrome: '$(browser) Google Chrome',
         browser_edge: '$(browser) Microsoft Edge',
+        browser_isolated_chrome: '$(browser) Chrome for Testing / Chromium Keepalive',
+        browser_isolated_edge: '$(browser) Edge Isolated Keepalive',
+        browser_isolated_desc: 'Separate profile, auto-loads the bridge extension, with anti-freeze flags',
         browser_default: '$(terminal) System Default',
         custom_step2: 'Step 2: Open {name} in...',
         status_starting: `$(sync~spin) ${BRANDING.productName}: Starting...`,
@@ -44,6 +47,9 @@ const messages = {
         status_offline: `$(circle-slash) ${BRANDING.productName}: OFF`,
         status_offline_tooltip: `Click to Start ${BRANDING.serverName}`,
         open_browser_failed: 'Failed to open browser: {message}',
+        browser_extension_missing: 'Built-in browser extension is missing. Run the browser build first or reinstall the VS Code extension.',
+        browser_not_found: '{browser} was not found. Install it or choose another browser mode.',
+        isolated_chrome_requires_cft: 'Chrome isolated mode requires Chrome for Testing or Chromium because Google Chrome no longer supports automatic unpacked extension loading. Install Chrome for Testing, set webcodeGateway.isolatedChrome.executablePath, or use Edge isolated mode.',
     },
     zh: {
         output_channel_name: 'MCP Gateway',
@@ -75,6 +81,9 @@ const messages = {
         custom_step1: '第 1 步：选择 AI 平台',
         browser_chrome: '$(browser) Google Chrome',
         browser_edge: '$(browser) Microsoft Edge',
+        browser_isolated_chrome: '$(browser) Chrome for Testing / Chromium 独立保活模式',
+        browser_isolated_edge: '$(browser) Edge 独立保活模式',
+        browser_isolated_desc: '单独 profile，自动加载桥接插件，并附带防后台冻结参数',
         browser_default: '$(terminal) 系统默认',
         custom_step2: '第 2 步：使用以下浏览器打开 {name}...',
         status_starting: `$(sync~spin) ${BRANDING.productName}：启动中...`,
@@ -83,6 +92,9 @@ const messages = {
         status_offline: `$(circle-slash) ${BRANDING.productName}：关闭`,
         status_offline_tooltip: `点击启动 ${BRANDING.productName} 服务`,
         open_browser_failed: '打开浏览器失败：{message}',
+        browser_extension_missing: '内置浏览器插件目录不存在。请先构建浏览器插件，或重新安装 VS Code 插件。',
+        browser_not_found: '未找到 {browser}。请安装该浏览器，或选择其他浏览器模式。',
+        isolated_chrome_requires_cft: 'Chrome 独立模式需要 Chrome for Testing 或 Chromium，因为 Google Chrome 已不再支持自动加载未打包扩展。请安装 Chrome for Testing，设置 webcodeGateway.isolatedChrome.executablePath，或改用 Edge 独立保活模式。',
     }
 } as const;
 

@@ -13,6 +13,7 @@ interface RegisterGatewayConnectCommandOptions {
 }
 
 interface OnlineMenuContext {
+    extensionContext: vscode.ExtensionContext;
     currentPort: number;
     currentToken: string;
     outputChannel: vscode.OutputChannel;
@@ -21,11 +22,12 @@ interface OnlineMenuContext {
 
 export function registerGatewayConnectCommand(options: RegisterGatewayConnectCommandOptions): void {
     options.context.subscriptions.push(vscode.commands.registerCommand('webcode-gateway.connect', async () => {
-        await handleGatewayConnectCommand(options.outputChannel, options.serviceController);
+        await handleGatewayConnectCommand(options.context, options.outputChannel, options.serviceController);
     }));
 }
 
 async function handleGatewayConnectCommand(
+    extensionContext: vscode.ExtensionContext,
     outputChannel: vscode.OutputChannel,
     serviceController: GatewayServiceController
 ): Promise<void> {
@@ -51,6 +53,7 @@ async function handleGatewayConnectCommand(
     }
 
     await showOnlineMenu({
+        extensionContext,
         currentPort: state.currentPort,
         currentToken: state.currentToken,
         outputChannel,
@@ -156,13 +159,14 @@ async function handleOnlineSelection(
 
     // 3. 自定义启动
     if (selection.action === 'custom') {
-        await launchCustomBridge(aiSites, context.currentPort, context.currentToken);
+        await launchCustomBridge(aiSites, context.extensionContext, context.currentPort, context.currentToken);
         return;
     }
 
     // 4. 默认启动 (智能匹配配置)
     if (selection.target) {
         launchBridge({
+            context: context.extensionContext,
             targetUrl: selection.target,
             browserMode: 'auto',
             currentPort: context.currentPort,
@@ -173,6 +177,7 @@ async function handleOnlineSelection(
 
 async function launchCustomBridge(
     aiSites: AISiteConfig[],
+    extensionContext: vscode.ExtensionContext,
     currentPort: number,
     currentToken: string
 ): Promise<void> {
@@ -193,6 +198,8 @@ async function launchCustomBridge(
     const browserOptions: CustomActionItem[] = [
         { label: t('browser_chrome'), value: 'chrome' },
         { label: t('browser_edge'), value: 'edge' },
+        { label: t('browser_isolated_chrome'), description: t('browser_isolated_desc'), value: 'isolated-chrome' },
+        { label: t('browser_isolated_edge'), description: t('browser_isolated_desc'), value: 'isolated-edge' },
         { label: t('browser_default'), value: 'default' }
     ];
     const browserSelection = await vscode.window.showQuickPick<CustomActionItem>(browserOptions, {
@@ -203,6 +210,7 @@ async function launchCustomBridge(
     }
 
     launchBridge({
+        context: extensionContext,
         targetUrl: aiSelection.target ?? "",
         browserMode: browserSelection.value ?? "",
         currentPort,

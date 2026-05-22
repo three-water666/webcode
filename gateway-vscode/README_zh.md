@@ -16,12 +16,15 @@
 * **内置本地工具**: 文件系统访问和命令执行现在由插件默认内置提供，不需要再在设置里额外配置 server。
 * **项目规则**: 初始化时自动读取工作区根目录的 `USER_RULES.md`，以及 `AGENTS.md` / `CLAUDE.md` 中优先级最高的一个。
 * **工作区 Skills**: 自动发现当前工作区中的本地 `SKILL.md` 工作流，并通过渐进式加载工具暴露给模型。
+* **独立保活浏览器**: 自定义启动时可选择 Chrome for Testing / Chromium 或 Edge 独立保活模式，使用单独 profile 并自动加载桥接插件。
 
 ## ⚙️ 安装与使用
 
 1. **安装插件**: 在 VS Code 扩展市场搜索并安装 `webcode gateway`。
 2. **启动服务**: 安装完成后，点击 VS Code 底部状态栏右侧的 `webcode: OFF` 按钮，然后选择开启。当状态变为 `webcode: <端口号>`（如 `34567`）时，服务即已启动成功。
 3. **浏览器配套**: 确保您的浏览器已安装 **webcode bridge** 插件。
+
+如果网页 AI 在后台标签页容易停止渲染，请点击状态栏后选择“自定义启动...”，并在第二步选择 `Chrome for Testing / Chromium 独立保活模式` 或 `Edge 独立保活模式`。该模式使用单独的浏览器 profile，首次使用需要重新登录目标 AI 站点。普通 Google Chrome 已不再适合自动加载未打包扩展；Chrome 方案请安装 Chrome for Testing / Chromium，或设置 `webcodeGateway.isolatedChrome.executablePath`。
 
 ### 项目规则
 

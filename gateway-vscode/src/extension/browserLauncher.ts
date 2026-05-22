@@ -1,5 +1,7 @@
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
+import * as fs from 'fs';
 import * as os from 'os';
+import * as path from 'path';
 import * as vscode from 'vscode';
 
 import { t } from '../i18n';
@@ -7,17 +9,25 @@ import { getConfiguredAiSites } from '../platforms';
 import type { AISiteConfig } from './types';
 
 interface LaunchBridgeOptions {
+    context: vscode.ExtensionContext;
     targetUrl: string;
     browserMode: string;
     currentPort: number;
     currentToken: string;
 }
 
+type BrowserFamily = 'chrome' | 'edge';
+
+interface BrowserLaunchCommand {
+    command: string;
+    prefixArgs: string[];
+}
+
 export function launchBridge(options: LaunchBridgeOptions): void {
     const bridgeUrl = buildBridgeUrl(options.currentPort, options.currentToken, options.targetUrl);
     const finalBrowser = resolveBrowser(options.targetUrl, options.browserMode);
 
-    openBrowser(bridgeUrl, finalBrowser);
+    openBrowser(bridgeUrl, finalBrowser, options.context);
 }
 
 function buildBridgeUrl(currentPort: number, currentToken: string, targetUrl: string): string {
@@ -43,9 +53,14 @@ function resolveBrowser(targetUrl: string, browserMode: string): string {
     return config.get<string>('browser') ?? 'default';
 }
 
-function openBrowser(url: string, browserType: string): void {
+function openBrowser(url: string, browserType: string, context: vscode.ExtensionContext): void {
     if (browserType === 'default') {
         void vscode.env.openExternal(vscode.Uri.parse(url));
+        return;
+    }
+
+    if (browserType === 'isolated-chrome' || browserType === 'isolated-edge') {
+        openIsolatedBrowser(url, browserType === 'isolated-edge' ? 'edge' : 'chrome', context);
         return;
     }
 
@@ -61,6 +76,220 @@ function openBrowser(url: string, browserType: string): void {
     }
 
     void vscode.env.openExternal(vscode.Uri.parse(url));
+}
+
+function openIsolatedBrowser(url: string, browserFamily: BrowserFamily, context: vscode.ExtensionContext): void {
+    const extensionPath = resolveBundledBrowserExtensionPath(context);
+    if (!extensionPath) {
+        void vscode.window.showErrorMessage(t('browser_extension_missing'));
+        return;
+    }
+
+    const profileDir = path.join(context.globalStorageUri.fsPath, 'isolated-browser-profiles', browserFamily);
+    try {
+        fs.mkdirSync(profileDir, { recursive: true });
+    } catch (error) {
+        void vscode.window.showErrorMessage(t('open_browser_failed', { message: getErrorMessage(error) }));
+        return;
+    }
+
+    const browserArgs = buildIsolatedBrowserArgs(url, profileDir, extensionPath);
+    const launchCommands = getBrowserLaunchCommands(browserFamily, os.platform());
+    if (launchCommands.length === 0 && browserFamily === 'chrome') {
+        void vscode.window.showErrorMessage(t('isolated_chrome_requires_cft'));
+        return;
+    }
+
+    launchFirstAvailableBrowser(launchCommands, browserArgs, getBrowserDisplayName(browserFamily));
+}
+
+function buildIsolatedBrowserArgs(url: string, profileDir: string, extensionPath: string): string[] {
+    const normalizedExtensionPath = normalizeBrowserPath(extensionPath);
+    const normalizedProfileDir = normalizeBrowserPath(profileDir);
+    return [
+        '--new-window',
+        `--user-data-dir=${normalizedProfileDir}`,
+        `--load-extension=${normalizedExtensionPath}`,
+        `--disable-extensions-except=${normalizedExtensionPath}`,
+        '--no-first-run',
+        '--no-default-browser-check',
+        '--disable-background-timer-throttling',
+        '--disable-renderer-backgrounding',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-features=CalculateNativeWinOcclusion,IntensiveWakeUpThrottling',
+        url
+    ];
+}
+
+function normalizeBrowserPath(filePath: string): string {
+    return path.resolve(filePath).replace(/\\/g, '/');
+}
+
+function resolveBundledBrowserExtensionPath(context: vscode.ExtensionContext): string | null {
+    const candidates = [
+        path.join(context.extensionPath, 'browser-extension'),
+        path.resolve(context.extensionPath, '..', 'bridge-browser', 'dist'),
+        path.resolve(context.extensionPath, '..', '..', 'bridge-browser', 'dist')
+    ];
+
+    return candidates.find(isUnpackedBrowserExtension) ?? null;
+}
+
+function isUnpackedBrowserExtension(extensionPath: string): boolean {
+    return fs.existsSync(path.join(extensionPath, 'manifest.json'));
+}
+
+function launchFirstAvailableBrowser(
+    launchCommands: BrowserLaunchCommand[],
+    browserArgs: string[],
+    browserName: string
+): void {
+    const tryLaunch = (index: number) => {
+        const launchCommand = launchCommands[index];
+        if (!launchCommand) {
+            void vscode.window.showErrorMessage(t('browser_not_found', { browser: browserName }));
+            return;
+        }
+
+        const child = spawn(launchCommand.command, [...launchCommand.prefixArgs, ...browserArgs], {
+            detached: true,
+            stdio: 'ignore',
+            windowsHide: false
+        });
+
+        child.once('error', (error: NodeJS.ErrnoException) => {
+            if (error.code === 'ENOENT') {
+                tryLaunch(index + 1);
+                return;
+            }
+
+            void vscode.window.showErrorMessage(t('open_browser_failed', { message: error.message }));
+        });
+
+        child.once('spawn', () => {
+            child.unref();
+        });
+    };
+
+    tryLaunch(0);
+}
+
+function getBrowserLaunchCommands(browserFamily: BrowserFamily, platform: NodeJS.Platform): BrowserLaunchCommand[] {
+    if (platform === 'win32') {
+        return getWindowsBrowserLaunchCommands(browserFamily);
+    }
+
+    if (platform === 'darwin') {
+        return getMacBrowserLaunchCommands(browserFamily);
+    }
+
+    return getLinuxBrowserLaunchCommands(browserFamily);
+}
+
+function getWindowsBrowserLaunchCommands(browserFamily: BrowserFamily): BrowserLaunchCommand[] {
+    const env = process.env;
+    if (browserFamily === 'chrome') {
+        return toLaunchCommands([
+            getConfiguredChromeForTestingPath(),
+            env.WEBCODE_CHROME_FOR_TESTING_PATH,
+            env.CHROME_FOR_TESTING_PATH,
+            env.LOCALAPPDATA ? path.join(env.LOCALAPPDATA, 'Google', 'Chrome for Testing', 'Application', 'chrome.exe') : '',
+            env.LOCALAPPDATA ? path.join(env.LOCALAPPDATA, 'Google', 'Chrome for Testing', 'chrome-win64', 'chrome.exe') : '',
+            env.ProgramFiles ? path.join(env.ProgramFiles, 'Google', 'Chrome for Testing', 'Application', 'chrome.exe') : '',
+            env.ProgramFiles ? path.join(env.ProgramFiles, 'Google', 'Chrome for Testing', 'chrome-win64', 'chrome.exe') : '',
+            env['ProgramFiles(x86)'] ? path.join(env['ProgramFiles(x86)'], 'Google', 'Chrome for Testing', 'Application', 'chrome.exe') : '',
+            'chrome-for-testing.exe',
+            'chromium.exe'
+        ]);
+    }
+
+    const edgeCandidates = [
+        env.ProgramFiles ? path.join(env.ProgramFiles, 'Microsoft', 'Edge', 'Application', 'msedge.exe') : '',
+        env['ProgramFiles(x86)'] ? path.join(env['ProgramFiles(x86)'], 'Microsoft', 'Edge', 'Application', 'msedge.exe') : '',
+        env.LOCALAPPDATA ? path.join(env.LOCALAPPDATA, 'Microsoft', 'Edge', 'Application', 'msedge.exe') : '',
+        'msedge.exe'
+    ];
+
+    return toLaunchCommands(edgeCandidates);
+}
+
+function getMacBrowserLaunchCommands(browserFamily: BrowserFamily): BrowserLaunchCommand[] {
+    const home = os.homedir();
+    if (browserFamily === 'edge') {
+        return toLaunchCommands([
+            '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+            path.join(home, 'Applications', 'Microsoft Edge.app', 'Contents', 'MacOS', 'Microsoft Edge')
+        ], { command: 'open', prefixArgs: ['-na', 'Microsoft Edge', '--args'] });
+    }
+
+    return toLaunchCommands([
+        getConfiguredChromeForTestingPath(),
+        process.env.WEBCODE_CHROME_FOR_TESTING_PATH,
+        process.env.CHROME_FOR_TESTING_PATH,
+        '/Applications/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
+        path.join(home, 'Applications', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
+        '/Applications/Chromium.app/Contents/MacOS/Chromium',
+        path.join(home, 'Applications', 'Chromium.app', 'Contents', 'MacOS', 'Chromium')
+    ]);
+}
+
+function getLinuxBrowserLaunchCommands(browserFamily: BrowserFamily): BrowserLaunchCommand[] {
+    if (browserFamily === 'edge') {
+        return toLaunchCommands(['microsoft-edge', 'microsoft-edge-stable']);
+    }
+
+    return toLaunchCommands([
+        getConfiguredChromeForTestingPath(),
+        process.env.WEBCODE_CHROME_FOR_TESTING_PATH,
+        process.env.CHROME_FOR_TESTING_PATH,
+        'chrome-for-testing',
+        'google-chrome-for-testing',
+        'chromium',
+        'chromium-browser'
+    ]);
+}
+
+function toLaunchCommands(candidates: Array<string | undefined | null>, fallback?: BrowserLaunchCommand): BrowserLaunchCommand[] {
+    const commands: BrowserLaunchCommand[] = candidates
+        .filter(Boolean)
+        .map(candidate => expandHomePath(String(candidate)))
+        .filter(candidate => !path.isAbsolute(candidate) || fs.existsSync(candidate))
+        .map(command => ({ command, prefixArgs: [] }));
+
+    if (fallback) {
+        commands.push(fallback);
+    }
+
+    return commands;
+}
+
+function getBrowserDisplayName(browserFamily: BrowserFamily): string {
+    return browserFamily === 'edge' ? 'Microsoft Edge' : 'Chrome for Testing / Chromium';
+}
+
+function getConfiguredChromeForTestingPath(): string | null {
+    const configuredPath = vscode.workspace
+        .getConfiguration('webcodeGateway')
+        .get<string>('isolatedChrome.executablePath')
+        ?.trim();
+
+    if (!configuredPath) {
+        return null;
+    }
+
+    return configuredPath;
+}
+
+function expandHomePath(filePath: string): string {
+    if (filePath === '~') {
+        return os.homedir();
+    }
+
+    if (filePath.startsWith(`~${path.sep}`) || filePath.startsWith('~/')) {
+        return path.join(os.homedir(), filePath.slice(2));
+    }
+
+    return filePath;
 }
 
 function buildBrowserCommand(url: string, browserType: string, platform: NodeJS.Platform): string {
@@ -105,4 +334,12 @@ function buildLinuxBrowserCommand(url: string, browserType: string): string {
     }
 
     return `xdg-open "${url}"`;
+}
+
+function getErrorMessage(error: unknown): string {
+    if (error instanceof Error) {
+        return error.message;
+    }
+
+    return String(error);
 }
