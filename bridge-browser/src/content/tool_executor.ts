@@ -74,7 +74,7 @@ export class ToolExecutor {
     }
 
     if (payload.name === "task_completion_notification") {
-      this.finishVirtualTool(payload);
+      await this.finishVirtualTool(payload);
       return;
     }
 
@@ -160,7 +160,7 @@ export class ToolExecutor {
             return;
           }
 
-          resolve(stringifyToolData(result.data, "[]"));
+          resolve(formatToolOutput(name, result.data, getInitToolFallback(name)));
         }
       );
     });
@@ -212,15 +212,18 @@ export class ToolExecutor {
     });
   }
 
-  private finishVirtualTool(payload: ToolExecutionPayload): void {
+  private async finishVirtualTool(payload: ToolExecutionPayload): Promise<void> {
     const requestId = getRequestId(payload);
     const msg = getPayloadMessage(payload) ?? "Task Completed";
-    Logger.log(`🔔 Notification: ${msg}`, "action");
-    void chrome.runtime.sendMessage({
-      type: "SHOW_NOTIFICATION",
-      title: `${BRANDING.productName} Task Finished`,
-      message: msg,
-    });
+    const notificationResult = await sendTaskCompletionNotification(msg);
+    if (notificationResult === "skipped") {
+      Logger.log("Notification skipped: browser window is not in background", "info");
+    } else if (notificationResult === "failed") {
+      Logger.log("Notification request failed", "info");
+    } else {
+      Logger.log(`🔔 Notification: ${msg}`, "action");
+    }
+
     this.options.requestRegistry.markSettled(requestId);
     this.options.requestRegistry.saveRawResult(requestId, "");
     this.options.scheduleMainLoop(50);
@@ -273,7 +276,11 @@ function escapeInlineNewlines(value: string): string {
 }
 
 function formatSuccessfulResult(toolName: string, data: unknown): string {
-  const finalData = stringifyToolData(data, "");
+  return formatToolOutput(toolName, data, getToolResultFallback(toolName));
+}
+
+function formatToolOutput(toolName: string, data: unknown, fallback: string): string {
+  const finalData = stringifyToolData(data, fallback);
   if (toolName !== "list_tools") {
     return finalData;
   }
@@ -284,6 +291,16 @@ function formatSuccessfulResult(toolName: string, data: unknown): string {
     console.error("Tool list processing error", error);
     return finalData;
   }
+}
+
+function getInitToolFallback(toolName: string): string {
+  // Initialization asks for a prompt fragment plus JSON-like tool/skill lists.
+  return toolName === "get_project_rules" ? "" : "[]";
+}
+
+function getToolResultFallback(toolName: string): string {
+  // Runtime list_tools output must stay parseable so client tools can be injected.
+  return toolName === "list_tools" ? "[]" : "";
 }
 
 function injectClientTools(toolListJson: string): string {
@@ -301,7 +318,7 @@ function injectClientTools(toolListJson: string): string {
   clientGroup.tools.push({
     name: "task_completion_notification",
     description:
-      "Notify the user that a long-running task or a series of complex operations is complete. Use this when you need the user's attention to review your work or provide new instructions. Calling this will trigger a system notification on the user's device.",
+      "Notify the user that a long-running task or a series of complex operations is complete. The extension may suppress redundant foreground notifications.",
     inputSchema: {
       type: "object",
       properties: { message: { type: "string" } },
@@ -310,6 +327,33 @@ function injectClientTools(toolListJson: string): string {
   });
 
   return JSON.stringify(groups, null, 2);
+}
+
+function sendTaskCompletionNotification(message: string): Promise<"sent" | "skipped" | "failed"> {
+  return new Promise((resolve) => {
+    try {
+      chrome.runtime.sendMessage(
+        {
+          type: "SHOW_NOTIFICATION",
+          title: `${BRANDING.productName} Task Finished`,
+          message,
+          onlyWhenWindowInBackground: true,
+        },
+        (response: unknown) => {
+          // Notification delivery is best-effort; background decides whether foreground notifications are suppressed.
+          const runtimeError = chrome.runtime.lastError;
+          if (runtimeError) {
+            resolve("failed");
+            return;
+          }
+
+          resolve(isSkippedNotificationResponse(response) ? "skipped" : "sent");
+        }
+      );
+    } catch {
+      resolve("failed");
+    }
+  });
 }
 
 function getClientGroup(groups: ToolGroup[]): ToolGroup & { tools: unknown[] } {
@@ -339,6 +383,10 @@ function normalizeToolResponse(response: unknown): ToolExecutionResponse {
     error: typeof response.error === "string" ? response.error : undefined,
     data: response.data,
   };
+}
+
+function isSkippedNotificationResponse(value: unknown): boolean {
+  return isRecord(value) && value.skipped === true;
 }
 
 function stringifyToolData(data: unknown, fallback: string): string {

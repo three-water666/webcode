@@ -16,6 +16,7 @@ export interface MessageRequest {
   show?: boolean;
   title?: string;
   message?: string;
+  onlyWhenWindowInBackground?: boolean;
   payload?: ToolExecutionPayload;
 }
 

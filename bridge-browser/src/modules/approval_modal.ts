@@ -80,6 +80,19 @@ function installModalEventGuards(
   };
 }
 
+function sendWindowAttentionMessage(type: "REQUEST_WINDOW_ATTENTION" | "CLEAR_WINDOW_ATTENTION"): void {
+  if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {return;}
+
+  try {
+    chrome.runtime.sendMessage({ type }, () => {
+      // Attention requests are best-effort and should not block the modal lifecycle.
+      void chrome.runtime.lastError;
+    });
+  } catch {
+    // The modal can outlive the extension context during reloads or navigation.
+  }
+}
+
 // === HITL 弹窗 (Shadow DOM) ===
 /**
  * 生成并显示供人类操作员决定是否通过（Approval / Rejection）危险操作的安全授权遮罩弹窗（Human-In-The-Loop 机制）
@@ -266,6 +279,7 @@ export function showConfirmationModal(
   const closeModal = () => {
     if (isClosed) {return;}
     isClosed = true;
+    sendWindowAttentionMessage("CLEAR_WINDOW_ATTENTION");
     removeModalGuards();
     host.remove();
   };
@@ -366,6 +380,7 @@ export function showConfirmationModal(
   };
   overlay.appendChild(card);
   shadow.appendChild(overlay);
+  sendWindowAttentionMessage("REQUEST_WINDOW_ATTENTION");
 }
 
 function renderExecutableApprovalOption(executableKey: string, isBroadExecutable: boolean): string {

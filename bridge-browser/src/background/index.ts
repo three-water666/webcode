@@ -141,19 +141,21 @@ chrome.runtime.onMessage.addListener((request: MessageRequest, sender, sendRespo
     }
     return true;
   }
+  if (request.type === "REQUEST_WINDOW_ATTENTION") {
+    updateWindowAttention(sender, true).then(sendResponse);
+    return true;
+  }
+  if (request.type === "CLEAR_WINDOW_ATTENTION") {
+    updateWindowAttention(sender, false).then(sendResponse);
+    return true;
+  }
   if (request.type === "EXECUTE_TOOL") {
     executeTool(request, currentTabId).then(sendResponse);
     return true;
   }
 
   if (request.type === "SHOW_NOTIFICATION") {
-    chrome.notifications.create({
-      type: "basic",
-      iconUrl: "icons/icon128.png",
-      title: request.title ?? BRANDING.notificationName,
-      message: request.message ?? "Task Completed",
-      priority: 2,
-    });
+    showNotification(request, sender).then(sendResponse);
     return true;
   }
   if (request.type === "SYNC_CONFIG") {
@@ -200,6 +202,86 @@ async function updateSessionLog(tabId: number, showLog: boolean) {
     session.showLog = showLog;
     await saveSession(tabId, session);
   }
+}
+
+async function updateWindowAttention(
+  sender: chrome.runtime.MessageSender,
+  drawAttention: boolean
+): Promise<{ success: boolean; error?: string; skipped?: boolean }> {
+  const windowId = sender.tab?.windowId;
+  if (typeof windowId !== "number" || windowId === chrome.windows.WINDOW_ID_NONE) {
+    return { success: false, error: "Missing Window ID" };
+  }
+
+  try {
+    if (drawAttention) {
+      const targetWindow = await chrome.windows.get(windowId);
+      if (targetWindow.focused) {
+        return { success: true, skipped: true };
+      }
+    }
+
+    await chrome.windows.update(windowId, { drawAttention });
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: getErrorMessage(error) };
+  }
+}
+
+async function showNotification(
+  request: MessageRequest,
+  sender: chrome.runtime.MessageSender
+): Promise<{ success: boolean; skipped?: boolean; notificationId?: string; error?: string }> {
+  try {
+    if (request.onlyWhenWindowInBackground) {
+      const shouldShowNotification = await shouldShowNotificationForSender(sender);
+      if (!shouldShowNotification) {
+        return { success: true, skipped: true };
+      }
+    }
+
+    const notificationId = await createNotification(request);
+
+    return { success: true, notificationId };
+  } catch (error) {
+    return { success: false, error: getErrorMessage(error) };
+  }
+}
+
+async function shouldShowNotificationForSender(sender: chrome.runtime.MessageSender): Promise<boolean> {
+  try {
+    const windowId = sender.tab?.windowId;
+    if (typeof windowId !== "number" || windowId === chrome.windows.WINDOW_ID_NONE) {
+      return true;
+    }
+
+    const targetWindow = await chrome.windows.get(windowId);
+    return targetWindow.focused === false;
+  } catch {
+    return true;
+  }
+}
+
+function createNotification(request: MessageRequest): Promise<string> {
+  return new Promise((resolve, reject) => {
+    chrome.notifications.create(
+      {
+        type: "basic",
+        iconUrl: "icons/icon128.png",
+        title: request.title ?? BRANDING.notificationName,
+        message: request.message ?? "Task Completed",
+        priority: 2,
+      },
+      (notificationId) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+
+        resolve(notificationId);
+      }
+    );
+  });
 }
 
 async function removeSession(tabId: number) {
@@ -356,6 +438,10 @@ async function readGatewayError(response: Response): Promise<string> {
   } catch {
     return `${response.status} - ${response.statusText}`;
   }
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 chrome.tabs.onRemoved.addListener((tabId) => {
