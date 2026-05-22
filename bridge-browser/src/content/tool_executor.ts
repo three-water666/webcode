@@ -294,10 +294,12 @@ function formatToolOutput(toolName: string, data: unknown, fallback: string): st
 }
 
 function getInitToolFallback(toolName: string): string {
+  // Initialization asks for a prompt fragment plus JSON-like tool/skill lists.
   return toolName === "get_project_rules" ? "" : "[]";
 }
 
 function getToolResultFallback(toolName: string): string {
+  // Runtime list_tools output must stay parseable so client tools can be injected.
   return toolName === "list_tools" ? "[]" : "";
 }
 

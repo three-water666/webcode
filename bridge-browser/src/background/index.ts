@@ -234,8 +234,8 @@ async function showNotification(
 ): Promise<{ success: boolean; skipped?: boolean; notificationId?: string; error?: string }> {
   try {
     if (request.onlyWhenWindowInBackground) {
-      const browserWindowInBackground = await isSenderWindowInBackground(sender);
-      if (!browserWindowInBackground) {
+      const shouldShowNotification = await shouldShowNotificationForSender(sender);
+      if (!shouldShowNotification) {
         return { success: true, skipped: true };
       }
     }
@@ -248,17 +248,17 @@ async function showNotification(
   }
 }
 
-async function isSenderWindowInBackground(sender: chrome.runtime.MessageSender): Promise<boolean> {
+async function shouldShowNotificationForSender(sender: chrome.runtime.MessageSender): Promise<boolean> {
   try {
     const windowId = sender.tab?.windowId;
     if (typeof windowId !== "number" || windowId === chrome.windows.WINDOW_ID_NONE) {
-      return false;
+      return true;
     }
 
     const targetWindow = await chrome.windows.get(windowId);
     return targetWindow.focused === false;
   } catch {
-    return false;
+    return true;
   }
 }
 
