@@ -141,6 +141,14 @@ chrome.runtime.onMessage.addListener((request: MessageRequest, sender, sendRespo
     }
     return true;
   }
+  if (request.type === "REQUEST_WINDOW_ATTENTION") {
+    updateWindowAttention(sender, true).then(sendResponse);
+    return true;
+  }
+  if (request.type === "CLEAR_WINDOW_ATTENTION") {
+    updateWindowAttention(sender, false).then(sendResponse);
+    return true;
+  }
   if (request.type === "EXECUTE_TOOL") {
     executeTool(request, currentTabId).then(sendResponse);
     return true;
@@ -199,6 +207,30 @@ async function updateSessionLog(tabId: number, showLog: boolean) {
   if (session) {
     session.showLog = showLog;
     await saveSession(tabId, session);
+  }
+}
+
+async function updateWindowAttention(
+  sender: chrome.runtime.MessageSender,
+  drawAttention: boolean
+): Promise<{ success: boolean; error?: string; skipped?: boolean }> {
+  const windowId = sender.tab?.windowId;
+  if (typeof windowId !== "number" || windowId === chrome.windows.WINDOW_ID_NONE) {
+    return { success: false, error: "Missing Window ID" };
+  }
+
+  try {
+    if (drawAttention) {
+      const targetWindow = await chrome.windows.get(windowId);
+      if (targetWindow.focused) {
+        return { success: true, skipped: true };
+      }
+    }
+
+    await chrome.windows.update(windowId, { drawAttention });
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: getErrorMessage(error) };
   }
 }
 
@@ -356,6 +388,10 @@ async function readGatewayError(response: Response): Promise<string> {
   } catch {
     return `${response.status} - ${response.statusText}`;
   }
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 chrome.tabs.onRemoved.addListener((tabId) => {
