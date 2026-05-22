@@ -25,18 +25,3 @@ export interface HandshakeResponse {
   error?: string;
   conflictTabId?: string;
 }
-
-export interface RuntimeContextResponse {
-  success: boolean;
-  current_time_iso: string;
-  current_time_local: string;
-  time_zone: string;
-  browser_window_focused: boolean | null;
-  browser_window_in_background: boolean | null;
-  tab_active: boolean | null;
-  window_id: number | null;
-  tab_id: number | null;
-  document_visibility_state?: string;
-  document_hidden?: boolean;
-  error?: string;
-}

@@ -7,7 +7,6 @@ import { BRANDING, PROTOCOL } from "@webcode/shared";
 import { AutoInitPromptController } from "./auto_init_prompt";
 import { createApprovalState, parseStoredApprovalEntries, type ApprovalState } from "./approval_policy";
 import { hasPromptResourceChange, loadPromptsFromStorage } from "./prompt_resources";
-import { appendRuntimeMetadata, getBrowserRuntimeContext } from "./runtime_context";
 import { logToolSummary, ToolCallTracker } from "./tool_call_tracker";
 import { ToolExecutor } from "./tool_executor";
 import { ToolRequestRegistry } from "./tool_request_registry";
@@ -284,11 +283,9 @@ function runMainLoop() {
 
         // 写回前先把这些 request_id 标记为 flushed，避免 deliverResult 触发 DOM 变化后重复写入。
         requestRegistry.markFlushed(resultBatch.ids);
-        void getBrowserRuntimeContext()
-          .then((runtimeContext) => UI.deliverResult(appendRuntimeMetadata(resultBatch.output, runtimeContext), selectors))
-          .then(() => {
-            UI.triggerAutoSend(CONFIG, selectors);
-          });
+        void UI.deliverResult(resultBatch.output, selectors).then(() => {
+          UI.triggerAutoSend(CONFIG, selectors);
+        });
       } else {
         // 某些虚拟工具只更新状态或弹通知，没有文本输出；它们完成后也要标记为已处理。
         if (resultBatch.hasAnyResult) {
