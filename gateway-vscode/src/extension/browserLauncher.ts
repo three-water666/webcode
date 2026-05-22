@@ -1,4 +1,4 @@
-import { exec, spawn } from 'child_process';
+import { exec } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 
 import { t } from '../i18n';
 import { getConfiguredAiSites } from '../platforms';
+import { launchFirstAvailableBrowser, type BrowserLaunchCommand } from './browserProcessLauncher';
 import { isBrowserProcessRunning } from './processDetection';
 import type { AISiteConfig } from './types';
 
@@ -18,11 +19,6 @@ interface LaunchBridgeOptions {
 }
 
 type BrowserFamily = 'chrome' | 'edge';
-
-interface BrowserLaunchCommand {
-    command: string;
-    prefixArgs: string[];
-}
 
 export function launchBridge(options: LaunchBridgeOptions): void {
     const bridgeUrl = buildBridgeUrl(options.currentPort, options.currentToken, options.targetUrl);
@@ -183,41 +179,6 @@ function resolveBundledBrowserExtensionPath(context: vscode.ExtensionContext): s
 
 function isUnpackedBrowserExtension(extensionPath: string): boolean {
     return fs.existsSync(path.join(extensionPath, 'manifest.json'));
-}
-
-function launchFirstAvailableBrowser(
-    launchCommands: BrowserLaunchCommand[],
-    browserArgs: string[],
-    browserName: string
-): void {
-    const tryLaunch = (index: number) => {
-        const launchCommand = launchCommands[index];
-        if (!launchCommand) {
-            void vscode.window.showErrorMessage(t('browser_not_found', { browser: browserName }));
-            return;
-        }
-
-        const child = spawn(launchCommand.command, [...launchCommand.prefixArgs, ...browserArgs], {
-            detached: true,
-            stdio: 'ignore',
-            windowsHide: false
-        });
-
-        child.once('error', (error: NodeJS.ErrnoException) => {
-            if (error.code === 'ENOENT') {
-                tryLaunch(index + 1);
-                return;
-            }
-
-            void vscode.window.showErrorMessage(t('open_browser_failed', { message: error.message }));
-        });
-
-        child.once('spawn', () => {
-            child.unref();
-        });
-    };
-
-    tryLaunch(0);
 }
 
 function getBrowserLaunchCommands(browserFamily: BrowserFamily, platform: NodeJS.Platform): BrowserLaunchCommand[] {
