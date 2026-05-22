@@ -127,7 +127,6 @@ function buildIsolatedBrowserArgs(url: string, profileDir: string, extensionPath
         '--new-window',
         `--user-data-dir=${normalizedProfileDir}`,
         `--load-extension=${normalizedExtensionPath}`,
-        `--disable-extensions-except=${normalizedExtensionPath}`,
         '--no-first-run',
         '--no-default-browser-check',
         '--disable-background-timer-throttling',

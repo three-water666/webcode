@@ -24,7 +24,7 @@
 2. **启动服务**: 安装完成后，点击 VS Code 底部状态栏右侧的 `webcode: OFF` 按钮，然后选择开启。当状态变为 `webcode: <端口号>`（如 `34567`）时，服务即已启动成功。
 3. **浏览器配套**: 确保您的浏览器已安装 **webcode bridge** 插件。
 
-如果网页 AI 在后台标签页容易停止渲染，请点击状态栏后选择“自定义启动...”，并在第二步选择 `Chrome for Testing / Chromium 独立保活模式` 或 `Edge 独立保活模式`。该模式使用单独的浏览器 profile，首次使用需要重新登录目标 AI 站点。普通 Google Chrome 已不再适合自动加载未打包扩展；Chrome 方案请安装 Chrome for Testing / Chromium，或设置 `webcodeGateway.isolatedChrome.executablePath`。
+如果网页 AI 在后台标签页容易停止渲染，请点击状态栏后选择“自定义启动...”，并在第二步选择 `Chrome for Testing / Chromium 独立保活模式` 或 `Edge 独立保活模式`。该模式使用单独的浏览器 profile，自动加载 webcode bridge，并允许你在这个 profile 里安装其他浏览器插件；首次使用需要重新登录目标 AI 站点。普通 Google Chrome 已不再适合自动加载未打包扩展；Chrome 方案请安装 Chrome for Testing / Chromium，或设置 `webcodeGateway.isolatedChrome.executablePath`。
 
 也可以选择 `Chrome 用户配置保活模式` 或 `Edge 用户配置保活模式` 复用你的日常浏览器 profile。这个模式不会自动加载浏览器插件，也不会禁用其他插件；启动前必须完全退出目标浏览器，否则防冻结参数不会生效。
 
