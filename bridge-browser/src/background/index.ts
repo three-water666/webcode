@@ -1,4 +1,4 @@
-import { type Session, type MessageRequest, type HandshakeResponse } from '../types';
+import { type Session, type MessageRequest, type HandshakeResponse, type RuntimeContextResponse } from '../types';
 import { BRANDING, PROTOCOL } from '@webcode/shared';
 
 // === Background Service (MV3 Persistent Edition) ===
@@ -149,19 +149,17 @@ chrome.runtime.onMessage.addListener((request: MessageRequest, sender, sendRespo
     updateWindowAttention(sender, false).then(sendResponse);
     return true;
   }
+  if (request.type === "GET_RUNTIME_CONTEXT") {
+    getRuntimeContext(sender).then(sendResponse);
+    return true;
+  }
   if (request.type === "EXECUTE_TOOL") {
     executeTool(request, currentTabId).then(sendResponse);
     return true;
   }
 
   if (request.type === "SHOW_NOTIFICATION") {
-    chrome.notifications.create({
-      type: "basic",
-      iconUrl: "icons/icon128.png",
-      title: request.title ?? BRANDING.notificationName,
-      message: request.message ?? "Task Completed",
-      priority: 2,
-    });
+    showNotification(request, sender).then(sendResponse);
     return true;
   }
   if (request.type === "SYNC_CONFIG") {
@@ -232,6 +230,86 @@ async function updateWindowAttention(
   } catch (error) {
     return { success: false, error: getErrorMessage(error) };
   }
+}
+
+async function getRuntimeContext(sender: chrome.runtime.MessageSender): Promise<RuntimeContextResponse> {
+  const now = new Date();
+  const context: RuntimeContextResponse = {
+    success: true,
+    current_time_iso: now.toISOString(),
+    current_time_local: now.toString(),
+    time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || "unknown",
+    browser_window_focused: null,
+    browser_window_in_background: null,
+    tab_active: null,
+    window_id: null,
+    tab_id: sender.tab?.id ?? null,
+  };
+
+  try {
+    const windowId = sender.tab?.windowId;
+    if (typeof windowId === "number" && windowId !== chrome.windows.WINDOW_ID_NONE) {
+      const targetWindow = await chrome.windows.get(windowId);
+      context.window_id = windowId;
+      context.browser_window_focused = targetWindow.focused === true;
+      context.browser_window_in_background = targetWindow.focused === false;
+    }
+
+    if (typeof sender.tab?.id === "number") {
+      const targetTab = await chrome.tabs.get(sender.tab.id);
+      context.tab_active = targetTab.active === true;
+    }
+
+    return context;
+  } catch (error) {
+    return {
+      ...context,
+      success: false,
+      error: getErrorMessage(error),
+    };
+  }
+}
+
+async function showNotification(
+  request: MessageRequest,
+  sender: chrome.runtime.MessageSender
+): Promise<{ success: boolean; skipped?: boolean; notificationId?: string; error?: string }> {
+  try {
+    if (request.onlyWhenWindowInBackground) {
+      const context = await getRuntimeContext(sender);
+      if (context.browser_window_in_background !== true) {
+        return { success: true, skipped: true };
+      }
+    }
+
+    const notificationId = await createNotification(request);
+
+    return { success: true, notificationId };
+  } catch (error) {
+    return { success: false, error: getErrorMessage(error) };
+  }
+}
+
+function createNotification(request: MessageRequest): Promise<string> {
+  return new Promise((resolve, reject) => {
+    chrome.notifications.create(
+      {
+        type: "basic",
+        iconUrl: "icons/icon128.png",
+        title: request.title ?? BRANDING.notificationName,
+        message: request.message ?? "Task Completed",
+        priority: 2,
+      },
+      (notificationId) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+
+        resolve(notificationId);
+      }
+    );
+  });
 }
 
 async function removeSession(tabId: number) {

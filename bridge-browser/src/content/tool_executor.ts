@@ -11,6 +11,7 @@ import {
   persistApprovalRule,
   type ApprovalState,
 } from "./approval_policy";
+import { getBrowserRuntimeContext, isBrowserWindowInBackground } from "./runtime_context";
 import { type ToolRequestRegistry } from "./tool_request_registry";
 
 interface ToolExecutorOptions {
@@ -160,7 +161,7 @@ export class ToolExecutor {
             return;
           }
 
-          resolve(stringifyToolData(result.data, "[]"));
+          resolve(formatToolOutput(name, result.data, getInitToolFallback(name)));
         }
       );
     });
@@ -212,15 +213,18 @@ export class ToolExecutor {
     });
   }
 
-  private finishVirtualTool(payload: ToolExecutionPayload): void {
+  private async finishVirtualTool(payload: ToolExecutionPayload): Promise<void> {
     const requestId = getRequestId(payload);
     const msg = getPayloadMessage(payload) ?? "Task Completed";
-    Logger.log(`🔔 Notification: ${msg}`, "action");
-    void chrome.runtime.sendMessage({
-      type: "SHOW_NOTIFICATION",
-      title: `${BRANDING.productName} Task Finished`,
-      message: msg,
-    });
+    const runtimeContext = await getBrowserRuntimeContext();
+
+    if (isBrowserWindowInBackground(runtimeContext)) {
+      await sendTaskCompletionNotification(msg);
+      Logger.log(`🔔 Notification: ${msg}`, "action");
+    } else {
+      Logger.log("Notification skipped: browser window is not in background", "info");
+    }
+
     this.options.requestRegistry.markSettled(requestId);
     this.options.requestRegistry.saveRawResult(requestId, "");
     this.options.scheduleMainLoop(50);
@@ -273,7 +277,11 @@ function escapeInlineNewlines(value: string): string {
 }
 
 function formatSuccessfulResult(toolName: string, data: unknown): string {
-  const finalData = stringifyToolData(data, "");
+  return formatToolOutput(toolName, data, getToolResultFallback(toolName));
+}
+
+function formatToolOutput(toolName: string, data: unknown, fallback: string): string {
+  const finalData = stringifyToolData(data, fallback);
   if (toolName !== "list_tools") {
     return finalData;
   }
@@ -284,6 +292,14 @@ function formatSuccessfulResult(toolName: string, data: unknown): string {
     console.error("Tool list processing error", error);
     return finalData;
   }
+}
+
+function getInitToolFallback(toolName: string): string {
+  return toolName === "get_project_rules" ? "" : "[]";
+}
+
+function getToolResultFallback(toolName: string): string {
+  return toolName === "list_tools" ? "[]" : "";
 }
 
 function injectClientTools(toolListJson: string): string {
@@ -301,7 +317,7 @@ function injectClientTools(toolListJson: string): string {
   clientGroup.tools.push({
     name: "task_completion_notification",
     description:
-      "Notify the user that a long-running task or a series of complex operations is complete. Use this when you need the user's attention to review your work or provide new instructions. Calling this will trigger a system notification on the user's device.",
+      "Notify the user that a long-running task or a series of complex operations is complete, but only when the latest Webcode Runtime Metadata has browser_window_in_background set to true. Do not call this tool when the browser window is focused, foreground, or unknown. Calling this tool while the browser is foreground is suppressed by the extension.",
     inputSchema: {
       type: "object",
       properties: { message: { type: "string" } },
@@ -310,6 +326,27 @@ function injectClientTools(toolListJson: string): string {
   });
 
   return JSON.stringify(groups, null, 2);
+}
+
+function sendTaskCompletionNotification(message: string): Promise<void> {
+  return new Promise((resolve) => {
+    try {
+      chrome.runtime.sendMessage(
+        {
+          type: "SHOW_NOTIFICATION",
+          title: `${BRANDING.productName} Task Finished`,
+          message,
+          onlyWhenWindowInBackground: true,
+        },
+        () => {
+          void chrome.runtime.lastError;
+          resolve();
+        }
+      );
+    } catch {
+      resolve();
+    }
+  });
 }
 
 function getClientGroup(groups: ToolGroup[]): ToolGroup & { tools: unknown[] } {
