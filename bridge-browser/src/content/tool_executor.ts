@@ -75,7 +75,7 @@ export class ToolExecutor {
     }
 
     if (payload.name === "task_completion_notification") {
-      this.finishVirtualTool(payload);
+      await this.finishVirtualTool(payload);
       return;
     }
 
@@ -339,6 +339,7 @@ function sendTaskCompletionNotification(message: string): Promise<void> {
           onlyWhenWindowInBackground: true,
         },
         () => {
+          // Notification delivery is best-effort; foreground state is checked before this call and in background.
           void chrome.runtime.lastError;
           resolve();
         }

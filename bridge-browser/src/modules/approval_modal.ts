@@ -85,6 +85,7 @@ function sendWindowAttentionMessage(type: "REQUEST_WINDOW_ATTENTION" | "CLEAR_WI
 
   try {
     chrome.runtime.sendMessage({ type }, () => {
+      // Attention requests are best-effort and should not block the modal lifecycle.
       void chrome.runtime.lastError;
     });
   } catch {

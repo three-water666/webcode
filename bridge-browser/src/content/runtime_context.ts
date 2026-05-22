@@ -1,5 +1,6 @@
 import type { RuntimeContextResponse } from "../types";
 
+// Keep this guidance aligned with gateway-vscode/prompts/prompt_*.md and the client tool description.
 const NOTIFICATION_GUIDANCE =
   "Call task_completion_notification only when browser_window_in_background is true. Do not call it when the browser window is focused, foreground, or unknown.";
 
@@ -63,7 +64,7 @@ function createLocalRuntimeContext(error?: string): RuntimeContextResponse {
   return withDocumentContext({
     success: false,
     current_time_iso: now.toISOString(),
-    current_time_local: now.toString(),
+    current_time_local: now.toLocaleString(),
     time_zone: getLocalTimeZone(),
     browser_window_focused: null,
     browser_window_in_background: null,

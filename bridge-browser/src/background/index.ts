@@ -237,7 +237,7 @@ async function getRuntimeContext(sender: chrome.runtime.MessageSender): Promise<
   const context: RuntimeContextResponse = {
     success: true,
     current_time_iso: now.toISOString(),
-    current_time_local: now.toString(),
+    current_time_local: now.toLocaleString(),
     time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || "unknown",
     browser_window_focused: null,
     browser_window_in_background: null,
@@ -276,8 +276,8 @@ async function showNotification(
 ): Promise<{ success: boolean; skipped?: boolean; notificationId?: string; error?: string }> {
   try {
     if (request.onlyWhenWindowInBackground) {
-      const context = await getRuntimeContext(sender);
-      if (context.browser_window_in_background !== true) {
+      const browserWindowInBackground = await isSenderWindowInBackground(sender);
+      if (!browserWindowInBackground) {
         return { success: true, skipped: true };
       }
     }
@@ -287,6 +287,20 @@ async function showNotification(
     return { success: true, notificationId };
   } catch (error) {
     return { success: false, error: getErrorMessage(error) };
+  }
+}
+
+async function isSenderWindowInBackground(sender: chrome.runtime.MessageSender): Promise<boolean> {
+  try {
+    const windowId = sender.tab?.windowId;
+    if (typeof windowId !== "number" || windowId === chrome.windows.WINDOW_ID_NONE) {
+      return false;
+    }
+
+    const targetWindow = await chrome.windows.get(windowId);
+    return targetWindow.focused === false;
+  } catch {
+    return false;
   }
 }
 
