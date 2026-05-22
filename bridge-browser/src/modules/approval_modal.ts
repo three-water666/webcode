@@ -210,8 +210,8 @@ export function showConfirmationModal(
                   <code>${exactKey}</code>
                   <button class="btn-allow-exact btn-scope-approve">${t("btn_allow_exact")}</button>
               </div>
-              ${executableOptionHtml}
               ${prefixOptionHtml}
+              ${executableOptionHtml}
           </div>
       `
     : "";
