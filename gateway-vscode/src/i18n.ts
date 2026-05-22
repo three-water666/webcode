@@ -36,6 +36,9 @@ const messages = {
         custom_step1: 'Step 1: Select AI Platform',
         browser_chrome: '$(browser) Google Chrome',
         browser_edge: '$(browser) Microsoft Edge',
+        browser_user_profile_chrome: '$(browser) Chrome User Profile Keepalive',
+        browser_user_profile_edge: '$(browser) Edge User Profile Keepalive',
+        browser_user_profile_desc: 'Uses your normal profile and anti-freeze flags; browser must be fully closed first',
         browser_isolated_chrome: '$(browser) Chrome for Testing / Chromium Keepalive',
         browser_isolated_edge: '$(browser) Edge Isolated Keepalive',
         browser_isolated_desc: 'Separate profile, auto-loads the bridge extension, with anti-freeze flags',
@@ -50,6 +53,7 @@ const messages = {
         browser_extension_missing: 'Built-in browser extension is missing. Run the browser build first or reinstall the VS Code extension.',
         browser_not_found: '{browser} was not found. Install it or choose another browser mode.',
         isolated_chrome_requires_cft: 'Chrome isolated mode requires Chrome for Testing or Chromium because Google Chrome no longer supports automatic unpacked extension loading. Install Chrome for Testing, set webcodeGateway.isolatedChrome.executablePath, or use Edge isolated mode.',
+        user_profile_browser_running: '{browser} is already running. Fully quit it, including background processes, then use user profile keepalive mode so anti-freeze flags can take effect.',
     },
     zh: {
         output_channel_name: 'MCP Gateway',
@@ -81,6 +85,9 @@ const messages = {
         custom_step1: '第 1 步：选择 AI 平台',
         browser_chrome: '$(browser) Google Chrome',
         browser_edge: '$(browser) Microsoft Edge',
+        browser_user_profile_chrome: '$(browser) Chrome 用户配置保活模式',
+        browser_user_profile_edge: '$(browser) Edge 用户配置保活模式',
+        browser_user_profile_desc: '使用你的常用 profile 和防冻结参数；启动前必须完全退出目标浏览器',
         browser_isolated_chrome: '$(browser) Chrome for Testing / Chromium 独立保活模式',
         browser_isolated_edge: '$(browser) Edge 独立保活模式',
         browser_isolated_desc: '单独 profile，自动加载桥接插件，并附带防后台冻结参数',
@@ -95,6 +102,7 @@ const messages = {
         browser_extension_missing: '内置浏览器插件目录不存在。请先构建浏览器插件，或重新安装 VS Code 插件。',
         browser_not_found: '未找到 {browser}。请安装该浏览器，或选择其他浏览器模式。',
         isolated_chrome_requires_cft: 'Chrome 独立模式需要 Chrome for Testing 或 Chromium，因为 Google Chrome 已不再支持自动加载未打包扩展。请安装 Chrome for Testing，设置 webcodeGateway.isolatedChrome.executablePath，或改用 Edge 独立保活模式。',
+        user_profile_browser_running: '{browser} 正在运行。请完全退出它（包括后台进程）后再使用用户配置保活模式，这样防冻结参数才能生效。',
     }
 } as const;
 

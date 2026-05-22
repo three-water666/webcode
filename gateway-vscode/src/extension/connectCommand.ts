@@ -198,6 +198,8 @@ async function launchCustomBridge(
     const browserOptions: CustomActionItem[] = [
         { label: t('browser_chrome'), value: 'chrome' },
         { label: t('browser_edge'), value: 'edge' },
+        { label: t('browser_user_profile_chrome'), description: t('browser_user_profile_desc'), value: 'user-profile-chrome' },
+        { label: t('browser_user_profile_edge'), description: t('browser_user_profile_desc'), value: 'user-profile-edge' },
         { label: t('browser_isolated_chrome'), description: t('browser_isolated_desc'), value: 'isolated-chrome' },
         { label: t('browser_isolated_edge'), description: t('browser_isolated_desc'), value: 'isolated-edge' },
         { label: t('browser_default'), value: 'default' }

@@ -28,6 +28,8 @@
 
 If your web AI tab stops rendering in the background, click the status bar, choose "Custom Launch...", then select `Chrome for Testing / Chromium Keepalive` or `Edge Isolated Keepalive` in step 2. This mode uses a separate browser profile, so you need to sign in to the target AI site once. Regular Google Chrome no longer supports automatic unpacked extension loading; for the Chrome option, install Chrome for Testing / Chromium or set `webcodeGateway.isolatedChrome.executablePath`.
 
+You can also choose `Chrome User Profile Keepalive` or `Edge User Profile Keepalive` to reuse your normal browser profile. This mode does not auto-load the browser extension and does not disable other extensions; the target browser must be fully closed before launch or the anti-freeze flags will not take effect.
+
 ### Project Rules
 
 During initialization, the extension reads rule files from the root of the primary VS Code workspace and sends them to the web AI:

@@ -26,6 +26,8 @@
 
 如果网页 AI 在后台标签页容易停止渲染，请点击状态栏后选择“自定义启动...”，并在第二步选择 `Chrome for Testing / Chromium 独立保活模式` 或 `Edge 独立保活模式`。该模式使用单独的浏览器 profile，首次使用需要重新登录目标 AI 站点。普通 Google Chrome 已不再适合自动加载未打包扩展；Chrome 方案请安装 Chrome for Testing / Chromium，或设置 `webcodeGateway.isolatedChrome.executablePath`。
 
+也可以选择 `Chrome 用户配置保活模式` 或 `Edge 用户配置保活模式` 复用你的日常浏览器 profile。这个模式不会自动加载浏览器插件，也不会禁用其他插件；启动前必须完全退出目标浏览器，否则防冻结参数不会生效。
+
 ### 项目规则
 
 初始化时插件会读取 VS Code 主工作区根目录中的规则文件，并发送给网页 AI：

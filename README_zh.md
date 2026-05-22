@@ -71,6 +71,8 @@ webcode 的设计目标是让控制权尽量留在用户手里：
 
 如果网页 AI 在后台标签页容易被冻结，可以使用 `自定义启动...`，第二步选择 `Chrome for Testing / Chromium 独立保活模式` 或 `Edge 独立保活模式`。该模式会使用单独的浏览器 profile，首次使用需要重新登录目标 AI 站点。普通 Google Chrome 已不再适合自动加载未打包扩展；Chrome 方案请安装 Chrome for Testing / Chromium，或设置 `webcodeGateway.isolatedChrome.executablePath`。
 
+也可以选择 `Chrome 用户配置保活模式` 或 `Edge 用户配置保活模式` 复用你的日常浏览器 profile。这个模式不会自动加载浏览器插件，也不会禁用其他插件；启动前必须完全退出目标浏览器，否则防冻结参数不会生效。
+
 ### 3. 在对话中使用
 
 1. 打开目标 AI 站点中的新对话。

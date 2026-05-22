@@ -1,4 +1,4 @@
-import { exec, spawn } from 'child_process';
+import { exec, execFile, spawn } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -27,7 +27,7 @@ export function launchBridge(options: LaunchBridgeOptions): void {
     const bridgeUrl = buildBridgeUrl(options.currentPort, options.currentToken, options.targetUrl);
     const finalBrowser = resolveBrowser(options.targetUrl, options.browserMode);
 
-    openBrowser(bridgeUrl, finalBrowser, options.context);
+    void openBrowser(bridgeUrl, finalBrowser, options.context);
 }
 
 function buildBridgeUrl(currentPort: number, currentToken: string, targetUrl: string): string {
@@ -53,7 +53,7 @@ function resolveBrowser(targetUrl: string, browserMode: string): string {
     return config.get<string>('browser') ?? 'default';
 }
 
-function openBrowser(url: string, browserType: string, context: vscode.ExtensionContext): void {
+async function openBrowser(url: string, browserType: string, context: vscode.ExtensionContext): Promise<void> {
     if (browserType === 'default') {
         void vscode.env.openExternal(vscode.Uri.parse(url));
         return;
@@ -61,6 +61,11 @@ function openBrowser(url: string, browserType: string, context: vscode.Extension
 
     if (browserType === 'isolated-chrome' || browserType === 'isolated-edge') {
         openIsolatedBrowser(url, browserType === 'isolated-edge' ? 'edge' : 'chrome', context);
+        return;
+    }
+
+    if (browserType === 'user-profile-chrome' || browserType === 'user-profile-edge') {
+        await openUserProfileKeepaliveBrowser(url, browserType === 'user-profile-edge' ? 'edge' : 'chrome');
         return;
     }
 
@@ -103,6 +108,18 @@ function openIsolatedBrowser(url: string, browserFamily: BrowserFamily, context:
     launchFirstAvailableBrowser(launchCommands, browserArgs, getBrowserDisplayName(browserFamily));
 }
 
+async function openUserProfileKeepaliveBrowser(url: string, browserFamily: BrowserFamily): Promise<void> {
+    const browserName = getUserProfileBrowserDisplayName(browserFamily);
+    const isAlreadyRunning = await isBrowserProcessRunning(browserFamily);
+    if (isAlreadyRunning) {
+        void vscode.window.showWarningMessage(t('user_profile_browser_running', { browser: browserName }));
+        return;
+    }
+
+    const launchCommands = getUserProfileBrowserLaunchCommands(browserFamily, os.platform());
+    launchFirstAvailableBrowser(launchCommands, buildKeepaliveBrowserArgs(url), browserName);
+}
+
 function buildIsolatedBrowserArgs(url: string, profileDir: string, extensionPath: string): string[] {
     const normalizedExtensionPath = normalizeBrowserPath(extensionPath);
     const normalizedProfileDir = normalizeBrowserPath(profileDir);
@@ -111,6 +128,19 @@ function buildIsolatedBrowserArgs(url: string, profileDir: string, extensionPath
         `--user-data-dir=${normalizedProfileDir}`,
         `--load-extension=${normalizedExtensionPath}`,
         `--disable-extensions-except=${normalizedExtensionPath}`,
+        '--no-first-run',
+        '--no-default-browser-check',
+        '--disable-background-timer-throttling',
+        '--disable-renderer-backgrounding',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-features=CalculateNativeWinOcclusion,IntensiveWakeUpThrottling',
+        url
+    ];
+}
+
+function buildKeepaliveBrowserArgs(url: string): string[] {
+    return [
+        '--new-window',
         '--no-first-run',
         '--no-default-browser-check',
         '--disable-background-timer-throttling',
@@ -203,14 +233,7 @@ function getWindowsBrowserLaunchCommands(browserFamily: BrowserFamily): BrowserL
         ]);
     }
 
-    const edgeCandidates = [
-        env.ProgramFiles ? path.join(env.ProgramFiles, 'Microsoft', 'Edge', 'Application', 'msedge.exe') : '',
-        env['ProgramFiles(x86)'] ? path.join(env['ProgramFiles(x86)'], 'Microsoft', 'Edge', 'Application', 'msedge.exe') : '',
-        env.LOCALAPPDATA ? path.join(env.LOCALAPPDATA, 'Microsoft', 'Edge', 'Application', 'msedge.exe') : '',
-        'msedge.exe'
-    ];
-
-    return toLaunchCommands(edgeCandidates);
+    return getWindowsEdgeLaunchCommands(env);
 }
 
 function getMacBrowserLaunchCommands(browserFamily: BrowserFamily): BrowserLaunchCommand[] {
@@ -249,6 +272,51 @@ function getLinuxBrowserLaunchCommands(browserFamily: BrowserFamily): BrowserLau
     ]);
 }
 
+function getUserProfileBrowserLaunchCommands(
+    browserFamily: BrowserFamily,
+    platform: NodeJS.Platform
+): BrowserLaunchCommand[] {
+    if (platform === 'win32') {
+        return browserFamily === 'edge'
+            ? getWindowsEdgeLaunchCommands(process.env)
+            : getWindowsChromeLaunchCommands(process.env);
+    }
+
+    if (platform === 'darwin') {
+        return browserFamily === 'edge'
+            ? toLaunchCommands([
+                '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+                path.join(os.homedir(), 'Applications', 'Microsoft Edge.app', 'Contents', 'MacOS', 'Microsoft Edge')
+            ])
+            : toLaunchCommands([
+                '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+                path.join(os.homedir(), 'Applications', 'Google Chrome.app', 'Contents', 'MacOS', 'Google Chrome')
+            ]);
+    }
+
+    return browserFamily === 'edge'
+        ? toLaunchCommands(['microsoft-edge', 'microsoft-edge-stable'])
+        : toLaunchCommands(['google-chrome', 'google-chrome-stable', 'chrome', 'chromium', 'chromium-browser']);
+}
+
+function getWindowsChromeLaunchCommands(env: NodeJS.ProcessEnv): BrowserLaunchCommand[] {
+    return toLaunchCommands([
+        env.LOCALAPPDATA ? path.join(env.LOCALAPPDATA, 'Google', 'Chrome', 'Application', 'chrome.exe') : '',
+        env.ProgramFiles ? path.join(env.ProgramFiles, 'Google', 'Chrome', 'Application', 'chrome.exe') : '',
+        env['ProgramFiles(x86)'] ? path.join(env['ProgramFiles(x86)'], 'Google', 'Chrome', 'Application', 'chrome.exe') : '',
+        'chrome.exe'
+    ]);
+}
+
+function getWindowsEdgeLaunchCommands(env: NodeJS.ProcessEnv): BrowserLaunchCommand[] {
+    return toLaunchCommands([
+        env.ProgramFiles ? path.join(env.ProgramFiles, 'Microsoft', 'Edge', 'Application', 'msedge.exe') : '',
+        env['ProgramFiles(x86)'] ? path.join(env['ProgramFiles(x86)'], 'Microsoft', 'Edge', 'Application', 'msedge.exe') : '',
+        env.LOCALAPPDATA ? path.join(env.LOCALAPPDATA, 'Microsoft', 'Edge', 'Application', 'msedge.exe') : '',
+        'msedge.exe'
+    ]);
+}
+
 function toLaunchCommands(candidates: Array<string | undefined | null>, fallback?: BrowserLaunchCommand): BrowserLaunchCommand[] {
     const commands: BrowserLaunchCommand[] = candidates
         .filter(Boolean)
@@ -265,6 +333,56 @@ function toLaunchCommands(candidates: Array<string | undefined | null>, fallback
 
 function getBrowserDisplayName(browserFamily: BrowserFamily): string {
     return browserFamily === 'edge' ? 'Microsoft Edge' : 'Chrome for Testing / Chromium';
+}
+
+function getUserProfileBrowserDisplayName(browserFamily: BrowserFamily): string {
+    return browserFamily === 'edge' ? 'Microsoft Edge' : 'Google Chrome';
+}
+
+async function isBrowserProcessRunning(browserFamily: BrowserFamily): Promise<boolean> {
+    const platform = os.platform();
+
+    if (platform === 'win32') {
+        const imageName = browserFamily === 'edge' ? 'msedge.exe' : 'chrome.exe';
+        const output = await execFileText('tasklist', ['/FI', `IMAGENAME eq ${imageName}`, '/FO', 'CSV', '/NH']);
+        return output.toLowerCase().includes(`"${imageName.toLowerCase()}"`);
+    }
+
+    const processNames = getBrowserProcessNames(browserFamily, platform);
+    const results = await Promise.all(processNames.map(name => isProcessNameRunning(name)));
+    return results.some(Boolean);
+}
+
+function getBrowserProcessNames(browserFamily: BrowserFamily, platform: NodeJS.Platform): string[] {
+    if (platform === 'darwin') {
+        return browserFamily === 'edge' ? ['Microsoft Edge'] : ['Google Chrome', 'Google Chrome Helper'];
+    }
+
+    return browserFamily === 'edge'
+        ? ['msedge', 'microsoft-edge', 'microsoft-edge-stable']
+        : ['chrome', 'google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser'];
+}
+
+async function isProcessNameRunning(processName: string): Promise<boolean> {
+    try {
+        await execFileText('pgrep', ['-x', processName]);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function execFileText(command: string, args: string[]): Promise<string> {
+    return new Promise((resolve, reject) => {
+        execFile(command, args, (error, stdout) => {
+            if (error) {
+                reject(new Error(error.message));
+                return;
+            }
+
+            resolve(stdout);
+        });
+    });
 }
 
 function getConfiguredChromeForTestingPath(): string | null {
