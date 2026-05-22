@@ -38,40 +38,7 @@ Invoke-CheckedCommand "pnpm install"
 Invoke-CheckedCommand "pnpm --filter @webcode/shared run build"
 
 # ==========================================
-# 4. Package VS Code Extension (Server)
-# ==========================================
-Write-Host "[*] Building VS Code Extension..." -ForegroundColor Cyan
-Set-Location "gateway-vscode"
-
-if (!(Test-Path "node_modules\.bin\vsce.cmd") -and !(Get-Command "vsce" -ErrorAction SilentlyContinue)) {
-    Write-Error "VS Code packaging tool not found. Run 'pnpm install' to install workspace dependencies, including @vscode/vsce."
-    exit 1
-}
-
-# Get version
-$json = Get-Content "package.json" -Raw | ConvertFrom-Json
-$vsVersion = $json.version
-$vsName = "$productName-gateway-vscode-$vsVersion.vsix"
-$vsReleasePath = Join-Path (Get-Location) "..\release\$vsName"
-$vsTempName = "$productName-gateway-vscode-$vsVersion.tmp.vsix"
-$vsTempPath = Join-Path (Get-Location) $vsTempName
-
-# Package to a temp file inside the extension folder first, then move into release.
-if (Test-Path $vsTempPath) {
-    Remove-Item $vsTempPath -Force
-}
-Invoke-CheckedCommand "pnpm exec vsce package --out $vsTempName --no-dependencies"
-
-if (Test-Path $vsReleasePath) {
-    Remove-Item $vsReleasePath -Force
-}
-Move-Item $vsTempPath $vsReleasePath -Force
-Write-Host "[OK] VS Code Extension built: release\$vsName" -ForegroundColor Green
-
-Set-Location ".."
-
-# ==========================================
-# 5. Package Browser Extension (Client)
+# 4. Build Browser Extension once (Client)
 # ==========================================
 Write-Host "[*] Building Browser Extension (Vite)..." -ForegroundColor Cyan
 Set-Location "bridge-browser"
@@ -111,6 +78,52 @@ if (Test-Path $releasePath) {
 } else {
     Write-Error "Browser Extension zip failed"
 }
+
+Set-Location ".."
+
+# ==========================================
+# 5. Package VS Code Extension (Server)
+# ==========================================
+Write-Host "[*] Building VS Code Extension..." -ForegroundColor Cyan
+Set-Location "gateway-vscode"
+
+if (!(Test-Path "node_modules\.bin\vsce.cmd") -and !(Get-Command "vsce" -ErrorAction SilentlyContinue)) {
+    Write-Error "VS Code packaging tool not found. Run 'pnpm install' to install workspace dependencies, including @vscode/vsce."
+    exit 1
+}
+
+# Get version
+$json = Get-Content "package.json" -Raw | ConvertFrom-Json
+$vsVersion = $json.version
+$vsName = "$productName-gateway-vscode-$vsVersion.vsix"
+$vsReleasePath = Join-Path (Get-Location) "..\release\$vsName"
+$vsTempName = "$productName-gateway-vscode-$vsVersion.tmp.vsix"
+$vsTempPath = Join-Path (Get-Location) $vsTempName
+
+# Package to a temp file inside the extension folder first, then move into release.
+if (Test-Path $vsTempPath) {
+    Remove-Item $vsTempPath -Force
+}
+
+# The browser extension was already built above. Tell vscode:prepublish to copy
+# the existing dist into the VSIX instead of rebuilding it.
+$previousPrebuiltEnv = $env:WEBCODE_BROWSER_PREBUILT
+$env:WEBCODE_BROWSER_PREBUILT = "1"
+try {
+    Invoke-CheckedCommand "pnpm exec vsce package --out $vsTempName --no-dependencies"
+} finally {
+    if ($null -eq $previousPrebuiltEnv) {
+        Remove-Item Env:\WEBCODE_BROWSER_PREBUILT -ErrorAction SilentlyContinue
+    } else {
+        $env:WEBCODE_BROWSER_PREBUILT = $previousPrebuiltEnv
+    }
+}
+
+if (Test-Path $vsReleasePath) {
+    Remove-Item $vsReleasePath -Force
+}
+Move-Item $vsTempPath $vsReleasePath -Force
+Write-Host "[OK] VS Code Extension built: release\$vsName" -ForegroundColor Green
 
 Set-Location ".."
 

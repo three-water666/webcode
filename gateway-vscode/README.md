@@ -18,12 +18,17 @@
 * **Built-in Local Tools**: Filesystem access and command execution are provided by the extension out of the box, without extra server setup in settings.
 * **Project Rules**: Reads `USER_RULES.md` and the highest-priority `AGENTS.md` / `CLAUDE.md` rule file from the workspace root during initialization.
 * **Workspace Skills**: Discovers local `SKILL.md` workflows in the current workspace and exposes them through progressive-loading tools.
+* **Isolated Keepalive Browser**: Custom Launch can open Chrome for Testing / Chromium or Edge with a separate profile and the bridge extension preloaded.
 
 ## ⚙️ Installation & Usage
 
 1. **Install**: Search for `webcode gateway` in the VS Code Marketplace and install it.
 2. **Start Service**: After installation, click the `webcode: OFF` button in the status bar (bottom right), then select "Turn On". When it changes to `webcode: <Port>` (e.g., `34567`), the service is running successfully.
 3. **Browser Companion**: Ensure you have the **webcode bridge** extension installed in your browser.
+
+If your web AI tab stops rendering in the background, click the status bar, choose "Custom Launch...", then select `Chrome for Testing / Chromium Keepalive` or `Edge Isolated Keepalive` in step 2. This mode uses a separate browser profile, auto-loads webcode bridge, and lets you install other browser extensions in that profile; you need to sign in to the target AI site once. Regular Google Chrome no longer supports automatic unpacked extension loading; for the Chrome option, install Chrome for Testing / Chromium or set `webcodeGateway.isolatedChrome.executablePath`.
+
+You can also choose `Chrome User Profile Keepalive` or `Edge User Profile Keepalive` to reuse your normal browser profile. This mode does not auto-load the browser extension and does not disable other extensions; the target browser must be fully closed before launch or the anti-freeze flags will not take effect.
 
 ### Project Rules
 

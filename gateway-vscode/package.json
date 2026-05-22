@@ -68,10 +68,14 @@
                 "enum": [
                   "default",
                   "chrome",
-                  "edge"
+                  "edge",
+                  "user-profile-chrome",
+                  "user-profile-edge",
+                  "isolated-chrome",
+                  "isolated-edge"
                 ],
                 "default": "default",
-                "description": "Specific browser for this site (overrides global setting)"
+                "description": "Specific browser for this site (overrides global setting). Use user-profile-chrome or user-profile-edge to launch the normal profile with anti-freeze flags when the target browser is closed. Use isolated-chrome or isolated-edge to launch a dedicated profile with the bridge extension and anti-freeze flags."
               },
               "selectors": {
                 "type": "object",
@@ -112,9 +116,18 @@
           "enum": [
             "default",
             "chrome",
-            "edge"
+            "edge",
+            "user-profile-chrome",
+            "user-profile-edge",
+            "isolated-chrome",
+            "isolated-edge"
           ],
-          "description": "Global default browser. Used if no site-specific browser is configured."
+          "description": "Global default browser. Used if no site-specific browser is configured. Use user-profile-chrome or user-profile-edge to launch the normal profile with anti-freeze flags when the target browser is closed. Use isolated-chrome or isolated-edge to launch a dedicated profile with the bridge extension and anti-freeze flags."
+        },
+        "webcodeGateway.isolatedChrome.executablePath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional path to a Chrome for Testing or Chromium executable for isolated-chrome mode. Google Chrome 137+ no longer supports automatic unpacked extension loading."
         },
         "webcodeGateway.commandShell.path": {
           "type": "string",
@@ -196,10 +209,12 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "pnpm run package",
+    "vscode:prepublish": "node scripts/prepublish.mjs",
     "compile": "webpack",
     "watch": "webpack --watch",
-    "package": "webpack --mode production --devtool hidden-source-map",
+    "copy-browser-extension": "node scripts/copy-browser-extension.mjs",
+    "prepare-browser-extension": "pnpm --filter bridge-browser run build && node scripts/copy-browser-extension.mjs",
+    "package": "node scripts/prepublish.mjs",
     "build": "pnpm run package",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",

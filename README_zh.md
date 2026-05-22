@@ -16,6 +16,7 @@ webcode 用来把 ChatGPT、Gemini、DeepSeek 这类网页 AI 接到 VS Code 中
 
 - **零配置连接**：VS Code 自动管理本地端口和会话 Token
 - **浏览器路由**：不同站点可以按规则使用不同浏览器打开
+- **独立保活浏览器**：可用单独 profile 打开 Chrome/Edge，并自动加载桥接插件和防后台冻结参数
 - **动态鉴权**：每次会话使用临时 Token，不依赖固定扩展 ID 白名单
 - **来源隔离**：Gateway 只接受预期来源的请求
 - **工作区技能**：可以从当前工作区发现本地技能，并按需逐步暴露给模型
@@ -67,6 +68,10 @@ webcode 的设计目标是让控制权尽量留在用户手里：
 5. 握手成功后，浏览器会自动跳转到对应的 AI 站点。
 
 当浏览器扩展显示 `ON` 时，表示连接已经可以使用。
+
+如果网页 AI 在后台标签页容易被冻结，可以使用 `自定义启动...`，第二步选择 `Chrome for Testing / Chromium 独立保活模式` 或 `Edge 独立保活模式`。该模式会使用单独的浏览器 profile，自动加载 webcode bridge，并允许你在这个 profile 里安装其他浏览器插件；首次使用需要重新登录目标 AI 站点。普通 Google Chrome 已不再适合自动加载未打包扩展；Chrome 方案请安装 Chrome for Testing / Chromium，或设置 `webcodeGateway.isolatedChrome.executablePath`。
+
+也可以选择 `Chrome 用户配置保活模式` 或 `Edge 用户配置保活模式` 复用你的日常浏览器 profile。这个模式不会自动加载浏览器插件，也不会禁用其他插件；启动前必须完全退出目标浏览器，否则防冻结参数不会生效。
 
 ### 3. 在对话中使用
 

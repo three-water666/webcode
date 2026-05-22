@@ -16,6 +16,7 @@ Please read this before using webcode:
 
 - **Zero-config connection**: VS Code manages the local port and session token automatically.
 - **Browser routing**: Different domains can open in different browsers.
+- **Isolated keepalive browser**: Open Chrome/Edge with a separate profile, the bridge extension, and anti-freeze flags.
 - **Dynamic authentication**: Each session uses a temporary token instead of a fixed browser extension ID allowlist.
 - **Origin isolation**: The gateway only accepts requests from the expected origin.
 - **Workspace skills**: Local skills can be discovered from the current workspace and exposed to the model progressively.
@@ -67,6 +68,10 @@ When the status bar shows a port number, the local gateway is running.
 5. After the handshake succeeds, the browser redirects to the target AI site.
 
 When the browser extension shows `ON`, the connection is ready to use.
+
+If your web AI tab freezes in the background, use `Custom Launch...` and choose `Chrome for Testing / Chromium Keepalive` or `Edge Isolated Keepalive` in step 2. This mode uses a separate browser profile, auto-loads webcode bridge, and lets you install other browser extensions in that profile; you need to sign in to the target AI site once. Regular Google Chrome no longer supports automatic unpacked extension loading; for the Chrome option, install Chrome for Testing / Chromium or set `webcodeGateway.isolatedChrome.executablePath`.
+
+You can also choose `Chrome User Profile Keepalive` or `Edge User Profile Keepalive` to reuse your normal browser profile. This mode does not auto-load the browser extension and does not disable other extensions; the target browser must be fully closed before launch or the anti-freeze flags will not take effect.
 
 ### 3. Use It in Chat
 

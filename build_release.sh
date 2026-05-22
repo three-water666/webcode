@@ -27,33 +27,7 @@ echo -e "${CYAN}Building Shared Module...${NC}"
 pnpm --filter @webcode/shared run build
 
 # ==========================================
-# 4. Package VS Code Extension (Server)
-# ==========================================
-echo -e "${CYAN}Building VS Code Extension...${NC}"
-cd gateway-vscode
-
-if [ ! -x "node_modules/.bin/vsce" ] && ! command -v vsce >/dev/null 2>&1; then
-  echo "[ERROR] VS Code packaging tool not found. Run 'pnpm install' to install workspace dependencies, including @vscode/vsce."
-  exit 1
-fi
-
-# Get version
-VS_VERSION=$(node -p "require('./package.json').version")
-VS_NAME="${PRODUCT_NAME}-gateway-vscode-${VS_VERSION}.vsix"
-VS_TEMP_NAME="${PRODUCT_NAME}-gateway-vscode-${VS_VERSION}.tmp.vsix"
-
-# Package to a temp file inside the extension folder first, then move into release.
-rm -f "${VS_TEMP_NAME}"
-pnpm exec vsce package --out "${VS_TEMP_NAME}" --no-dependencies
-rm -f "../release/${VS_NAME}"
-mv -f "${VS_TEMP_NAME}" "../release/${VS_NAME}"
-echo -e "${GREEN}VS Code Extension built: release/${VS_NAME}${NC}"
-
-# Return to root
-cd ..
-
-# ==========================================
-# 5. Package Browser Extension (Client)
+# 4. Build Browser Extension once (Client)
 # ==========================================
 echo -e "${CYAN}Building Browser Extension (Vite)...${NC}"
 cd bridge-browser
@@ -74,6 +48,33 @@ cd ..
 rm -f "../release/${BROWSER_NAME}"
 mv -f "${BROWSER_TEMP_PATH}" "../release/${BROWSER_NAME}"
 echo -e "${GREEN}Browser Extension built: release/${BROWSER_NAME}${NC}"
+
+# Return to root
+cd ..
+
+# ==========================================
+# 5. Package VS Code Extension (Server)
+# ==========================================
+echo -e "${CYAN}Building VS Code Extension...${NC}"
+cd gateway-vscode
+
+if [ ! -x "node_modules/.bin/vsce" ] && ! command -v vsce >/dev/null 2>&1; then
+  echo "[ERROR] VS Code packaging tool not found. Run 'pnpm install' to install workspace dependencies, including @vscode/vsce."
+  exit 1
+fi
+
+# Get version
+VS_VERSION=$(node -p "require('./package.json').version")
+VS_NAME="${PRODUCT_NAME}-gateway-vscode-${VS_VERSION}.vsix"
+VS_TEMP_NAME="${PRODUCT_NAME}-gateway-vscode-${VS_VERSION}.tmp.vsix"
+
+# Package to a temp file inside the extension folder first, then move into release.
+# The browser extension was already built above, so prepublish only copies it.
+rm -f "${VS_TEMP_NAME}"
+WEBCODE_BROWSER_PREBUILT=1 pnpm exec vsce package --out "${VS_TEMP_NAME}" --no-dependencies
+rm -f "../release/${VS_NAME}"
+mv -f "${VS_TEMP_NAME}" "../release/${VS_NAME}"
+echo -e "${GREEN}VS Code Extension built: release/${VS_NAME}${NC}"
 
 # Return to root
 cd ..
