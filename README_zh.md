@@ -34,11 +34,15 @@ webcode 的设计目标是让控制权尽量留在用户手里：
 
 ## 安装
 
-### VS Code 扩展
+### 推荐方式：只安装 VS Code 扩展
 
 在 VS Code Marketplace 中安装 `webcode gateway`。
 
-### 浏览器扩展
+推荐使用 `Edge 独立保活模式`。这个模式会使用独立的 Microsoft Edge profile，并自动加载 VS Code 插件内置的 webcode bridge，所以不需要再单独安装浏览器插件。
+
+### 可选：浏览器扩展
+
+只有在你想使用普通 Chrome/Edge、系统默认浏览器、用户配置保活模式时，才需要额外安装浏览器扩展。
 
 1. 从 [Releases](https://github.com/three-water666/webcode/releases) 下载最新的 `webcode-bridge-browser-x.x.x.zip`
 2. 解压压缩包
@@ -52,26 +56,26 @@ webcode 的设计目标是让控制权尽量留在用户手里：
 
 ### 1. 启动 Gateway
 
-1. 打开 VS Code。
+1. 在 VS Code 中打开一个具体文件夹或工作区。
 2. 点击右下角状态栏里的 `webcode: 关闭`。
 3. 在弹出的菜单里点击 `启动 webcode`。
 4. 等待状态栏文字变成 `webcode: <端口>`。
 
-当状态栏显示端口号时，说明本地 Gateway 已经启动。
+当状态栏显示端口号时，说明本地 Gateway 已经启动。启动成功后会自动打开 AI 启动菜单，不需要再点一次状态栏。
 
-### 2. 打开目标网页 AI
+### 2. 用 Edge 独立保活模式打开目标网页 AI
 
-1. 点击状态栏里的 `webcode: <端口>`。
-2. 选择你要打开的目标站点，例如 `Open Gemini`、`Open ChatGPT` 或其他支持的入口。
-3. webcode 会先在已配置的浏览器中打开桥接页。
+1. 在启动菜单里选择目标站点，例如 `Open Gemini`、`Open ChatGPT` 或其他支持的入口。
+2. webcode 默认会用 `Edge 独立保活模式` 打开 Microsoft Edge。
+3. 独立 Edge profile 会自动加载内置的 webcode bridge。
 4. 桥接页会自动与本地 Gateway 完成握手。
 5. 握手成功后，浏览器会自动跳转到对应的 AI 站点。
 
-当浏览器扩展显示 `ON` 时，表示连接已经可以使用。
+首次使用时，需要在这个独立 Edge profile 中登录一次目标 AI 站点。当 bridge 显示 `ON` 时，表示连接已经可以使用。
 
-如果网页 AI 在后台标签页容易被冻结，可以使用 `自定义启动...`，第二步选择 `Chrome for Testing / Chromium 独立保活模式` 或 `Edge 独立保活模式`。该模式会使用单独的浏览器 profile，自动加载 webcode bridge，并允许你在这个 profile 里安装其他浏览器插件；首次使用需要重新登录目标 AI 站点。普通 Google Chrome 已不再适合自动加载未打包扩展；Chrome 方案请安装 Chrome for Testing / Chromium，或设置 `webcodeGateway.isolatedChrome.executablePath`。
+如果 Gateway 已经在运行，点击状态栏里的 `webcode: <端口>` 可以重新打开同一个启动菜单。
 
-也可以选择 `Chrome 用户配置保活模式` 或 `Edge 用户配置保活模式` 复用你的日常浏览器 profile。这个模式不会自动加载浏览器插件，也不会禁用其他插件；启动前必须完全退出目标浏览器，否则防冻结参数不会生效。
+其他浏览器方式可以从 `自定义启动...` 里选择。普通 Chrome/Edge、系统默认浏览器、用户配置保活模式都需要手动安装浏览器插件。`Chrome for Testing / Chromium 独立保活模式` 也能自动加载内置 bridge，但需要额外安装 Chrome for Testing / Chromium，或配置 `webcodeGateway.isolatedChrome.executablePath`；首选仍然是 `Edge 独立保活模式`。
 
 ### 3. 在对话中使用
 

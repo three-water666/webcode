@@ -41,7 +41,7 @@ async function handleGatewayConnectCommand(
 
     // 2. Case: Offline -> Show Start Option
     if (!state.isRunning) {
-        await showOfflineMenu(outputChannel, serviceController);
+        await showOfflineMenu(extensionContext, outputChannel, serviceController);
         return;
     }
 
@@ -62,6 +62,7 @@ async function handleGatewayConnectCommand(
 }
 
 async function showOfflineMenu(
+    extensionContext: vscode.ExtensionContext,
     outputChannel: vscode.OutputChannel,
     serviceController: GatewayServiceController
 ): Promise<void> {
@@ -82,6 +83,16 @@ async function showOfflineMenu(
 
     if (selection.action === 'start') {
         await serviceController.start();
+        const newState = serviceController.getState();
+        if (newState.currentPort && newState.currentToken && newState.isRunning) {
+            await showOnlineMenu({
+                extensionContext,
+                currentPort: newState.currentPort,
+                currentToken: newState.currentToken,
+                outputChannel,
+                serviceController
+            });
+        }
     } else if (selection.action === 'showLogs') {
         outputChannel.show();
     } else if (selection.action === 'settings') {
@@ -196,12 +207,20 @@ async function launchCustomBridge(
     }
 
     const browserOptions: CustomActionItem[] = [
-        { label: t('browser_chrome'), value: 'chrome' },
-        { label: t('browser_edge'), value: 'edge' },
-        { label: t('browser_user_profile_chrome'), description: t('browser_user_profile_desc'), value: 'user-profile-chrome' },
+        { label: t('browser_group_edge'), kind: vscode.QuickPickItemKind.Separator },
+        {
+            label: t('browser_isolated_edge'),
+            description: t('browser_recommended'),
+            detail: t('browser_isolated_desc'),
+            value: 'isolated-edge'
+        },
         { label: t('browser_user_profile_edge'), description: t('browser_user_profile_desc'), value: 'user-profile-edge' },
+        { label: t('browser_edge'), value: 'edge' },
+        { label: t('browser_group_chrome'), kind: vscode.QuickPickItemKind.Separator },
         { label: t('browser_isolated_chrome'), description: t('browser_isolated_desc'), value: 'isolated-chrome' },
-        { label: t('browser_isolated_edge'), description: t('browser_isolated_desc'), value: 'isolated-edge' },
+        { label: t('browser_user_profile_chrome'), description: t('browser_user_profile_desc'), value: 'user-profile-chrome' },
+        { label: t('browser_chrome'), value: 'chrome' },
+        { label: t('browser_group_system'), kind: vscode.QuickPickItemKind.Separator },
         { label: t('browser_default'), value: 'default' }
     ];
     const browserSelection = await vscode.window.showQuickPick<CustomActionItem>(browserOptions, {

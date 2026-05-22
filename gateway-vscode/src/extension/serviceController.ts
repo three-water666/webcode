@@ -39,6 +39,19 @@ export function createGatewayServiceController(options: CreateGatewayServiceCont
     const getState = () => ({ currentPort, currentToken, isStarting, isRunning });
 
     const start = async () => {
+        if (!hasWorkspaceFolder()) {
+            if (isRunning || isStarting) {
+                await options.manager.stop();
+            }
+            currentPort = null;
+            currentToken = null;
+            isStarting = false;
+            isRunning = false;
+            updateGatewayStatusBar(options.statusBarItem, false);
+            void vscode.window.showErrorMessage(t('start_requires_workspace'));
+            return;
+        }
+
         // Set Loading State
         isStarting = true;
         updateGatewayStatusBar(options.statusBarItem, true, undefined, true);
@@ -127,6 +140,10 @@ export function createGatewayServiceController(options: CreateGatewayServiceCont
 function getCommandShellPath(config: vscode.WorkspaceConfiguration): string | undefined {
     const configuredCommandShellPath = config.get<string>('commandShell.path')?.trim();
     return configuredCommandShellPath === '' ? undefined : configuredCommandShellPath;
+}
+
+function hasWorkspaceFolder(): boolean {
+    return (vscode.workspace.workspaceFolders?.length ?? 0) > 0;
 }
 
 function buildAllowedOrigins(aiSites: AISiteConfig[]): string[] {

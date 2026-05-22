@@ -47,7 +47,7 @@ function resolveBrowser(targetUrl: string, browserMode: string): string {
     }
 
     // 如果没有特定配置，使用全局默认设置
-    return config.get<string>('browser') ?? 'default';
+    return config.get<string>('browser') ?? 'isolated-edge';
 }
 
 function openBrowser(url: string, browserType: string, context: vscode.ExtensionContext): void {

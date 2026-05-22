@@ -1,9 +1,10 @@
 # webcode gateway (VS Code 插件)
 
 > ⚠️ **重要提示**
-> 本插件必须配合浏览器插件 **webcode bridge** 使用才能生效。
-> 请确保您已在 Chrome 或 Edge 浏览器中安装了对应的扩展。
-> 浏览器插件下载地址：https://github.com/three-water666/webcode/releases
+> 推荐方式只需要安装这个 VS Code 插件。
+> 使用 `Edge 独立保活模式` 时，webcode 会打开独立 Edge profile，并自动加载内置的 webcode bridge。
+> 只有选择普通 Chrome/Edge、系统默认浏览器、用户配置保活模式时，才需要额外安装浏览器插件。
+> 可选浏览器插件下载地址：https://github.com/three-water666/webcode/releases
 >
 > 项目地址：https://github.com/three-water666/webcode
 
@@ -16,17 +17,18 @@
 * **内置本地工具**: 文件系统访问和命令执行现在由插件默认内置提供，不需要再在设置里额外配置 server。
 * **项目规则**: 初始化时自动读取工作区根目录的 `USER_RULES.md`，以及 `AGENTS.md` / `CLAUDE.md` 中优先级最高的一个。
 * **工作区 Skills**: 自动发现当前工作区中的本地 `SKILL.md` 工作流，并通过渐进式加载工具暴露给模型。
-* **独立保活浏览器**: 自定义启动时可选择 Chrome for Testing / Chromium 或 Edge 独立保活模式，使用单独 profile 并自动加载桥接插件。
+* **推荐 Edge 独立保活模式**: 使用独立 Edge profile，自动加载内置 bridge，并附带防后台冻结参数。
 
 ## ⚙️ 安装与使用
 
 1. **安装插件**: 在 VS Code 扩展市场搜索并安装 `webcode gateway`。
-2. **启动服务**: 安装完成后，点击 VS Code 底部状态栏右侧的 `webcode: OFF` 按钮，然后选择开启。当状态变为 `webcode: <端口号>`（如 `34567`）时，服务即已启动成功。
-3. **浏览器配套**: 确保您的浏览器已安装 **webcode bridge** 插件。
+2. **打开工作区**: 启动服务前，先在 VS Code 中打开一个具体文件夹或工作区。
+3. **启动服务**: 点击 VS Code 底部状态栏右侧的 `webcode: OFF` 按钮，然后选择开启。当状态变为 `webcode: <端口号>`（如 `34567`）时，服务即已启动成功，并会自动打开启动菜单。
+4. **打开 AI 站点**: 选择 ChatGPT、Gemini、DeepSeek 等快捷启动项。默认会使用 `Edge 独立保活模式`，内置 bridge 会自动加载。
 
-如果网页 AI 在后台标签页容易停止渲染，请点击状态栏后选择“自定义启动...”，并在第二步选择 `Chrome for Testing / Chromium 独立保活模式` 或 `Edge 独立保活模式`。该模式使用单独的浏览器 profile，自动加载 webcode bridge，并允许你在这个 profile 里安装其他浏览器插件；首次使用需要重新登录目标 AI 站点。普通 Google Chrome 已不再适合自动加载未打包扩展；Chrome 方案请安装 Chrome for Testing / Chromium，或设置 `webcodeGateway.isolatedChrome.executablePath`。
+首次使用时，需要在这个独立 Edge profile 中登录一次目标 AI 站点。bridge 显示 `ON` 后，网页就可以连接本地 Gateway。
 
-也可以选择 `Chrome 用户配置保活模式` 或 `Edge 用户配置保活模式` 复用你的日常浏览器 profile。这个模式不会自动加载浏览器插件，也不会禁用其他插件；启动前必须完全退出目标浏览器，否则防冻结参数不会生效。
+其他浏览器方式可以从 `自定义启动...` 里选择。普通 Chrome/Edge、系统默认浏览器、用户配置保活模式都需要手动安装浏览器插件。`Chrome for Testing / Chromium 独立保活模式` 也能自动加载内置 bridge，但需要额外安装 Chrome for Testing / Chromium，或配置 `webcodeGateway.isolatedChrome.executablePath`；首选仍然是 `Edge 独立保活模式`。
 
 ### 项目规则
 

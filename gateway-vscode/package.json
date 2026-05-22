@@ -112,7 +112,7 @@
         },
         "webcodeGateway.browser": {
           "type": "string",
-          "default": "default",
+          "default": "isolated-edge",
           "enum": [
             "default",
             "chrome",
@@ -122,7 +122,7 @@
             "isolated-chrome",
             "isolated-edge"
           ],
-          "description": "Global default browser. Used if no site-specific browser is configured. Use user-profile-chrome or user-profile-edge to launch the normal profile with anti-freeze flags when the target browser is closed. Use isolated-chrome or isolated-edge to launch a dedicated profile with the bridge extension and anti-freeze flags."
+          "description": "Global default browser. Used if no site-specific browser is configured. Edge isolated mode is recommended because it launches a dedicated profile with the bundled bridge extension and anti-freeze flags, so no separate browser extension install is needed. Use regular or user-profile browser modes only after installing the browser extension manually."
         },
         "webcodeGateway.isolatedChrome.executablePath": {
           "type": "string",

@@ -3,9 +3,10 @@
 [中文文档](README_zh.md)
 
 > ⚠️ **IMPORTANT**
-> This extension requires the companion browser extension **webcode bridge** to function.
-> Please ensure you have installed the corresponding extension in Chrome or Edge.
-> Browser extension download: https://github.com/three-water666/webcode/releases
+> The recommended path only requires this VS Code extension.
+> Use `Edge Isolated Keepalive` to launch a dedicated Edge profile with the bundled webcode bridge extension preloaded.
+> Install the separate browser extension only if you choose regular Chrome/Edge, system default, or user-profile browser modes.
+> Optional browser extension download: https://github.com/three-water666/webcode/releases
 >
 > Project: https://github.com/three-water666/webcode
 
@@ -18,17 +19,18 @@
 * **Built-in Local Tools**: Filesystem access and command execution are provided by the extension out of the box, without extra server setup in settings.
 * **Project Rules**: Reads `USER_RULES.md` and the highest-priority `AGENTS.md` / `CLAUDE.md` rule file from the workspace root during initialization.
 * **Workspace Skills**: Discovers local `SKILL.md` workflows in the current workspace and exposes them through progressive-loading tools.
-* **Isolated Keepalive Browser**: Custom Launch can open Chrome for Testing / Chromium or Edge with a separate profile and the bridge extension preloaded.
+* **Recommended Edge Isolated Keepalive**: Opens a dedicated Edge profile, preloads the bundled bridge extension, and applies anti-freeze flags.
 
 ## ⚙️ Installation & Usage
 
 1. **Install**: Search for `webcode gateway` in the VS Code Marketplace and install it.
-2. **Start Service**: After installation, click the `webcode: OFF` button in the status bar (bottom right), then select "Turn On". When it changes to `webcode: <Port>` (e.g., `34567`), the service is running successfully.
-3. **Browser Companion**: Ensure you have the **webcode bridge** extension installed in your browser.
+2. **Open a Workspace**: Open a folder or workspace before starting the service.
+3. **Start Service**: Click the `webcode: OFF` button in the status bar (bottom right), then select "Turn On". When it changes to `webcode: <Port>` (e.g., `34567`), the service is running successfully and the launch menu opens automatically.
+4. **Launch AI Site**: Pick a quick launch site such as ChatGPT, Gemini, or DeepSeek. By default webcode uses `Edge Isolated Keepalive`, so the bundled bridge extension is loaded automatically.
 
-If your web AI tab stops rendering in the background, click the status bar, choose "Custom Launch...", then select `Chrome for Testing / Chromium Keepalive` or `Edge Isolated Keepalive` in step 2. This mode uses a separate browser profile, auto-loads webcode bridge, and lets you install other browser extensions in that profile; you need to sign in to the target AI site once. Regular Google Chrome no longer supports automatic unpacked extension loading; for the Chrome option, install Chrome for Testing / Chromium or set `webcodeGateway.isolatedChrome.executablePath`.
+Sign in to the target AI site once in the isolated Edge profile. After the bridge shows `ON`, the site can use the local gateway.
 
-You can also choose `Chrome User Profile Keepalive` or `Edge User Profile Keepalive` to reuse your normal browser profile. This mode does not auto-load the browser extension and does not disable other extensions; the target browser must be fully closed before launch or the anti-freeze flags will not take effect.
+Other browser modes are available from `Custom Launch...`. Regular Chrome/Edge, system default, and user-profile keepalive modes require manually installing the browser extension. Chrome for Testing / Chromium isolated mode can auto-load the bundled bridge, but it requires Chrome for Testing, Chromium, or `webcodeGateway.isolatedChrome.executablePath`; Edge isolated mode is recommended.
 
 ### Project Rules
 
