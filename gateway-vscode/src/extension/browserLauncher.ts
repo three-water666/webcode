@@ -20,11 +20,17 @@ interface LaunchBridgeOptions {
 
 type BrowserFamily = 'chrome' | 'edge';
 
+const ISOLATED_EDGE_PROFILE_HOME_URL = 'edge://newtab/';
+
 export function launchBridge(options: LaunchBridgeOptions): void {
     const bridgeUrl = buildBridgeUrl(options.currentPort, options.currentToken, options.targetUrl);
     const finalBrowser = resolveBrowser(options.targetUrl, options.browserMode);
 
     openBrowser(bridgeUrl, finalBrowser, options.context);
+}
+
+export function launchIsolatedEdgeProfile(context: vscode.ExtensionContext): void {
+    openIsolatedBrowser(ISOLATED_EDGE_PROFILE_HOME_URL, 'edge', context);
 }
 
 function buildBridgeUrl(currentPort: number, currentToken: string, targetUrl: string): string {

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 
 import { t } from '../i18n';
 import { getConfiguredAiSites } from '../platforms';
-import { launchBridge } from './browserLauncher';
+import { launchBridge, launchIsolatedEdgeProfile } from './browserLauncher';
 import type { GatewayServiceController } from './serviceController';
 import type { AISiteConfig, CustomActionItem } from './types';
 
@@ -68,6 +68,7 @@ async function showOfflineMenu(
 ): Promise<void> {
     const items: CustomActionItem[] = [
         { label: t('offline_start_label'), description: t('offline_start_desc'), action: 'start' },
+        createOpenIsolatedEdgeProfileItem(),
         { label: t('view_logs_label'), description: t('view_logs_desc'), action: 'showLogs' },
         { label: t('configure_label'), description: t('configure_desc'), action: 'settings' }
     ];
@@ -93,6 +94,8 @@ async function showOfflineMenu(
                 serviceController
             });
         }
+    } else if (selection.action === 'openIsolatedEdgeProfile') {
+        launchIsolatedEdgeProfile(extensionContext);
     } else if (selection.action === 'showLogs') {
         outputChannel.show();
     } else if (selection.action === 'settings') {
@@ -131,6 +134,7 @@ function buildOnlineMenuItems(aiSites: AISiteConfig[]): CustomActionItem[] {
     // 3. 准备完整的 QuickPick 列表
     return [
         ...quickLaunchItems,
+        createOpenIsolatedEdgeProfileItem(),
         { label: t('custom_launch_label'), description: t('custom_launch_desc'), action: 'custom' },
         { label: t('view_logs_label'), description: t('view_gateway_logs_desc'), action: 'showLogs' },
         { label: t('configure_gateway_label'), description: t('configure_gateway_desc'), action: 'settings' },
@@ -171,6 +175,12 @@ async function handleOnlineSelection(
     // 3. 自定义启动
     if (selection.action === 'custom') {
         await launchCustomBridge(aiSites, context.extensionContext, context.currentPort, context.currentToken);
+        return;
+    }
+
+    // 3.5 直接打开默认 Edge 独立 profile，便于登录或管理浏览器插件。
+    if (selection.action === 'openIsolatedEdgeProfile') {
+        launchIsolatedEdgeProfile(context.extensionContext);
         return;
     }
 
@@ -237,4 +247,12 @@ async function launchCustomBridge(
         currentPort,
         currentToken
     });
+}
+
+function createOpenIsolatedEdgeProfileItem(): CustomActionItem {
+    return {
+        label: t('open_isolated_edge_profile_label'),
+        description: t('open_isolated_edge_profile_desc'),
+        action: 'openIsolatedEdgeProfile'
+    };
 }
