@@ -19,7 +19,7 @@ export interface UnflushedRequestBatch {
  * 从 bufferedResults 中按页面顺序取出的待回填结果。
  *
  * hasOutput 表示至少有一段非空文本需要写回输入框；hasAnyResult 表示至少有 request_id 已经
- * 产出结果，即使结果是空字符串也算。空字符串常用于“只弹通知、不回填文本”的虚拟工具。
+ * 产出结果，即使结果是空字符串也算。空字符串用于不需要回填正文但仍要推进生命周期的路径。
  */
 export interface BufferedResultBatch {
   ids: string[];
@@ -63,7 +63,7 @@ export class ToolRequestRegistry {
   /**
    * 正在执行或等待用户审批的 request_id。
    *
-   * 工具开始执行时加入，后台返回、用户拒绝、或虚拟工具完成时移除。某个 request_id 只有
+   * 工具开始执行时加入，后台返回、用户拒绝、或客户端路径完成时移除。某个 request_id 只有
    * 同时“不在 runningRequests 中”且“bufferedResults 中已有结果”，才算完成。
    */
   private readonly runningRequests = new Set<string>();
@@ -191,7 +191,7 @@ export class ToolRequestRegistry {
    * 按当前页面顺序组装一批已缓存结果。
    *
    * requestIds 的顺序来自 ToolRequestTurn，因此和 AI 回复中工具调用出现的顺序一致。空字符串
-   * 结果不会进入 output，但仍会让 hasAnyResult 为 true，供调用方标记虚拟工具已处理。
+   * 结果不会进入 output，但仍会让 hasAnyResult 为 true，供调用方标记对应请求已处理。
    */
   public buildBufferedResultBatch(requestIds: readonly string[]): BufferedResultBatch {
     const orderedResults: string[] = [];

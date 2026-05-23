@@ -27,12 +27,6 @@ interface ToolExecutionResponse {
   data?: unknown;
 }
 
-interface ToolGroup {
-  server?: unknown;
-  tools?: unknown;
-  [key: string]: unknown;
-}
-
 export class ToolExecutor {
   private readonly toolExecutionQueue: ToolExecutionPayload[] = [];
   private isToolExecutionQueueRunning = false;
@@ -70,11 +64,6 @@ export class ToolExecutor {
   private async runQueuedTool(payload: ToolExecutionPayload): Promise<void> {
     if (payload.name === PROTOCOL.initToolName) {
       await this.initializeWebcode(payload);
-      return;
-    }
-
-    if (payload.name === "task_completion_notification") {
-      await this.finishVirtualTool(payload);
       return;
     }
 
@@ -160,7 +149,7 @@ export class ToolExecutor {
             return;
           }
 
-          resolve(formatToolOutput(name, result.data, getInitToolFallback(name)));
+          resolve(formatToolOutput(result.data, getInitToolFallback(name)));
         }
       );
     });
@@ -212,21 +201,6 @@ export class ToolExecutor {
     });
   }
 
-  private async finishVirtualTool(payload: ToolExecutionPayload): Promise<void> {
-    const requestId = getRequestId(payload);
-    const msg = getPayloadMessage(payload) ?? "Task Completed";
-    const notificationResult = await sendTaskCompletionNotification(msg);
-    if (notificationResult === "failed") {
-      Logger.log("Notification request failed", "info");
-    } else {
-      Logger.log(`🔔 Notification: ${msg}`, "action");
-    }
-
-    this.options.requestRegistry.markSettled(requestId);
-    this.options.requestRegistry.saveRawResult(requestId, "");
-    this.options.scheduleMainLoop(50);
-  }
-
   private requestToolApproval(payload: ToolExecutionPayload): Promise<boolean> {
     return new Promise((resolve) => {
       UI.showConfirmationModal(
@@ -274,21 +248,11 @@ function escapeInlineNewlines(value: string): string {
 }
 
 function formatSuccessfulResult(toolName: string, data: unknown): string {
-  return formatToolOutput(toolName, data, getToolResultFallback(toolName));
+  return formatToolOutput(data, getToolResultFallback(toolName));
 }
 
-function formatToolOutput(toolName: string, data: unknown, fallback: string): string {
-  const finalData = stringifyToolData(data, fallback);
-  if (toolName !== "list_tools") {
-    return finalData;
-  }
-
-  try {
-    return injectClientTools(finalData);
-  } catch (error) {
-    console.error("Tool list processing error", error);
-    return finalData;
-  }
+function formatToolOutput(data: unknown, fallback: string): string {
+  return stringifyToolData(data, fallback);
 }
 
 function getInitToolFallback(toolName: string): string {
@@ -296,105 +260,8 @@ function getInitToolFallback(toolName: string): string {
   return toolName === "get_project_rules" ? "" : "[]";
 }
 
-function getToolResultFallback(toolName: string): string {
-  // Runtime list_tools output must stay parseable so client tools can be injected.
-  return toolName === "list_tools" ? "[]" : "";
-}
-
-function injectClientTools(toolListJson: string): string {
-  const parsed: unknown = JSON.parse(toolListJson);
-  if (!Array.isArray(parsed)) {
-    return toolListJson;
-  }
-
-  if (!parsed.every(isToolGroup)) {
-    return toolListJson;
-  }
-
-  const groups = parsed;
-  const clientGroup = getClientGroup(groups);
-  clientGroup.tools.push({
-    name: "task_completion_notification",
-    description: getTaskCompletionNotificationDescription(),
-    inputSchema: {
-      type: "object",
-      properties: {
-        message: {
-          type: "string",
-          description: getTaskCompletionNotificationMessageDescription(),
-        },
-      },
-      required: ["message"],
-    },
-  });
-
-  return JSON.stringify(groups, null, 2);
-}
-
-function getTaskCompletionNotificationDescription(): string {
-  if (i18n.lang === "zh") {
-    return [
-      "在完成一整件需要用户回来查看的工作时通知用户。",
-      "适合在代码审查、需求实现、提交代码、执行 skill 工作流、长时间任务或一系列复杂工具操作完成后，",
-      "于最终答复前调用一次。",
-      "不要用于普通沟通、简单查询、单个快速检查、中间步骤，或同一用户请求中的重复通知。",
-    ].join("");
-  }
-
-  return [
-    "Notify the user when a complete unit of work is ready for them to review.",
-    "Call this once before the final answer after completing code review, a requested implementation, a code commit,",
-    "a skill workflow, a long-running task, or a series of complex tool operations.",
-    "Do not use it for ordinary conversation, simple lookups, one quick check, intermediate progress,",
-    "or repeated notifications for the same user request.",
-  ].join(" ");
-}
-
-function getTaskCompletionNotificationMessageDescription(): string {
-  return i18n.lang === "zh"
-    ? "简短说明已完成的整件工作，例如：CR 完成，发现 2 个问题。"
-    : "Brief summary of the completed unit of work, for example: Code review complete; found 2 issues.";
-}
-
-function sendTaskCompletionNotification(message: string): Promise<"sent" | "failed"> {
-  return new Promise((resolve) => {
-    try {
-      chrome.runtime.sendMessage(
-        {
-          type: "SHOW_NOTIFICATION",
-          title: `${BRANDING.productName} Task Finished`,
-          message,
-        },
-        (response: unknown) => {
-          void response;
-          // Notification delivery is best-effort.
-          const runtimeError = chrome.runtime.lastError;
-          if (runtimeError) {
-            resolve("failed");
-            return;
-          }
-
-          resolve("sent");
-        }
-      );
-    } catch {
-      resolve("failed");
-    }
-  });
-}
-
-function getClientGroup(groups: ToolGroup[]): ToolGroup & { tools: unknown[] } {
-  let clientGroup = groups.find((group) => group.server === "client");
-  if (!clientGroup) {
-    clientGroup = { server: "client", tools: [] };
-    groups.push(clientGroup);
-  }
-
-  if (!Array.isArray(clientGroup.tools)) {
-    clientGroup.tools = [];
-  }
-
-  return clientGroup as ToolGroup & { tools: unknown[] };
+function getToolResultFallback(_toolName: string): string {
+  return "";
 }
 
 function normalizeToolResponse(response: unknown): ToolExecutionResponse {
@@ -427,23 +294,12 @@ function getRequestId(payload: ToolExecutionPayload): string {
   return payload.request_id ?? "unknown_id";
 }
 
-function getPayloadMessage(payload: ToolExecutionPayload): string | null {
-  const args: unknown = payload.arguments;
-  if (!isRecord(args)) {return null;}
-  const message = args.message;
-  return typeof message === "string" ? message : null;
-}
-
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
-}
-
-function isToolGroup(value: unknown): value is ToolGroup {
-  return isRecord(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

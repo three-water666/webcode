@@ -6,6 +6,7 @@ import { looksLikeToolCall, parseToolCall } from "../modules/toolCallProtocol";
 import { BRANDING, PROTOCOL } from "@webcode/shared";
 import { AutoInitPromptController } from "./auto_init_prompt";
 import { createApprovalState, parseStoredApprovalEntries, type ApprovalState } from "./approval_policy";
+import { CompletionNotifier } from "./completion_notifier";
 import { hasPromptResourceChange, loadPromptsFromStorage } from "./prompt_resources";
 import { logToolSummary, ToolCallTracker } from "./tool_call_tracker";
 import { ToolExecutor } from "./tool_executor";
@@ -70,6 +71,9 @@ chrome.runtime.onMessage.addListener((request) => {
         await loadWorkspaceData(currentWorkspaceId);
         await loadPromptsFromStorage();
         autoInitPrompt.scheduleCheck();
+        if (DOM) {
+          completionNotifier.observe(DOM);
+        }
         runMainLoop();
       })();
     }
@@ -102,6 +106,7 @@ function initDOMConfig() {
         if (matchedSite?.selectors) {
           DOM = matchedSite.selectors;
           currentPlatform = matchedSite.name;
+          completionNotifier.reset();
           autoInitPrompt.setupTrigger();
           autoInitPrompt.scheduleCheck();
           startObserver();
@@ -159,6 +164,8 @@ const toolExecutor = new ToolExecutor({
   requestRegistry,
   scheduleMainLoop,
 });
+
+const completionNotifier = new CompletionNotifier();
 
 /**
  * 延迟调度一次主循环扫描。
@@ -287,7 +294,7 @@ function runMainLoop() {
           UI.triggerAutoSend(CONFIG, selectors);
         });
       } else {
-        // 某些虚拟工具只更新状态或弹通知，没有文本输出；它们完成后也要标记为已处理。
+        // 某些路径可能没有文本输出；它们完成后也要标记为已处理。
         if (resultBatch.hasAnyResult) {
           requestRegistry.markFlushed(resultBatch.ids);
         }
@@ -318,6 +325,10 @@ function runMainLoop() {
  */
 const observer = new MutationObserver(() => {
   if (!isClientConnected) { return; }
+
+  if (DOM) {
+    completionNotifier.observe(DOM);
+  }
 
   // DOM 变化只说明页面可能出现了新内容；延迟扫描能等待流式文本继续补全。
   scheduleMainLoop(CONFIG.pollInterval);
@@ -355,6 +366,9 @@ function startObserver() {
       Logger.log(`${BRANDING.productName} activated for ${currentPlatform} (Connected)`, "info");
       // 连接恢复后先检查自动初始化触发词，再立刻扫描现有消息，避免等待下一次页面变化。
       autoInitPrompt.scheduleCheck();
+      if (DOM) {
+        completionNotifier.observe(DOM);
+      }
       runMainLoop();
     } else {
       isClientConnected = false;

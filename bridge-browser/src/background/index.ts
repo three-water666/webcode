@@ -256,7 +256,17 @@ async function shouldShowNotificationForSender(sender: chrome.runtime.MessageSen
     }
 
     const targetWindow = await chrome.windows.get(windowId);
-    return targetWindow.focused === false;
+    if (targetWindow.focused === false || targetWindow.state === "minimized") {
+      return true;
+    }
+
+    const tabId = sender.tab?.id;
+    if (typeof tabId !== "number") {
+      return false;
+    }
+
+    const targetTab = await chrome.tabs.get(tabId);
+    return targetTab.active === false;
   } catch {
     return true;
   }
