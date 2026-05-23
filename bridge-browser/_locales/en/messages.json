@@ -1,0 +1,10 @@
+{
+  "extensionName": {
+    "message": "webcode bridge",
+    "description": "Extension name"
+  },
+  "extensionDescription": {
+    "message": "Connect Web AI to local VS Code.",
+    "description": "Short extension description"
+  }
+}

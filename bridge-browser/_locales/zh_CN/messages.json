@@ -1,0 +1,10 @@
+{
+  "extensionName": {
+    "message": "webcode bridge",
+    "description": "扩展名称"
+  },
+  "extensionDescription": {
+    "message": "连接 Web AI 与本地 VS Code。",
+    "description": "扩展短描述"
+  }
+}
