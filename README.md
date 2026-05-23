@@ -35,7 +35,7 @@ webcode 用来把 ChatGPT、Gemini、DeepSeek 等这类网页 AI 接到本地 VS
 
 如果 Gateway 已经在运行，点击状态栏里的 `webcode: <端口>` 可以重新打开同一个启动菜单。
 
-其他浏览器方式可以从 `自定义启动...` 里选择。普通 Chrome/Edge、系统默认浏览器、用户配置保活模式都需要手动安装浏览器插件。`Chrome for Testing / Chromium 独立保活模式` 也能自动加载内置 bridge，但需要额外安装 Chrome for Testing / Chromium，或配置 `webcodeGateway.isolatedChrome.executablePath`；首选仍然是 `Edge 独立保活模式`。
+其他浏览器方式可以从 `自定义启动...` 里选择。普通 Chrome/Edge、系统默认浏览器、用户配置保活模式都需要手动安装浏览器插件，可从 [Chrome Web Store](https://chromewebstore.google.com/detail/webcode-bridge/kghhldphcmpiimophipabdhldfipgiio) 或 [GitHub Releases](https://github.com/three-water666/webcode/releases) 下载。`Chrome for Testing / Chromium 独立保活模式` 也能自动加载内置 bridge，但需要额外安装 Chrome for Testing / Chromium，或配置 `webcodeGateway.isolatedChrome.executablePath`；首选仍然是 `Edge 独立保活模式`。
 
 ### 4. 在对话中使用
 

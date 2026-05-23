@@ -32,11 +32,12 @@ export function registerBridgeRoute(app: express.Express, options: BridgeRouteOp
 
         const port = options.getPort();
         const releaseUrl = `${BRANDING.repositoryUrl}/releases`;
+        const storeUrl = 'https://chromewebstore.google.com/detail/webcode-bridge/kghhldphcmpiimophipabdhldfipgiio';
         const workspaceId = createWorkspaceId(options.getWorkspaceRoot());
 
         options.log(`🌉 Bridge handshake requested for workspace [${workspaceId}].`);
 
-        res.send(renderBridgePage({ port, workspaceId, releaseUrl }));
+        res.send(renderBridgePage({ port, workspaceId, releaseUrl, storeUrl }));
     });
 }
 
@@ -44,12 +45,14 @@ type BridgePageOptions = {
     port: number;
     workspaceId: string;
     releaseUrl: string;
+    storeUrl: string;
 };
 
 function renderBridgePage({
     port,
     workspaceId,
-    releaseUrl
+    releaseUrl,
+    storeUrl
 }: BridgePageOptions): string {
     return `
                 <!DOCTYPE html>
@@ -60,9 +63,9 @@ function renderBridgePage({
 
                     ${renderBridgeData({ port, workspaceId })}
 
-                    ${renderInstallGuide(releaseUrl)}
+                    ${renderInstallGuide({ releaseUrl, storeUrl })}
 
-                    ${renderBridgeScript(releaseUrl)}
+                    ${renderBridgeScript()}
                 </body>
                 </html>
             `;
@@ -116,6 +119,12 @@ function renderBridgeHead(): string {
                         .warn { color: #e67e22; font-size: 0.9em; margin-top: 10px; }
                         button { background: #3498db; border: none; padding: 10px 20px; color: white; border-radius: 4px; cursor: pointer; margin-top: 15px; }
                         button:hover { background: #2980b9; }
+                        .download-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+                        .download-link { display:inline-block; color:white; padding:10px 16px; text-decoration:none; border-radius:4px; font-weight:bold; }
+                        .download-link.store { background:#2ea043; }
+                        .download-link.store:hover { background:#238636; }
+                        .download-link.github { background:#e74c3c; }
+                        .download-link.github:hover { background:#c0392b; }
                         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
                     </style>
                 </head>`;
@@ -129,49 +138,53 @@ function renderMainCard(): string {
                     </div>`;
 }
 
-function renderInstallGuide(releaseUrl: string): string {
+function renderInstallGuide({ releaseUrl, storeUrl }: Pick<BridgePageOptions, 'releaseUrl' | 'storeUrl'>): string {
     return `<div class="card" id="install-guide" style="display:none; border: 1px solid #e74c3c; box-shadow: 0 4px 15px rgba(231, 76, 60, 0.2);">
                         <h2 id="install-title" style="color:#e74c3c; margin-bottom:10px">⚠️ Extension Required</h2>
                         <p id="install-desc" style="margin-bottom:20px">To enable auto-connection, you need the companion browser extension:</p>
                         <div style="background:#333; padding:10px; border-radius:6px; margin-bottom:20px; font-weight:bold; color:#fff">
                             🧩 ${BRANDING.bridgeName}
                         </div>
-                        <a id="install-button" href="${escapeHtmlAttr(releaseUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-block; background:#e74c3c; color:white; padding:10px 20px; text-decoration:none; border-radius:4px; font-weight:bold;">
-                            Get Browser Extension
-                        </a>
+                        <div class="download-actions">
+                            <a id="install-store-button" class="download-link store" href="${escapeHtmlAttr(storeUrl)}" target="_blank" rel="noopener noreferrer">
+                                Chrome Web Store
+                            </a>
+                            <a id="install-github-button" class="download-link github" href="${escapeHtmlAttr(releaseUrl)}" target="_blank" rel="noopener noreferrer">
+                                GitHub Releases
+                            </a>
+                        </div>
                         <p id="install-warn" class="warn" style="margin-top:15px; font-size:12px">Already installed? Try reloading this page.</p>
                     </div>`;
 }
 
-function renderBridgeScript(releaseUrl: string): string {
+function renderBridgeScript(): string {
     return `<script>
                         const productName = ${toSafeScriptJson(BRANDING.productName)};
-                        const releaseUrl = ${toSafeScriptJson(releaseUrl)};
                         const isZh = navigator.language.toLowerCase().startsWith('zh');
                         const bridgeI18n = isZh ? {
                             connectingTitle: '正在连接 ' + productName + '...',
                             connectingStatus: '正在与 VS Code 同步...',
                             installTitle: '需要浏览器扩展',
                             installDesc: '要启用自动连接，您需要先安装配套的浏览器扩展：',
-                            installButton: '前往下载浏览器扩展',
-                            installWarn: '如果已经安装，请尝试刷新当前页面。',
-                            installAlert: '请前往 GitHub Releases 下载浏览器插件：' + releaseUrl
+                            storeButton: '去插件商店下载',
+                            githubButton: '去 GitHub 下载',
+                            installWarn: '如果已经安装，请尝试刷新当前页面。'
                         } : {
                             connectingTitle: 'Connecting to ' + productName + '...',
                             connectingStatus: 'Synchronizing with VS Code...',
                             installTitle: 'Browser Extension Required',
                             installDesc: 'To enable auto-connection, you need the companion browser extension:',
-                            installButton: 'Download Browser Extension',
-                            installWarn: 'Already installed? Try reloading this page.',
-                            installAlert: 'Please download the browser extension from GitHub Releases: ' + releaseUrl
+                            storeButton: 'Download from Store',
+                            githubButton: 'Download from GitHub',
+                            installWarn: 'Already installed? Try reloading this page.'
                         };
                         window.__bridgeI18n = bridgeI18n;
                         document.getElementById('bridge-title').textContent = bridgeI18n.connectingTitle;
                         document.getElementById('bridge-status').textContent = bridgeI18n.connectingStatus;
                         document.getElementById('install-title').textContent = bridgeI18n.installTitle;
                         document.getElementById('install-desc').textContent = bridgeI18n.installDesc;
-                        document.getElementById('install-button').textContent = bridgeI18n.installButton;
-                        document.getElementById('install-button').addEventListener('click', () => alert(bridgeI18n.installAlert));
+                        document.getElementById('install-store-button').textContent = bridgeI18n.storeButton;
+                        document.getElementById('install-github-button').textContent = bridgeI18n.githubButton;
                         document.getElementById('install-warn').textContent = bridgeI18n.installWarn;
 
                         // 检测逻辑：等待 1.5 秒
