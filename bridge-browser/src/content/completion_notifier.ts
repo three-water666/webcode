@@ -17,33 +17,57 @@ interface LatestResponseSnapshot {
 }
 
 const NO_RESPONSE_SIGNATURE = "no-response";
+const COMPLETION_SETTLE_MS = 600;
+const COMPLETION_NOTIFICATION_COOLDOWN_MS = 1000;
+const MAX_NOTIFIED_COMPLETION_KEYS = 200;
 
 export class CompletionNotifier {
   private lastSendReady: boolean | null = null;
   private pendingStartSignature: string | null = null;
+  private completionTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastNotificationTime = 0;
   private readonly notifiedCompletionKeys = new Set<string>();
 
   public reset(): void {
+    this.clearCompletionTimer();
     this.lastSendReady = null;
     this.pendingStartSignature = null;
+    this.lastNotificationTime = 0;
+    this.notifiedCompletionKeys.clear();
   }
 
   public observe(domSelectors: SiteSelectors): void {
     const sendReady = isCompletionSendButtonVisible(domSelectors);
     if (this.lastSendReady === null) {
       this.lastSendReady = sendReady;
+      if (!sendReady) {
+        this.pendingStartSignature = getLatestResponseSnapshot(domSelectors)?.signature ?? NO_RESPONSE_SIGNATURE;
+      }
       return;
     }
 
     if (this.lastSendReady && !sendReady) {
+      this.clearCompletionTimer();
       this.pendingStartSignature = getLatestResponseSnapshot(domSelectors)?.signature ?? NO_RESPONSE_SIGNATURE;
     }
 
     if (!this.lastSendReady && sendReady) {
-      this.notifyIfCurrentTurnCompletedWithoutTools(domSelectors);
+      this.scheduleCompletionCheck(domSelectors);
     }
 
     this.lastSendReady = sendReady;
+  }
+
+  private scheduleCompletionCheck(domSelectors: SiteSelectors): void {
+    this.clearCompletionTimer();
+    this.completionTimer = setTimeout(() => {
+      this.completionTimer = null;
+      if (!isCompletionSendButtonVisible(domSelectors)) {
+        return;
+      }
+
+      this.notifyIfCurrentTurnCompletedWithoutTools(domSelectors);
+    }, COMPLETION_SETTLE_MS);
   }
 
   private notifyIfCurrentTurnCompletedWithoutTools(domSelectors: SiteSelectors): void {
@@ -67,7 +91,20 @@ export class CompletionNotifier {
       return;
     }
 
+    const now = Date.now();
+    if (now - this.lastNotificationTime < COMPLETION_NOTIFICATION_COOLDOWN_MS) {
+      return;
+    }
+
     this.notifiedCompletionKeys.add(completionKey);
+    this.lastNotificationTime = now;
+    if (this.notifiedCompletionKeys.size > MAX_NOTIFIED_COMPLETION_KEYS) {
+      const oldestKey = this.notifiedCompletionKeys.values().next().value;
+      if (typeof oldestKey === "string") {
+        this.notifiedCompletionKeys.delete(oldestKey);
+      }
+    }
+
     void sendCompletionNotification().then((result) => {
       if (result === "sent") {
         Logger.log("Completion notification sent", "action");
@@ -75,6 +112,15 @@ export class CompletionNotifier {
         Logger.log("Completion notification failed", "info");
       }
     });
+  }
+
+  private clearCompletionTimer(): void {
+    if (!this.completionTimer) {
+      return;
+    }
+
+    clearTimeout(this.completionTimer);
+    this.completionTimer = null;
   }
 }
 

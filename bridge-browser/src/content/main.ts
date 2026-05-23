@@ -23,6 +23,25 @@ const CONFIG: ConfigState = {
   autoSend: true,
 };
 
+const OBSERVED_STATE_ATTRIBUTES = [
+  "aria-busy",
+  "aria-disabled",
+  "aria-hidden",
+  "aria-label",
+  "class",
+  "data-disabled",
+  "data-loading",
+  "data-state",
+  "data-test-id",
+  "data-testid",
+  "data-visible",
+  "disabled",
+  "hidden",
+  "inert",
+  "style",
+  "title",
+];
+
 // [State] Connection Guard
 let isClientConnected = false;
 let currentWorkspaceId = "global";
@@ -322,6 +341,9 @@ function runMainLoop() {
  * AI 输出通常是流式写入页面的，MutationObserver 可能在很短时间内被触发很多次。这里不直接
  * 调用 runMainLoop，而是通过 scheduleMainLoop 按 CONFIG.pollInterval 节流，让工具解析在
  * 文本相对稳定后再发生，也避免重复解析同一批代码块。
+ *
+ * 很多站点通过 class/style/aria-* 切换发送和停止按钮的可见性，不一定增删 DOM 节点。因此也
+ * 监听常见状态属性变化，让 CompletionNotifier 有机会重新执行可见性判断。
  */
 const observer = new MutationObserver(() => {
   if (!isClientConnected) { return; }
@@ -349,6 +371,8 @@ function startObserver() {
 
   // 1. Start observing immediately (but logic inside is guarded by isClientConnected)
   observer.observe(document.body, {
+    attributes: true,
+    attributeFilter: OBSERVED_STATE_ATTRIBUTES,
     childList: true,
     subtree: true,
     characterData: true
