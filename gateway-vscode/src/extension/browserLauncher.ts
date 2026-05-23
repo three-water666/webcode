@@ -143,11 +143,11 @@ function buildIsolatedBrowserArgs(url: string, profileDir: string, extensionPath
     const normalizedExtensionPath = normalizeBrowserPath(extensionPath);
     const normalizedProfileDir = normalizeBrowserPath(profileDir);
     return [
-        '--new-window',
         `--user-data-dir=${normalizedProfileDir}`,
         `--load-extension=${normalizedExtensionPath}`,
         '--no-first-run',
         '--no-default-browser-check',
+        '--disable-sync',
         '--disable-background-timer-throttling',
         '--disable-renderer-backgrounding',
         '--disable-backgrounding-occluded-windows',
@@ -158,7 +158,6 @@ function buildIsolatedBrowserArgs(url: string, profileDir: string, extensionPath
 
 function buildKeepaliveBrowserArgs(url: string): string[] {
     return [
-        '--new-window',
         '--no-first-run',
         '--no-default-browser-check',
         '--disable-background-timer-throttling',
