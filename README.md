@@ -1,177 +1,94 @@
 # webcode
 
-webcode connects web-based AI products such as ChatGPT, Gemini, and DeepSeek to VS Code with support for MCP and Skills.
+语言：中文 | [English](README_en.md)
 
-[中文说明](README_zh.md)
+webcode 用来把 ChatGPT、Gemini、DeepSeek 等这类网页 AI 接到本地 VS Code 中，支持读、写、编辑本地文件，运行命令，还支持 MCP 和 Skills。
 
-## Disclaimer
+## 快速开始：Edge 独立保活模式
 
-Please read this before using webcode:
+推荐使用 `Edge 独立保活模式`。只需要安装 VS Code 扩展 `webcode gateway`；这个模式会使用独立的 Microsoft Edge profile，并用特殊启动参数让网页置于后台时也能继续渲染和工作，同时自动加载内置的 webcode bridge，不需要手动安装浏览器插件。
 
-1. Use at your own risk. webcode bridges remote AI systems with local tools and files. You are responsible for what those tools are allowed to do.
-2. Check the terms of service of the AI products you use. Automated interaction may not be allowed on some platforms.
-3. Do not send secrets or sensitive code unless you are comfortable sharing that data with the AI provider you are using.
+### 1. 安装 VS Code 扩展
 
-## Key Features
+1. 打开 VS Code 扩展商店。
+2. 搜索 `webcode gateway`。
+3. 安装扩展。
 
-- **Zero-config connection**: VS Code manages the local port and session token automatically.
-- **Browser routing**: Different domains can open in different browsers.
-- **Isolated keepalive browser**: Open Chrome/Edge with a separate profile, the bridge extension, and anti-freeze flags.
-- **Dynamic authentication**: Each session uses a temporary token instead of a fixed browser extension ID allowlist.
-- **Origin isolation**: The gateway only accepts requests from the expected origin.
-- **Workspace skills**: Local skills can be discovered from the current workspace and exposed to the model progressively.
-- **Human-in-the-loop safety**: Sensitive operations can require explicit approval before execution.
+### 2. 启动 Gateway
 
-## Security Model
+1. 在 VS Code 中打开一个具体文件夹或工作区。
+2. 点击右下角状态栏里的 `webcode: 关闭`。
+3. 在弹出的菜单里点击 `启动 webcode`。
+4. 等待状态栏文字变成 `webcode: <端口>`。
 
-webcode is designed to keep the user in control:
+当状态栏显示端口号时，说明本地 Gateway 已经启动。启动成功后会自动打开 AI 启动菜单，不需要再点一次状态栏。
 
-- Sensitive operations such as file writes or command execution can be blocked until you approve them.
-- The gateway runs locally. There is no hosted relay service in the middle.
-- Commands are executed relative to the current workspace and can be restricted by the gateway.
+### 3. 用 Edge 独立保活模式打开目标网页 AI
 
-That said, webcode is still a bridge between a remote model and local tools. Review your tool permissions carefully.
+1. 在启动菜单里选择目标站点，例如 `Open Gemini`、`Open ChatGPT` 或其他支持的入口。
+2. webcode 默认会用 `Edge 独立保活模式` 打开 Microsoft Edge。
+3. 独立 Edge profile 会自动加载内置的 webcode bridge。
+4. 桥接页会自动与本地 Gateway 完成握手。
+5. 握手成功后，浏览器会自动跳转到对应的 AI 站点。
 
-## Installation
+首次使用时，需要在这个独立 Edge profile 中登录一次目标 AI 站点。登录完成后，请回到 VS Code，再从 webcode 启动菜单重新打开一次同一个目标站点；有些网站登录后会跳转或变更域名，导致第一次连接使用的 token 失效。重新跳转后，当 bridge 显示 `ON` 时，表示连接已经可以使用。
 
-### Recommended: VS Code Extension Only
+如果 Gateway 已经在运行，点击状态栏里的 `webcode: <端口>` 可以重新打开同一个启动菜单。
 
-Install `webcode gateway` from the VS Code Marketplace.
+其他浏览器方式可以从 `自定义启动...` 里选择。普通 Chrome/Edge、系统默认浏览器、用户配置保活模式都需要手动安装浏览器插件。`Chrome for Testing / Chromium 独立保活模式` 也能自动加载内置 bridge，但需要额外安装 Chrome for Testing / Chromium，或配置 `webcodeGateway.isolatedChrome.executablePath`；首选仍然是 `Edge 独立保活模式`。
 
-The recommended launch mode is `Edge Isolated Keepalive`. It uses a dedicated Microsoft Edge profile and auto-loads the bundled webcode bridge extension, so you do not need to install a separate browser extension.
+### 4. 在对话中使用
 
-### Optional Browser Extension
+1. 打开目标 AI 站点中的新对话。
+2. 先输入你的实际需求，再在同一条消息末尾添加 `/webcode` 或 `@webcode`。
+3. 当 webcode 询问是否添加初始化提示词时，点击 `添加` 或按 Enter。
+4. webcode 会把触发词替换为初始化提示词。确认消息内容后，由你手动发送。
 
-Install the browser extension only if you want to use regular Chrome/Edge, the system default browser, or user-profile keepalive modes.
+例如：
 
-1. Download the latest `webcode-bridge-browser-x.x.x.zip` from [Releases](https://github.com/three-water666/webcode/releases).
-2. Extract the archive.
-3. Open the browser extensions page:
-   - Chrome: `chrome://extensions`
-   - Edge: `edge://extensions`
-4. Enable Developer Mode.
-5. Click `Load unpacked` and select the extracted folder.
+- `读取 src/utils.ts，然后为它补一个单元测试。 /webcode`
+- `列出当前工作区的文件结构。 @webcode`
+- `把项目文档生成到 docs 目录里。 /webcode`
 
-## Quick Start
+## MCP
 
-### 1. Start the Gateway
+webcode 自带文件读写、代码搜索、命令执行等本地工具，不需要额外配置 MCP server。需要接入浏览器自动化、GitHub、数据库或其他外部能力时，可以通过 `webcodeGateway.servers` 配置第三方 MCP server。
 
-1. Open a folder or workspace in VS Code.
-2. Click `webcode: OFF` in the bottom-right status bar.
-3. In the menu that opens, click `Start webcode`.
-4. Wait for the status bar item to change to `webcode: <port>`.
+具体配置方式见 [MCP 服务配置指南](doc/MCP_GUIDE.md)。
 
-When the status bar shows a port number, the local gateway is running. The AI launch menu opens automatically after startup, so you do not need to click the status bar a second time.
+## Skills
 
-### 2. Open a Supported AI Product with Edge Isolated Keepalive
+webcode 可以把当前 VS Code 工作区中的本地 Skills 暴露给网页 AI，让模型按需读取项目工作流、模板、领域说明或脚本资源。
 
-1. Choose the target site in the launch menu, such as `Open Gemini`, `Open ChatGPT`, or another supported entry.
-2. webcode opens Microsoft Edge in isolated keepalive mode by default.
-3. The isolated Edge profile auto-loads the bundled webcode bridge extension.
-4. The bridge page completes the handshake with the local gateway automatically.
-5. After the handshake succeeds, the browser redirects to the target AI site.
+具体使用方式见 [Skills 使用指南](doc/SKILLS_GUIDE.md)。
 
-Sign in to the target AI site once in the isolated Edge profile. When the bridge extension shows `ON`, the connection is ready to use.
+## 项目规则
 
-If the gateway is already running, click `webcode: <port>` in the status bar to open the same launch menu again.
-
-Other browser modes are available from `Custom Launch...`. Regular Chrome/Edge, system default, and user-profile keepalive modes require the browser extension to be installed manually. Chrome for Testing / Chromium isolated mode can also auto-load the bundled bridge extension, but it requires Chrome for Testing, Chromium, or `webcodeGateway.isolatedChrome.executablePath`; Edge isolated mode is the recommended path.
-
-### 3. Use It in Chat
-
-1. Open a new chat on the target AI site.
-2. Enter your actual task first, then add `/webcode` or `@webcode` at the end of the same message.
-3. When webcode asks whether to add the initialization prompt, choose `Add` or press Enter.
-4. webcode replaces the trigger word with the initialization prompt. Review the message, then send it yourself.
-
-For example:
-
-- `Read src/utils.ts and write a unit test for it. /webcode`
-- `List the files in the current workspace. @webcode`
-- `Create project docs under the docs directory. /webcode`
-
-## Project Rules
-
-During initialization, webcode reads project rule files from the root of the primary VS Code workspace and sends them with the initialization result:
+初始化时，webcode 会从 VS Code 当前打开的主工作区根目录读取项目规则文件，并随初始化结果发送给网页 AI：
 
 - `USER_RULES.md`
-- `AGENTS.md` or `CLAUDE.md`
+- `AGENTS.md` 或 `CLAUDE.md`
 
-If both `AGENTS.md` and `CLAUDE.md` exist, only `AGENTS.md` is sent. The browser extension no longer has a separate custom-instructions settings page.
+如果 `AGENTS.md` 和 `CLAUDE.md` 同时存在，只发送 `AGENTS.md`。浏览器扩展不再提供单独的个性化指令设置页。
 
-## Workspace Skills
+## 其他 AI 平台支持
 
-webcode can expose local skills from the current VS Code workspace.
+webcode 内置支持常见网页 AI，也允许通过 VS Code 配置快速接入新的站点。稳定平台可以加入内置站点列表，实验或私有站点通常只需要配置 `webcodeGateway.aiSites`。
 
-Default scan directories:
+具体步骤见 [站点支持扩展指南](doc/PLATFORM_GUIDE.md)。
 
-- `.agents/skills`
-- `.codex/skills`
-- `skills`
+## 从源码构建
 
-A skill is any directory containing `SKILL.md`.
+源码下载、依赖安装、打包脚本、产物说明和本地安装方式见 [构建指南](doc/BUILD_GUIDE.md)。
 
-The recommended loading flow is:
+## 常见问题
 
-1. Call `list_skills`.
-2. Call `get_skill` for the selected skill.
-3. Call `get_skill` with `resource_path` only when the skill references extra files such as `references/`, `templates/`, or `scripts/`.
+触发词无反应、工具调用执行后页面没有变化、查看历史工具调用等问题见 [常见问题](doc/FAQ_GUIDE.md)。
 
-Example:
+## 参与贡献
 
-```text
-.agents/
-  skills/
-    my-skill/
-      SKILL.md
-      references/
-        examples.md
-```
+欢迎提交 Issue 和 Pull Request。
 
-You can customize scan paths with the VS Code setting `webcodeGateway.skillDirectories`.
-
-## Build From Source
-
-### Requirements
-
-- Node.js 18+
-- VS Code
-
-### 1. Clone the Repository
-
-```bash
-git clone git@github.com:three-water666/webcode.git
-cd webcode
-```
-
-### 2. Build
-
-The build scripts generate both the VS Code extension (`.vsix`) and the browser extension package (`.zip`).
-
-macOS / Linux:
-
-```bash
-chmod +x build_release.sh
-./build_release.sh
-```
-
-Windows PowerShell:
-
-```powershell
-.\build_release.ps1
-```
-
-Build artifacts are written to the `release/` directory.
-
-### 3. Install for Debugging
-
-- VS Code: open Extensions, choose `...`, then `Install from VSIX...`
-- Browser: open the extensions page, enable Developer Mode, click `Load unpacked`, and select the extracted extension folder from `release/` or `bridge-browser`
-
-## Contributing
-
-Issues and pull requests are welcome.
-
-## License
+## 许可证
 
 [MIT License](LICENSE)
