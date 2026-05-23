@@ -131,13 +131,13 @@ For example, with this config:
 }
 ```
 
-After initialization, calling `list_tools` shows tools in the `chrome-devtools` group as:
+After initialization, tools in the `chrome-devtools` group appear in Available Tools as:
 
 ```text
 chrome-devtools:<toolName>
 ```
 
-When calling a third-party tool, use the full name shown by `list_tools`. Example:
+When calling a third-party tool, use the full name shown in Available Tools. Example:
 
 ```json
 {
@@ -196,7 +196,6 @@ The following capabilities are built into webcode and do not require third-party
 - `execute_command`
 - `run_in_terminal`
 - `terminal_session`
-- `list_skills`
 - `get_skill`
 
 These legacy built-in server ids are ignored:
@@ -220,7 +219,7 @@ Check the webcode gateway logs in the VS Code Output panel. Common causes:
 
 ### A tool appears but calls fail
 
-Make sure the call name exactly matches the name shown by `list_tools`. Third-party MCP tools must include the server prefix, for example:
+Make sure the call name exactly matches the name shown in Available Tools. Third-party MCP tools must include the server prefix, for example:
 
 ```text
 chrome-devtools:<toolName>

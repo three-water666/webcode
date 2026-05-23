@@ -5,11 +5,15 @@ export const getSkillTool: LocalTool = {
     serverId: 'internal',
     definition: {
         name: 'get_skill',
-        description: 'Load a workspace skill. Omit resource_path to read SKILL.md and the resource list; include resource_path to read a text resource inside the skill directory. Prefer passing skill_id from list_skills when available.',
+        description: [
+            'Load a workspace skill. Omit resource_path to read SKILL.md and the resource list;',
+            'include resource_path to read a text resource inside the skill directory.',
+            'Prefer passing skill_id from the Available Skills initialization list.'
+        ].join(' '),
         inputSchema: {
             type: 'object',
             properties: {
-                skill_id: { type: 'string', description: 'Stable skill identifier returned by list_skills.' },
+                skill_id: { type: 'string', description: 'Stable skill identifier from the Available Skills initialization list.' },
                 skill_name: { type: 'string', description: 'Fallback skill name when skill_id is unavailable.' },
                 resource_path: {
                     type: 'string',

@@ -1,4 +1,4 @@
-import { BRANDING, PROTOCOL } from "@webcode/shared";
+import { BRANDING, isBootstrapOnlyToolName, PROTOCOL } from "@webcode/shared";
 import type { SiteSelectors } from "../modules/config";
 import * as UI from "../modules/ui";
 import { i18n, t } from "../modules/i18n";
@@ -67,6 +67,11 @@ export class ToolExecutor {
       return;
     }
 
+    if (isBootstrapOnlyToolName(payload.name)) {
+      this.rejectBootstrapOnlyTool(payload);
+      return;
+    }
+
     if (!isPayloadApproved(payload, this.options.getApprovalState())) {
       Logger.log(`${t("hitl_intercept")}: ${payload.name}`, "warn");
       payload.request_id = payload.request_id ?? "unknown_id";
@@ -121,7 +126,7 @@ export class ToolExecutor {
       finalPrompt += `\n\n# Available Skills\n\`\`\`json\n${escapeInlineNewlines(skillsResult)}\n\`\`\``;
     } catch (error) {
       Logger.log(`Initialization data fetch failed: ${getErrorMessage(error)}`, "error");
-      finalPrompt += `\n\n# Initialization Note\nFailed to fetch the tool or skill list. Call \`list_tools\` or \`list_skills\` manually if needed.`;
+      finalPrompt += `\n\n# Initialization Note\nFailed to fetch the tool or skill list. Re-run \`${PROTOCOL.initToolName}\` if needed.`;
     }
 
     this.options.requestRegistry.saveRawResult(requestId, finalPrompt);
@@ -199,6 +204,24 @@ export class ToolExecutor {
         reject(toError(error));
       }
     });
+  }
+
+  private rejectBootstrapOnlyTool(payload: ToolExecutionPayload): void {
+    const requestId = getRequestId(payload);
+    const message = i18n.lang === "zh"
+      ? [
+        `工具 ${payload.name} 仅供 ${BRANDING.productName} 初始化使用，不能由模型直接调用。`,
+        "请根据已初始化的工具和技能列表继续。",
+      ].join("")
+      : [
+        `Tool ${payload.name} is reserved for ${BRANDING.productName} initialization and cannot be called directly by the model.`,
+        " Continue with the initialized tool and skill lists.",
+      ].join("");
+
+    this.options.requestRegistry.markSettled(requestId);
+    Logger.log(`${t("exec_fail")}: ${message}`, "error");
+    this.options.requestRegistry.saveToolResult(requestId, message, true);
+    this.options.scheduleMainLoop(50);
   }
 
   private requestToolApproval(payload: ToolExecutionPayload): Promise<boolean> {

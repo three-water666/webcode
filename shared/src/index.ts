@@ -36,6 +36,18 @@ export const PROTOCOL = {
   observerStartedFlag: `_${brandConfig.slug}_observer_started`,
 } as const;
 
+export const BOOTSTRAP_ONLY_TOOL_NAMES = [
+  'get_project_rules',
+  'list_tools',
+  'list_skills',
+] as const;
+
+export type BootstrapOnlyToolName = typeof BOOTSTRAP_ONLY_TOOL_NAMES[number];
+
+export function isBootstrapOnlyToolName(name: string): name is BootstrapOnlyToolName {
+  return (BOOTSTRAP_ONLY_TOOL_NAMES as readonly string[]).includes(name);
+}
+
 /**
  * 工具执行请求载荷
  * 用于 Browser -> Extension -> Gateway 的链路

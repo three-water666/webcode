@@ -1,3 +1,4 @@
+import { isBootstrapOnlyToolName } from '@webcode/shared';
 import type { LocalTool, ToolDefinition } from '../tools';
 import type { RemoteToolRoute } from './types';
 
@@ -16,6 +17,10 @@ export function generateGroupedTools(
     const allTools = Array.from(toolRouter.values()).map(t => ({ ...t.definition, _server: t.serverId }));
 
     for (const tool of localTools.values()) {
+        if (isBootstrapOnlyToolName(tool.definition.name)) {
+            continue;
+        }
+
         allTools.push({ ...tool.definition, _server: tool.serverId ?? 'internal' });
     }
 
