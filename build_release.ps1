@@ -108,10 +108,17 @@ if (Test-Path $vsTempPath) {
 # The browser extension was already built above. Tell vscode:prepublish to copy
 # the existing dist into the VSIX instead of rebuilding it.
 $previousPrebuiltEnv = $env:WEBCODE_BROWSER_PREBUILT
+$readmePath = Join-Path (Get-Location) "README.md"
+$readmeBackupPath = [System.IO.Path]::GetTempFileName()
+Copy-Item -LiteralPath $readmePath -Destination $readmeBackupPath -Force
 $env:WEBCODE_BROWSER_PREBUILT = "1"
 try {
+    Invoke-CheckedCommand "node scripts/generate-marketplace-readme.mjs"
     Invoke-CheckedCommand "pnpm exec vsce package --out $vsTempName --no-dependencies"
 } finally {
+    Copy-Item -LiteralPath $readmeBackupPath -Destination $readmePath -Force
+    Remove-Item -LiteralPath $readmeBackupPath -Force -ErrorAction SilentlyContinue
+
     if ($null -eq $previousPrebuiltEnv) {
         Remove-Item Env:\WEBCODE_BROWSER_PREBUILT -ErrorAction SilentlyContinue
     } else {

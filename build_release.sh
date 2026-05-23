@@ -71,7 +71,17 @@ VS_TEMP_NAME="${PRODUCT_NAME}-gateway-vscode-${VS_VERSION}.tmp.vsix"
 # Package to a temp file inside the extension folder first, then move into release.
 # The browser extension was already built above, so prepublish only copies it.
 rm -f "${VS_TEMP_NAME}"
+README_BACKUP="$(mktemp)"
+cp README.md "${README_BACKUP}"
+restore_readme() {
+  cp "${README_BACKUP}" README.md
+  rm -f "${README_BACKUP}"
+}
+trap restore_readme EXIT
+node scripts/generate-marketplace-readme.mjs
 WEBCODE_BROWSER_PREBUILT=1 pnpm exec vsce package --out "${VS_TEMP_NAME}" --no-dependencies
+restore_readme
+trap - EXIT
 rm -f "../release/${VS_NAME}"
 mv -f "${VS_TEMP_NAME}" "../release/${VS_NAME}"
 echo -e "${GREEN}VS Code Extension built: release/${VS_NAME}${NC}"
