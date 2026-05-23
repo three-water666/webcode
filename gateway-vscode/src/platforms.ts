@@ -38,7 +38,8 @@ const BUILTIN_PLATFORMS: BuiltinPlatformDefinition[] = [
             codeBlocks: 'pre code',
             inputArea: '#prompt-textarea',
             sendButton: 'button[data-testid="send-button"]',
-            stopButton: 'button[data-testid="stop-button"]'
+            stopButton: 'button[data-testid="stop-button"]',
+            maxInlineChars: 20000
         }
     },
     {
@@ -54,7 +55,8 @@ const BUILTIN_PLATFORMS: BuiltinPlatformDefinition[] = [
             codeBlocks: 'pre code',
             inputArea: 'div[contenteditable="true"]',
             sendButton: 'button[aria-label="发送"], button[aria-label="Send"], button[aria-label*="Send"]',
-            stopButton: 'button[aria-label*="Stop"], button[aria-label*="停止"]'
+            stopButton: 'button[aria-label*="Stop"], button[aria-label*="停止"]',
+            maxInlineChars: 20000
         }
     },
     {
@@ -70,7 +72,8 @@ const BUILTIN_PLATFORMS: BuiltinPlatformDefinition[] = [
             codeBlocks: 'pre code',
             inputArea: 'textarea',
             sendButton: 'ms-run-button button',
-            stopButton: 'ms-run-button button:has(.spin)'
+            stopButton: 'ms-run-button button:has(.spin)',
+            maxInlineChars: 20000
         }
     },
     {
@@ -86,7 +89,8 @@ const BUILTIN_PLATFORMS: BuiltinPlatformDefinition[] = [
             codeBlocks: '.ds-markdown.ds-assistant-message-main-content pre',
             inputArea: 'textarea.ds-scroll-area',
             sendButton: "div[role='button']:has(path[d^='M8.3125'])",
-            stopButton: "div[role='button']:has(path[d^='M2 4.88'])"
+            stopButton: "div[role='button']:has(path[d^='M2 4.88'])",
+            maxInlineChars: 20000
         }
     },
     {
@@ -120,6 +124,7 @@ const BUILTIN_PLATFORMS: BuiltinPlatformDefinition[] = [
             inputArea: 'div[contenteditable="true"]',
             sendButton: 'button[aria-label="Send message"]',
             stopButton: 'button[aria-label="Stop response"]',
+            maxInlineChars: 20000
         }
     }
 ];
