@@ -193,6 +193,7 @@ export class SkillManager {
     const raw = await fs.readFile(skillFilePath, 'utf8');
     const parsed = this.parseSkillFile(raw, rootPath);
     const relativePath = this.normalizeRelativePath(path.relative(workspaceFolder.uri.fsPath, rootPath));
+    const relativeSkillFilePath = this.normalizeRelativePath(path.relative(workspaceFolder.uri.fsPath, skillFilePath));
     const sourceDirNormalized = this.normalizeRelativePath(sourceDir);
     const id = `${workspaceFolder.name}:${relativePath}`;
 
@@ -202,7 +203,7 @@ export class SkillManager {
       description: parsed.description,
       relativePath,
       sourceDir: sourceDirNormalized,
-      skillFilePath
+      skillFilePath: relativeSkillFilePath
     };
   }
 

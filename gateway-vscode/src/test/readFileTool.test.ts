@@ -2,6 +2,7 @@ import * as fs from 'fs/promises';
 import * as assert from 'assert';
 import * as os from 'os';
 import * as path from 'path';
+import { resolveWorkspacePath } from '../tools/filesystemUtils';
 import { readFileContent, readFilePrefix, selectReadFileContent, selectReadFileResult } from '../tools/readFileTool';
 
 suite('Read File Tool', () => {
@@ -155,6 +156,22 @@ suite('Read File Tool', () => {
         await withTempFileBytes(Buffer.from([0x61, 0xC0]), async filePath => {
             assert.strictEqual(await readFilePrefix(filePath, 2), 'a\uFFFD');
         });
+    });
+
+    test('resolves workspace-relative posix paths', async () => {
+        const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'read-file-tool-workspace-'));
+        const skillFilePath = path.join(tempDir, '.codex', 'skills', 'release-package', 'SKILL.md');
+        try {
+            await fs.mkdir(path.dirname(skillFilePath), { recursive: true });
+            await fs.writeFile(skillFilePath, '# release-package\n', 'utf8');
+
+            assert.strictEqual(
+                await resolveWorkspacePath(tempDir, '.codex/skills/release-package/SKILL.md'),
+                await fs.realpath(skillFilePath)
+            );
+        } finally {
+            await fs.rm(tempDir, { recursive: true, force: true });
+        }
     });
 });
 
