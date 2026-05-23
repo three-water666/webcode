@@ -1,8 +1,8 @@
-# 🏗️ 构建指南
+# 构建指南
 
 您可以使用项目内置的脚本一键打包 VS Code 插件 (`.vsix`) 和浏览器插件 (`.zip`)。
 
-## 🍎 macOS / 🐧 Linux
+## macOS / Linux
 
 在项目根目录下运行 Bash 脚本：
 
@@ -11,7 +11,7 @@ chmod +x build_release.sh
 ./build_release.sh
 ```
 
-## 🪟 Windows
+## Windows
 
 可以使用 PowerShell 脚本进行原生打包（无需安装 Bash 或 WSL）：
 
@@ -26,14 +26,14 @@ chmod +x build_release.sh
 .\build_release.ps1
 ```
 
-> **⚠️ 常见问题**：如果运行报错提示“在此系统上禁止运行脚本”，请以管理员身份打开 PowerShell 并执行以下命令开启权限，然后重试：
+> **常见问题**：如果运行报错提示“在此系统上禁止运行脚本”，请以管理员身份打开 PowerShell 并执行以下命令开启权限，然后重试：
 > ```powershell
 > Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 > ```
 
 ---
 
-## 📦 产物说明
+## 产物说明
 
 打包成功后，根目录下会自动生成 `release/` 文件夹，包含：
 
@@ -45,7 +45,7 @@ chmod +x build_release.sh
   - 浏览器插件压缩包。
   - 安装方法：解压后 -> Chrome/Edge 扩展管理页 -> 打开“开发者模式” -> **加载已解压的扩展程序**。
 
-## 🚀 自动 GitHub Release
+## 自动 GitHub Release
 
 推送类似 `0.6.2` 的版本 tag 后，会触发 GitHub Actions 发布流水线。流水线会构建 `.vsix` 和 `.zip` 产物，从 `changelogs/en/` 与 `changelogs/zh/` 中读取对应版本文件，并用中英文更新日志创建或更新 GitHub Release。
 

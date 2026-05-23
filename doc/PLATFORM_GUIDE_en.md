@@ -203,13 +203,6 @@ Manual checks:
 8. Verify auto-send works
 9. Verify oversize results switch to the file-upload fallback when needed
 
-### Step 5: Document the New Built-In Platform
-
-If the platform is meant to be public and permanent, update:
-
-- [README.md](README.md)
-- [README_zh.md](README_zh.md)
-- Release notes if needed
 
 ## Option B: Add a Site Only Through VS Code Configuration
 

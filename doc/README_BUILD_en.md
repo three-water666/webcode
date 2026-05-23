@@ -1,8 +1,8 @@
-# 🏗️ Build Guide
+# Build Guide
 
 You can use the built-in scripts to package the VS Code extension (`.vsix`) and the browser extension (`.zip`) with one click.
 
-## 🍎 macOS / 🐧 Linux
+## macOS / Linux
 
 Run the Bash script in the project root directory:
 
@@ -11,7 +11,7 @@ chmod +x build_release.sh
 ./build_release.sh
 ```
 
-## 🪟 Windows
+## Windows
 
 You can use the PowerShell script for native packaging (no Bash or WSL required):
 
@@ -26,14 +26,14 @@ Execute in a PowerShell terminal:
 .\build_release.ps1
 ```
 
-> **⚠️ Common Issue**: If you see an error saying "running scripts is disabled on this system", open PowerShell as Administrator, run the following command to enable permissions, and try again:
+> **Common Issue**: If you see an error saying "running scripts is disabled on this system", open PowerShell as Administrator, run the following command to enable permissions, and try again:
 > ```powershell
 > Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 > ```
 
 ---
 
-## 📦 Artifacts
+## Artifacts
 
 After a successful build, a `release/` folder will be generated in the root directory containing:
 
@@ -45,7 +45,7 @@ After a successful build, a `release/` folder will be generated in the root dire
   - Browser extension archive.
   - Installation: Unzip -> Chrome/Edge Extensions page -> Enable "Developer mode" -> **Load unpacked**.
 
-## 🚀 Automated GitHub Release
+## Automated GitHub Release
 
 Pushing a version tag such as `0.6.2` triggers the GitHub Actions release workflow. It builds the `.vsix` and `.zip` artifacts, reads the matching version files from `changelogs/en/` and `changelogs/zh/`, and creates or updates the GitHub Release with bilingual release notes.
 

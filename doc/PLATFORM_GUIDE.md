@@ -206,13 +206,6 @@ pnpm --filter bridge-browser exec tsc -p . --noEmit
 8. 验证自动发送正常
 9. 验证超长结果会正确切换到文件上传兜底
 
-### 第五步：补充文档
-
-如果这是一个面向所有用户的长期内置平台，建议同步更新：
-
-- [README.md](README.md)
-- [README_zh.md](README_zh.md)
-- 需要的话也更新发布说明
 
 ## 方案 B：只通过 VS Code 配置新增站点
 
