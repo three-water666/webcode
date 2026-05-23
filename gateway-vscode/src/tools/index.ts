@@ -2,7 +2,6 @@ import type { LocalTool } from './types';
 import { editFileTool } from './editFileTool';
 import { executeCommandTool } from './executeCommandTool';
 import { getProjectRulesTool } from './getProjectRulesTool';
-import { getSkillTool } from './getSkillTool';
 import { listSkillsTool } from './listSkillsTool';
 import { listToolsTool } from './listToolsTool';
 import { readFileTool } from './readFileTool';
@@ -23,8 +22,7 @@ const LOCAL_TOOLS: LocalTool[] = [
     executeCommandTool,
     runInTerminalTool,
     terminalSessionTool,
-    listSkillsTool,
-    getSkillTool
+    listSkillsTool
 ];
 
 export function createLocalToolMap(): Map<string, LocalTool> {

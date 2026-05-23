@@ -196,7 +196,6 @@ SSE 示例：
 - `execute_command`
 - `run_in_terminal`
 - `terminal_session`
-- `get_skill`
 
 旧配置中的这些 server id 会被忽略：
 

@@ -12,23 +12,20 @@ const MAX_SCAN_DEPTH = 8;
 const CACHE_TTL_MS = 30000;
 
 export interface SkillSummary {
-  id: string;
   name: string;
   description: string;
-  workspaceFolder: string;
   relativePath: string;
   sourceDir: string;
+  skillFilePath: string;
 }
 
 interface SkillEntry extends SkillSummary {
-  rootPath: string;
-  skillFilePath: string;
+  id: string;
 }
 
 interface ParsedSkillFile {
   name?: string;
   description: string;
-  body: string;
 }
 
 interface SkillCacheRecord {
@@ -70,98 +67,6 @@ export class SkillManager {
       .map(({ entry }) => this.toSummary(entry));
 
     return ranked;
-  }
-
-  async getSkillDetails(
-    params: { skill_id?: string; skill_name?: string },
-    customDirectories: string[] = []
-  ) {
-    const skill = await this.resolveSkill(params, customDirectories);
-    const raw = await fs.readFile(skill.skillFilePath, 'utf8');
-    const parsed = this.parseSkillFile(raw, skill.rootPath);
-    const resources = await this.listSkillResources(skill.rootPath);
-
-    return {
-      skill: this.toSummary(skill),
-      content: parsed.body.trim(),
-      resources
-    };
-  }
-
-  async getSkillResource(
-    params: { skill_id?: string; skill_name?: string; resource_path: string },
-    customDirectories: string[] = []
-  ) {
-    const skill = await this.resolveSkill(params, customDirectories);
-    const requestedPath = params.resource_path?.trim();
-
-    if (!requestedPath) {
-      throw new Error('Missing required field: resource_path');
-    }
-
-    const absolutePath = path.resolve(skill.rootPath, requestedPath);
-    if (!this.isSubPath(skill.rootPath, absolutePath)) {
-      throw new Error(`Resource path is outside the skill directory: ${requestedPath}`);
-    }
-
-    const realSkillRoot = await fs.realpath(skill.rootPath);
-    const realResourcePath = await fs.realpath(absolutePath).catch(() => null);
-    if (!realResourcePath) {
-      throw new Error(`Skill resource not found: ${requestedPath}`);
-    }
-    if (!this.isSubPath(realSkillRoot, realResourcePath)) {
-      throw new Error(`Resource path is outside the skill directory: ${requestedPath}`);
-    }
-
-    const stat = await fs.stat(realResourcePath).catch(() => null);
-    if (!stat?.isFile()) {
-      throw new Error(`Skill resource not found: ${requestedPath}`);
-    }
-
-    const content = await fs.readFile(realResourcePath, 'utf8');
-    return {
-      skill: this.toSummary(skill),
-      resource_path: this.normalizeRelativePath(path.relative(skill.rootPath, absolutePath)),
-      content
-    };
-  }
-
-  private async resolveSkill(
-    params: { skill_id?: string; skill_name?: string },
-    customDirectories: string[]
-  ): Promise<SkillEntry> {
-    const entries = await this.scanSkills(customDirectories);
-    const skillId = params.skill_id?.trim();
-    const skillName = params.skill_name?.trim();
-
-    if (!skillId && !skillName) {
-      throw new Error('Provide either skill_id or skill_name');
-    }
-
-    if (skillId) {
-      const byId = entries.find((entry) => entry.id === skillId);
-      if (byId) {
-        return byId;
-      }
-    }
-
-    if (skillName) {
-      const exact = entries.filter((entry) => entry.name === skillName);
-      if (exact.length === 1) {
-        return exact[0];
-      }
-      if (exact.length > 1) {
-        const ids = exact.map((entry) => entry.id).join(', ');
-        throw new Error(`Multiple skills found for "${skillName}". Use skill_id instead: ${ids}`);
-      }
-
-      const insensitive = entries.find((entry) => entry.name.toLowerCase() === skillName.toLowerCase());
-      if (insensitive) {
-        return insensitive;
-      }
-    }
-
-    throw new Error(`Skill not found: ${skillId ?? skillName}`);
   }
 
   private async scanSkills(customDirectories: string[]): Promise<SkillEntry[]> {
@@ -295,10 +200,8 @@ export class SkillManager {
       id,
       name: parsed.name ?? path.basename(rootPath),
       description: parsed.description,
-      workspaceFolder: workspaceFolder.name,
       relativePath,
       sourceDir: sourceDirNormalized,
-      rootPath,
       skillFilePath
     };
   }
@@ -341,8 +244,7 @@ export class SkillManager {
 
     return {
       name: parsedName,
-      description: parsedDescription,
-      body
+      description: parsedDescription
     };
   }
 
@@ -369,37 +271,6 @@ export class SkillManager {
     }
 
     return buffer.join(' ').slice(0, 240);
-  }
-
-  private async listSkillResources(skillRoot: string): Promise<string[]> {
-    const resources: string[] = [];
-    const stack = [skillRoot];
-    const realSkillRoot = await fs.realpath(skillRoot);
-
-    while (stack.length > 0) {
-      const currentDir = stack.pop();
-      if (!currentDir) {continue;}
-      const entries = await fs.readdir(currentDir, { withFileTypes: true }).catch(() => []);
-
-      for (const entry of entries) {
-        const absolutePath = path.join(currentDir, entry.name);
-        const realPath = await fs.realpath(absolutePath).catch(() => null);
-        if (!realPath || !this.isSubPath(realSkillRoot, realPath)) {
-          continue;
-        }
-
-        if (entry.isDirectory()) {
-          stack.push(realPath);
-          continue;
-        }
-        if (entry.name === 'SKILL.md') {
-          continue;
-        }
-        resources.push(this.normalizeRelativePath(path.relative(skillRoot, absolutePath)));
-      }
-    }
-
-    return resources.sort();
   }
 
   private scoreSkill(entry: SkillEntry, query: string, tokens: string[]): number {
@@ -435,12 +306,11 @@ export class SkillManager {
 
   private toSummary(entry: SkillEntry): SkillSummary {
     return {
-      id: entry.id,
       name: entry.name,
       description: entry.description,
-      workspaceFolder: entry.workspaceFolder,
       relativePath: entry.relativePath,
-      sourceDir: entry.sourceDir
+      sourceDir: entry.sourceDir,
+      skillFilePath: entry.skillFilePath
     };
   }
 

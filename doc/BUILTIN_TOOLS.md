@@ -22,7 +22,6 @@
 | `execute_command` | 在后台执行短生命周期 POSIX/bash 命令并返回 stdout/stderr/exitCode，适用于构建、测试、git、包管理器和项目脚本。读取或搜索文件应优先使用 `read_file`、`search_files`、`search_code`。 |
 | `run_in_terminal` | 在 VS Code 可见终端会话中启动一条长时间运行的 POSIX shell 命令，立即返回 `session_id`，适合常驻任务或需要用户可见输出的任务。Windows 上要求 Git Bash，命令应使用 bash/POSIX 语法，而不是 cmd.exe 或 PowerShell 语法；明显破坏性、提权或 shell 逃逸类命令会在执行前被拒绝。 |
 | `terminal_session` | 管理由 `run_in_terminal` 创建的终端会话：`action=list` 查看状态，`action=read` 读取输出，`action=stop` 停止会话。 |
-| `get_skill` | 读取指定 skill 的 `SKILL.md` 内容和资源列表；传入 `resource_path` 时读取 skill 目录下的文本资源文件。 |
 
 ## 2. Bootstrap-only tools
 
@@ -32,7 +31,7 @@
 | --- | --- |
 | `get_project_rules` | 读取 workspace 根目录中的 `USER_RULES.md`、`AGENTS.md` 或 `CLAUDE.md`，用于组装初始化提示词。 |
 | `list_tools` | 返回模型可用工具列表，按 server 分组，每个工具都包含完整 schema，用于组装初始化提示词。 |
-| `list_skills` | 列出当前 workspace 中发现的本地 skills，用于组装初始化提示词中的 Available Skills。 |
+| `list_skills` | 列出当前 workspace 中发现的本地 skills，用于组装初始化提示词中的 Available Skills；每项包含 `skillFilePath`，可直接交给 `read_file` 读取 `SKILL.md`。 |
 
 ## 3. Browser client virtual tools
 

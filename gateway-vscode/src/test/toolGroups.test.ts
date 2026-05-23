@@ -9,15 +9,14 @@ suite('Gateway tool grouping', () => {
             ['list_tools', createLocalTool('list_tools')],
             ['get_project_rules', createLocalTool('get_project_rules')],
             ['list_skills', createLocalTool('list_skills')],
-            ['read_file', createLocalTool('read_file')],
-            ['get_skill', createLocalTool('get_skill')]
+            ['read_file', createLocalTool('read_file')]
         ]));
 
         const internalGroup = groups.find(group => group.server === 'internal');
         assert.ok(internalGroup);
         assert.deepStrictEqual(
             internalGroup.tools.map(tool => tool.name),
-            ['get_skill', 'read_file']
+            ['read_file']
         );
     });
 });

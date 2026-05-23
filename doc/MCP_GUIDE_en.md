@@ -196,7 +196,6 @@ The following capabilities are built into webcode and do not require third-party
 - `execute_command`
 - `run_in_terminal`
 - `terminal_session`
-- `get_skill`
 
 These legacy built-in server ids are ignored:
 

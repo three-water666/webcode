@@ -38,7 +38,7 @@
 4. **工具分组**：工具列表按服务器来源分组，所有可用工具都会在 `tools` 数组中直接展示完整定义。第三方 MCP 工具名会带有服务器前缀（`server:tool`）；裸名只保留给本地/内置工具。
 5. **优先使用专用文件工具**：查找工作区文件用 `search_files`。搜索代码或文本内容用 `search_code`。读取文件内容或指定行范围用 `read_file`。不要为了查看文件而用 `execute_command` 执行 `grep`、`rg`、`find`、`cat`、`sed`、`awk`、`nl` 等 shell 命令。
 6. **命令工具适用范围**：`execute_command` 用于构建、测试、包管理器、git 命令和项目脚本。只有长时间运行或需要可见终端输出时才使用 `run_in_terminal`。
-7. **Skills 与渐进式加载**：如果初始化上下文中存在 Available Skills 和 `get_skill` 工具，说明当前工作区提供了本地 skills。
-   - 在用户需要工作流、模板、领域指南、安装说明或专用能力时，先从 Available Skills 中选择合适的 `skill_id`。
-   - 在真正使用某个 skill 之前，先调用 `get_skill` 读取它的 `SKILL.md`，不要仅凭名字猜测规则。
-   - 如果 `SKILL.md` 提到了 `references/`、`templates/`、`scripts/` 等附属文件，再按需调用 `get_skill` 并传入 `resource_path` 继续读取。
+7. **Skills 与渐进式加载**：如果初始化上下文中存在 Available Skills，说明当前工作区提供了本地 skills。
+   - 在用户需要工作流、模板、领域指南、安装说明或专用能力时，先根据 Available Skills 的 `name`、`description` 和路径信息选择合适的 skill。
+   - 在真正使用某个 skill 之前，使用该条目的 `skillFilePath` 调用 `read_file` 读取对应 `SKILL.md`，不要仅凭名字猜测规则。
+   - 如果 `SKILL.md` 提到了 `references/`、`templates/` 等文本附属文件，再按需用 `read_file` 读取；如果需要运行 `scripts/` 或项目脚本，短任务用 `execute_command`，长时间运行或需要可见终端输出时用 `run_in_terminal`。
