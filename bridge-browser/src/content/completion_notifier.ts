@@ -1,13 +1,8 @@
 import { BRANDING } from "@webcode/shared";
 import { type SiteSelectors } from "../modules/config";
-import { isElementVisible } from "../modules/dom_helpers";
 import { i18n } from "../modules/i18n";
 import { Logger } from "../modules/logger";
-import {
-  getSendButton,
-  isSendButtonActuallyStopButton,
-  isStopButtonVisible,
-} from "../modules/page_selectors";
+import { isStopButtonVisible } from "../modules/page_selectors";
 import { looksLikeToolCall } from "../modules/toolCallProtocol";
 
 interface LatestResponseSnapshot {
@@ -22,7 +17,7 @@ const COMPLETION_NOTIFICATION_COOLDOWN_MS = 1000;
 const MAX_NOTIFIED_COMPLETION_KEYS = 200;
 
 export class CompletionNotifier {
-  private lastSendReady: boolean | null = null;
+  private lastIdle: boolean | null = null;
   private pendingStartSignature: string | null = null;
   private completionTimer: ReturnType<typeof setTimeout> | null = null;
   private lastNotificationTime = 0;
@@ -30,39 +25,39 @@ export class CompletionNotifier {
 
   public reset(): void {
     this.clearCompletionTimer();
-    this.lastSendReady = null;
+    this.lastIdle = null;
     this.pendingStartSignature = null;
     this.lastNotificationTime = 0;
     this.notifiedCompletionKeys.clear();
   }
 
   public observe(domSelectors: SiteSelectors): void {
-    const sendReady = isCompletionSendButtonVisible(domSelectors);
-    if (this.lastSendReady === null) {
-      this.lastSendReady = sendReady;
-      if (!sendReady) {
+    const isIdle = isCompletionIdle(domSelectors);
+    if (this.lastIdle === null) {
+      this.lastIdle = isIdle;
+      if (!isIdle) {
         this.pendingStartSignature = getLatestResponseSnapshot(domSelectors)?.signature ?? NO_RESPONSE_SIGNATURE;
       }
       return;
     }
 
-    if (this.lastSendReady && !sendReady) {
+    if (this.lastIdle && !isIdle) {
       this.clearCompletionTimer();
       this.pendingStartSignature = getLatestResponseSnapshot(domSelectors)?.signature ?? NO_RESPONSE_SIGNATURE;
     }
 
-    if (!this.lastSendReady && sendReady) {
+    if (!this.lastIdle && isIdle) {
       this.scheduleCompletionCheck(domSelectors);
     }
 
-    this.lastSendReady = sendReady;
+    this.lastIdle = isIdle;
   }
 
   private scheduleCompletionCheck(domSelectors: SiteSelectors): void {
     this.clearCompletionTimer();
     this.completionTimer = setTimeout(() => {
       this.completionTimer = null;
-      if (!isCompletionSendButtonVisible(domSelectors)) {
+      if (!isCompletionIdle(domSelectors)) {
         return;
       }
 
@@ -124,17 +119,8 @@ export class CompletionNotifier {
   }
 }
 
-function isCompletionSendButtonVisible(domSelectors: SiteSelectors): boolean {
-  const sendButton = getSendButton(domSelectors);
-  if (!sendButton) {
-    return false;
-  }
-
-  if (isStopButtonVisible(domSelectors) || isSendButtonActuallyStopButton(domSelectors, sendButton)) {
-    return false;
-  }
-
-  return isElementVisible(sendButton);
+function isCompletionIdle(domSelectors: SiteSelectors): boolean {
+  return !isStopButtonVisible(domSelectors);
 }
 
 function getLatestResponseSnapshot(domSelectors: SiteSelectors): LatestResponseSnapshot | null {
