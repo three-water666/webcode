@@ -8,6 +8,10 @@ import {
 } from "./command_approval";
 import { isElementVisible } from "./dom_helpers";
 import { t } from "./i18n";
+import {
+  clearWindowAttention,
+  showUserAttentionNotification,
+} from "./user_attention";
 
 const MODAL_EVENT_GUARD_TYPES = [
   "beforeinput",
@@ -80,17 +84,12 @@ function installModalEventGuards(
   };
 }
 
-function sendWindowAttentionMessage(type: "REQUEST_WINDOW_ATTENTION" | "CLEAR_WINDOW_ATTENTION"): void {
-  if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {return;}
-
-  try {
-    chrome.runtime.sendMessage({ type }, () => {
-      // Attention requests are best-effort and should not block the modal lifecycle.
-      void chrome.runtime.lastError;
-    });
-  } catch {
-    // The modal can outlive the extension context during reloads or navigation.
-  }
+function showApprovalAttentionNotification(payload: ToolExecutionPayload): void {
+  void showUserAttentionNotification({
+    title: t("hitl_title"),
+    message: `${t("hitl_intercept")}: ${payload.name}`,
+    onlyWhenWindowInBackground: true,
+  });
 }
 
 // === HITL 弹窗 (Shadow DOM) ===
@@ -279,7 +278,7 @@ export function showConfirmationModal(
   const closeModal = () => {
     if (isClosed) {return;}
     isClosed = true;
-    sendWindowAttentionMessage("CLEAR_WINDOW_ATTENTION");
+    clearWindowAttention();
     removeModalGuards();
     host.remove();
   };
@@ -380,7 +379,7 @@ export function showConfirmationModal(
   };
   overlay.appendChild(card);
   shadow.appendChild(overlay);
-  sendWindowAttentionMessage("REQUEST_WINDOW_ATTENTION");
+  showApprovalAttentionNotification(payload);
 }
 
 function renderExecutableApprovalOption(executableKey: string, isBroadExecutable: boolean): string {

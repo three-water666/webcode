@@ -4,6 +4,7 @@ import { i18n } from "../modules/i18n";
 import { Logger } from "../modules/logger";
 import { isStopButtonVisible } from "../modules/page_selectors";
 import { looksLikeToolCall } from "../modules/toolCallProtocol";
+import { showUserAttentionNotification } from "../modules/user_attention";
 
 interface LatestResponseSnapshot {
   signature: string;
@@ -142,37 +143,10 @@ function getLatestResponseSnapshot(domSelectors: SiteSelectors): LatestResponseS
 }
 
 function sendCompletionNotification(): Promise<"sent" | "skipped" | "failed"> {
-  return new Promise((resolve) => {
-    try {
-      chrome.runtime.sendMessage(
-        {
-          type: "SHOW_NOTIFICATION",
-          title: `${BRANDING.productName} Task Finished`,
-          message: getCompletionNotificationMessage(),
-          onlyWhenWindowInBackground: true,
-        },
-        (response: unknown) => {
-          if (chrome.runtime.lastError) {
-            resolve("failed");
-            return;
-          }
-
-          if (isRecord(response) && response.skipped === true) {
-            resolve("skipped");
-            return;
-          }
-
-          if (isRecord(response) && response.success === false) {
-            resolve("failed");
-            return;
-          }
-
-          resolve("sent");
-        }
-      );
-    } catch {
-      resolve("failed");
-    }
+  return showUserAttentionNotification({
+    title: `${BRANDING.productName} Task Finished`,
+    message: getCompletionNotificationMessage(),
+    onlyWhenWindowInBackground: true,
   });
 }
 
@@ -189,8 +163,4 @@ function hashStableString(value: string): string {
     hash = Math.imul(hash, 16777619);
   }
   return (hash >>> 0).toString(36);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }

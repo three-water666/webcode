@@ -3,6 +3,8 @@ import { BRANDING, PROTOCOL } from '@webcode/shared';
 
 // === Background Service (MV3 Persistent Edition) ===
 
+const NOTIFICATION_ID_PREFIX = "webcode-tab";
+
 // 初始化：设置默认状态
 chrome.runtime.onInstalled.addListener(async () => {
   // 初始化用户配置 (storage.sync)
@@ -184,6 +186,10 @@ chrome.runtime.onMessage.addListener((request: MessageRequest, sender, sendRespo
   return false;
 });
 
+chrome.notifications.onClicked.addListener((notificationId) => {
+  void focusNotificationSourceTab(notificationId);
+});
+
 // === 数据层 ===
 async function getSession(tabId: number): Promise<Session | undefined> {
   const key = `session_${tabId}`;
@@ -240,7 +246,11 @@ async function showNotification(
       }
     }
 
-    const notificationId = await createNotification(request);
+    if (request.drawAttention) {
+      void updateWindowAttention(sender, true);
+    }
+
+    const notificationId = await createNotification(request, sender);
 
     return { success: true, notificationId };
   } catch (error) {
@@ -272,9 +282,14 @@ async function shouldShowNotificationForSender(sender: chrome.runtime.MessageSen
   }
 }
 
-function createNotification(request: MessageRequest): Promise<string> {
+function createNotification(
+  request: MessageRequest,
+  sender: chrome.runtime.MessageSender
+): Promise<string> {
   return new Promise((resolve, reject) => {
+    const notificationId = createNotificationId(sender);
     chrome.notifications.create(
+      notificationId,
       {
         type: "basic",
         iconUrl: "icons/icon128.png",
@@ -282,16 +297,59 @@ function createNotification(request: MessageRequest): Promise<string> {
         message: request.message ?? "Task Completed",
         priority: 2,
       },
-      (notificationId) => {
+      (createdNotificationId) => {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message));
           return;
         }
 
-        resolve(notificationId);
+        resolve(createdNotificationId);
       }
     );
   });
+}
+
+function createNotificationId(sender: chrome.runtime.MessageSender): string {
+  const tabId = sender.tab?.id;
+  const tabPart = typeof tabId === "number" ? String(tabId) : "none";
+  const uniquePart = Math.random().toString(36).slice(2, 8);
+  return `${NOTIFICATION_ID_PREFIX}-${tabPart}-${Date.now()}-${uniquePart}`;
+}
+
+function getNotificationSourceTabId(notificationId: string): number | null {
+  const match = notificationId.match(new RegExp(`^${NOTIFICATION_ID_PREFIX}-(\\d+)-`));
+  if (!match) {return null;}
+
+  const tabId = Number(match[1]);
+  return Number.isInteger(tabId) ? tabId : null;
+}
+
+async function focusNotificationSourceTab(notificationId: string): Promise<void> {
+  try {
+    const tabId = getNotificationSourceTabId(notificationId);
+    if (tabId === null) {return;}
+
+    const tab = await chrome.tabs.get(tabId);
+    if (typeof tab.windowId === "number" && tab.windowId !== chrome.windows.WINDOW_ID_NONE) {
+      const targetWindow = await chrome.windows.get(tab.windowId);
+      const updateInfo: chrome.windows.UpdateInfo = {
+        drawAttention: false,
+        focused: true,
+      };
+      if (targetWindow.state === "minimized") {
+        updateInfo.state = "normal";
+      }
+      await chrome.windows.update(tab.windowId, updateInfo);
+    }
+
+    await chrome.tabs.update(tabId, { active: true });
+  } catch (error) {
+    console.warn(`${BRANDING.logPrefix} Failed to focus notification source tab:`, error);
+  } finally {
+    chrome.notifications.clear(notificationId, () => {
+      void chrome.runtime.lastError;
+    });
+  }
 }
 
 async function removeSession(tabId: number) {
