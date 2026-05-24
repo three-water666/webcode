@@ -50,6 +50,7 @@ export default typescriptEslint.config(
             "**/node_modules/**",
             "**/out/**",
             "**/release/**",
+            "**/.vscode-test/**",
             "gateway-vscode/browser-extension/**",
             "pnpm-lock.yaml"
         ],
