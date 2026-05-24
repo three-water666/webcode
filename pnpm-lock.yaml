@@ -88,6 +88,9 @@ importers:
       '@vscode/vsce':
         specifier: ^3.6.0
         version: 3.9.1
+      mocha:
+        specifier: ^11.7.5
+        version: 11.7.5
       ts-loader:
         specifier: ^9.5.4
         version: 9.5.7(typescript@5.9.3)(webpack@5.106.2)

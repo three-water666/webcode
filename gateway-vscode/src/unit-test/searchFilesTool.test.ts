@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { createFileSearchIncludePattern } from '../tools/searchFilesTool';
+import { createFileSearchIncludePattern } from '../tools/searchFilesPatterns';
 import { matchesFileQuery } from '../tools/filesystemUtils';
 
 suite('Search Files Tool', () => {

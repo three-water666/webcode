@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 import type { LocalTool } from './types';
 import { textResult } from './result';
 import {
-    DEFAULT_EXCLUDED_DIRECTORIES,
     getNumberArg,
     getStringArrayArg,
     matchesAnyPattern,
@@ -11,6 +10,7 @@ import {
     resolveWorkspaceDirectory,
     toPosixPath
 } from './filesystemUtils';
+import { createFileSearchIncludePattern, createFindFilesExcludePattern } from './searchFilesPatterns';
 
 export const searchFilesTool: LocalTool = {
     serverId: 'internal',
@@ -66,40 +66,3 @@ export const searchFilesTool: LocalTool = {
         return textResult(matches.length > 0 ? matches.join('\n') : 'No matches found.');
     }
 };
-
-export function createFileSearchIncludePattern(query: string): string {
-    if (hasGlobSyntax(query)) {
-        return query.includes('/') ? query : `**/${query}`;
-    }
-
-    const escapedQuery = escapeFindFilesLiteral(query);
-    if (query.includes('/')) {
-        return `{**/*${escapedQuery}*,**/*${escapedQuery}*/**}`;
-    }
-
-    return `**/*${escapedQuery}*`;
-}
-
-function createFindFilesExcludePattern(excludePatterns: string[]): string | undefined {
-    const patterns = [
-        ...DEFAULT_EXCLUDED_DIRECTORIES.map(directory => `**/${directory}/**`),
-        ...excludePatterns.map(pattern => toPosixPath(pattern.trim())).filter(Boolean)
-    ];
-
-    if (patterns.length === 0) {
-        return undefined;
-    }
-    if (patterns.length === 1) {
-        return patterns[0];
-    }
-
-    return `{${patterns.join(',')}}`;
-}
-
-function hasGlobSyntax(value: string): boolean {
-    return /[*?{}]/.test(value);
-}
-
-function escapeFindFilesLiteral(value: string): string {
-    return value.replace(/[\[\]]/g, character => (character === '[' ? '[[]' : '[]]'));
-}

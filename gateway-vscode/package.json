@@ -218,9 +218,11 @@
     "build": "pnpm run package",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
-    "pretest": "pnpm run compile-tests && pnpm run compile && pnpm run lint",
+    "pretest": "pnpm run compile-tests && pnpm run lint",
     "lint": "eslint src",
-    "test": "vscode-test"
+    "test": "mocha --ui tdd \"out/unit-test/**/*.test.js\"",
+    "pretest:extension": "pnpm run compile-tests && pnpm run compile && pnpm run lint",
+    "test:extension": "node scripts/run-extension-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.1",
@@ -238,6 +240,7 @@
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.6.0",
+    "mocha": "^11.7.5",
     "ts-loader": "^9.5.4",
     "typescript": "^5.9.3",
     "webpack": "^5.102.1",
