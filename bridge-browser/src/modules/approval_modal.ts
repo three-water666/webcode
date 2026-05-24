@@ -10,7 +10,7 @@ import { isElementVisible } from "./dom_helpers";
 import { t } from "./i18n";
 import {
   clearUserAttention,
-  requestUserAttention,
+  showUserAttentionNotification,
 } from "./user_attention";
 
 const MODAL_EVENT_GUARD_TYPES = [
@@ -84,8 +84,12 @@ function installModalEventGuards(
   };
 }
 
-function showApprovalWindowAttention(): void {
-  void requestUserAttention({ playSound: true });
+function showApprovalWindowAttention(payload: ToolExecutionPayload): void {
+  void showUserAttentionNotification({
+    title: t("hitl_title"),
+    message: `${t("hitl_intercept")}: ${payload.name}`,
+    onlyWhenWindowInBackground: true,
+  });
 }
 
 // === HITL 弹窗 (Shadow DOM) ===
@@ -375,7 +379,7 @@ export function showConfirmationModal(
   };
   overlay.appendChild(card);
   shadow.appendChild(overlay);
-  showApprovalWindowAttention();
+  showApprovalWindowAttention(payload);
 }
 
 function renderExecutableApprovalOption(executableKey: string, isBroadExecutable: boolean): string {

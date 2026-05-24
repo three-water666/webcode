@@ -1,8 +1,9 @@
+import { BRANDING } from "@webcode/shared";
 import { type SiteSelectors } from "../modules/config";
 import { Logger } from "../modules/logger";
 import { isStopButtonVisible } from "../modules/page_selectors";
 import { looksLikeToolCall } from "../modules/toolCallProtocol";
-import { requestUserAttention } from "../modules/user_attention";
+import { showUserAttentionNotification } from "../modules/user_attention";
 
 interface LatestResponseSnapshot {
   signature: string;
@@ -141,7 +142,11 @@ function getLatestResponseSnapshot(domSelectors: SiteSelectors): LatestResponseS
 }
 
 function requestCompletionAttention(): Promise<"sent" | "skipped" | "failed"> {
-  return requestUserAttention({ playSound: true });
+  return showUserAttentionNotification({
+    title: BRANDING.notificationName,
+    message: "Task Completed",
+    onlyWhenWindowInBackground: true,
+  });
 }
 
 function hashStableString(value: string): string {
