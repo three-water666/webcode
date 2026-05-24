@@ -41,6 +41,10 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
+      input: {
+        popup: resolve(__dirname, 'index.html'),
+        offscreen: resolve(__dirname, 'offscreen.html'),
+      },
       output: {
         chunkFileNames: 'assets/chunk-[hash].js',
       }

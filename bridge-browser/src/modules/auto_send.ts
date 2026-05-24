@@ -8,6 +8,7 @@ import {
   isStopButtonVisible,
 } from "./page_selectors";
 import { isElementVisible } from "./dom_helpers";
+import { showUserAttentionNotification } from "./user_attention";
 
 let autoSendTimer: NodeJS.Timeout | null = null;
 type AutoSendAction = "ctrl-enter" | "enter" | "button";
@@ -79,8 +80,7 @@ export function triggerAutoSend(
       autoSendTimer = setTimeout(trySend, AUTO_SEND_RETRY_MS);
     } else {
       Logger.log(t("auto_send_timeout"), "error");
-      void chrome.runtime.sendMessage({
-        type: "SHOW_NOTIFICATION",
+      void showUserAttentionNotification({
         title: "Auto-Send Failed",
         message: "Could not send message.",
       });

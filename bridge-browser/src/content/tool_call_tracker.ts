@@ -3,6 +3,7 @@ import { i18n } from "../modules/i18n";
 import { Logger } from "../modules/logger";
 import * as UI from "../modules/ui";
 import { ToolCallProtocolError, type ParsedToolCallPayload } from "../modules/toolCallProtocol";
+import { showUserAttentionNotification } from "../modules/user_attention";
 import type { ToolExecutionPayload } from "../types";
 import { type ToolRequestRegistry } from "./tool_request_registry";
 
@@ -97,8 +98,7 @@ export class ToolCallTracker {
     const message = buildProtocolErrorMessage(error);
     Logger.log(`Tool call protocol error: ${message}`, "error");
     UI.markVisualError(codeEl);
-    void chrome.runtime.sendMessage({
-      type: "SHOW_NOTIFICATION",
+    void showUserAttentionNotification({
       title: `${BRANDING.productName} Error`,
       message: "Invalid tool call format. Returned guidance to the model.",
     });

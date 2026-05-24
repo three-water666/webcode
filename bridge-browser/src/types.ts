@@ -17,7 +17,7 @@ export interface MessageRequest {
   title?: string;
   message?: string;
   onlyWhenWindowInBackground?: boolean;
-  drawAttention?: boolean;
+  playSound?: boolean;
   payload?: ToolExecutionPayload;
 }
 

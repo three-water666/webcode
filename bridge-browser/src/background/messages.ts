@@ -1,4 +1,5 @@
 import { type MessageRequest } from '../types';
+import { playAttentionSound } from './attention_sound';
 import { bindSession, handleHandshake } from './connection';
 import { executeTool } from './gateway';
 import { showNotification, updateWindowAttention } from './notifications';
@@ -48,8 +49,8 @@ export function handleRuntimeMessage(
     }
     return true;
   }
-  if (request.type === "REQUEST_WINDOW_ATTENTION") {
-    updateWindowAttention(sender, true).then(sendResponse);
+  if (request.type === "REQUEST_USER_ATTENTION") {
+    requestUserAttention(request, sender).then(sendResponse);
     return true;
   }
   if (request.type === "CLEAR_WINDOW_ATTENTION") {
@@ -89,4 +90,29 @@ export function handleRuntimeMessage(
     return true;
   }
   return false;
+}
+
+async function requestUserAttention(
+  request: MessageRequest,
+  sender: chrome.runtime.MessageSender
+): Promise<{ success: boolean; error?: string; skipped?: boolean; sound?: "played" | "failed"; soundError?: string }> {
+  const attentionResult = await updateWindowAttention(sender, true);
+
+  if (!request.playSound) {
+    return attentionResult;
+  }
+
+  const soundResult = await playAttentionSound();
+  if (!soundResult.success) {
+    return {
+      ...attentionResult,
+      sound: "failed",
+      soundError: soundResult.error,
+    };
+  }
+
+  return {
+    ...attentionResult,
+    sound: "played",
+  };
 }

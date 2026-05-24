@@ -4,11 +4,38 @@ interface UserAttentionNotificationOptions {
   title: string;
   message: string;
   onlyWhenWindowInBackground?: boolean;
-  drawAttention?: boolean;
+}
+
+interface UserAttentionOptions {
+  playSound?: boolean;
+}
+
+export function requestUserAttention(
+  options: UserAttentionOptions = {}
+): Promise<UserAttentionNotificationResult> {
+  return sendRuntimeRequestForAttention({
+    type: "REQUEST_USER_ATTENTION",
+    playSound: options.playSound === true,
+  });
 }
 
 export function showUserAttentionNotification(
   options: UserAttentionNotificationOptions
+): Promise<UserAttentionNotificationResult> {
+  return sendRuntimeRequestForAttention({
+    type: "SHOW_NOTIFICATION",
+    title: options.title,
+    message: options.message,
+    onlyWhenWindowInBackground: options.onlyWhenWindowInBackground,
+  });
+}
+
+export function clearUserAttention(): void {
+  sendBestEffortRuntimeMessage({ type: "CLEAR_WINDOW_ATTENTION" });
+}
+
+function sendRuntimeRequestForAttention(
+  request: Record<string, unknown>
 ): Promise<UserAttentionNotificationResult> {
   return new Promise((resolve) => {
     if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
@@ -17,41 +44,28 @@ export function showUserAttentionNotification(
     }
 
     try {
-      chrome.runtime.sendMessage(
-        {
-          type: "SHOW_NOTIFICATION",
-          title: options.title,
-          message: options.message,
-          onlyWhenWindowInBackground: options.onlyWhenWindowInBackground,
-          drawAttention: options.drawAttention ?? true,
-        },
-        (response: unknown) => {
-          if (chrome.runtime.lastError) {
-            resolve("failed");
-            return;
-          }
-
-          if (isRecord(response) && response.skipped === true) {
-            resolve("skipped");
-            return;
-          }
-
-          if (isRecord(response) && response.success === false) {
-            resolve("failed");
-            return;
-          }
-
-          resolve("sent");
+      chrome.runtime.sendMessage(request, (response: unknown) => {
+        if (chrome.runtime.lastError) {
+          resolve("failed");
+          return;
         }
-      );
+
+        if (isRecord(response) && response.skipped === true) {
+          resolve("skipped");
+          return;
+        }
+
+        if (isRecord(response) && response.success === false) {
+          resolve("failed");
+          return;
+        }
+
+        resolve("sent");
+      });
     } catch {
       resolve("failed");
     }
   });
-}
-
-export function clearWindowAttention(): void {
-  sendBestEffortRuntimeMessage({ type: "CLEAR_WINDOW_ATTENTION" });
 }
 
 function sendBestEffortRuntimeMessage(request: Record<string, unknown>): void {

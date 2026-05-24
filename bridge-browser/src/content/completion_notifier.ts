@@ -1,10 +1,8 @@
-import { BRANDING } from "@webcode/shared";
 import { type SiteSelectors } from "../modules/config";
-import { i18n } from "../modules/i18n";
 import { Logger } from "../modules/logger";
 import { isStopButtonVisible } from "../modules/page_selectors";
 import { looksLikeToolCall } from "../modules/toolCallProtocol";
-import { showUserAttentionNotification } from "../modules/user_attention";
+import { requestUserAttention } from "../modules/user_attention";
 
 interface LatestResponseSnapshot {
   signature: string;
@@ -101,11 +99,11 @@ export class CompletionNotifier {
       }
     }
 
-    void sendCompletionNotification().then((result) => {
+    void requestCompletionAttention().then((result) => {
       if (result === "sent") {
-        Logger.log("Completion notification sent", "action");
+        Logger.log("Completion attention requested", "action");
       } else if (result === "failed") {
-        Logger.log("Completion notification failed", "info");
+        Logger.log("Completion attention request failed", "info");
       }
     });
   }
@@ -142,18 +140,8 @@ function getLatestResponseSnapshot(domSelectors: SiteSelectors): LatestResponseS
   };
 }
 
-function sendCompletionNotification(): Promise<"sent" | "skipped" | "failed"> {
-  return showUserAttentionNotification({
-    title: `${BRANDING.productName} Task Finished`,
-    message: getCompletionNotificationMessage(),
-    onlyWhenWindowInBackground: true,
-  });
-}
-
-function getCompletionNotificationMessage(): string {
-  return i18n.lang === "zh"
-    ? "回复已完成，可以回来查看。"
-    : "The response is ready to review.";
+function requestCompletionAttention(): Promise<"sent" | "skipped" | "failed"> {
+  return requestUserAttention({ playSound: true });
 }
 
 function hashStableString(value: string): string {

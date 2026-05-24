@@ -41,10 +41,6 @@ export async function showNotification(
       }
     }
 
-    if (request.drawAttention) {
-      void updateWindowAttention(sender, true);
-    }
-
     const notificationId = await createNotification(request, sender);
 
     return { success: true, notificationId };
