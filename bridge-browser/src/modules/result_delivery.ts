@@ -7,8 +7,16 @@ import { getInputAreaBySelector, getInputAreaElement } from "./page_selectors";
 import { showUserAttentionNotification } from "./user_attention";
 
 export interface DeliverResultStatus {
+  /** Historical flag: true means the oversized-result paste event was dispatched. */
   uploaded: boolean;
   delivered: boolean;
+  attemptedWrite: boolean;
+  attemptedUpload: boolean;
+}
+
+interface InputWriteResult {
+  delivered: boolean;
+  attemptedWrite: boolean;
 }
 
 const INPUT_WRITE_VERIFY_DELAYS_MS = [120, 250, 500];
@@ -23,18 +31,17 @@ const INPUT_WRITE_VERIFY_DELAYS_MS = [120, 250, 500];
  * - 尝试使用 `document.execCommand("insertText")` 安全地将文字插入到输入框，这能最好地触发 React/Vue 的变更检测。
  * - 作为备选（Fail-safe），如果 `execCommand` 失败，则回退直接赋值，并手动 dispatch `input` 事件触发框架数据更新。
  */
-export function writeToInputBox(text: string, inputSelector: string): boolean {
+export function writeToInputBox(text: string, inputSelector: string): void {
   const inputEl = getInputAreaBySelector(inputSelector);
   if (!inputEl) {
     Logger.log(t("input_not_found"), "error");
-    return false;
+    return;
   }
 
   const final = buildFinalInputText(inputEl, text);
 
   setInputBoxText(final, inputEl);
   Logger.log(t("result_written"), "action");
-  return true;
 }
 
 export function replaceInputBoxText(text: string, inputSelector: string): boolean {
@@ -76,7 +83,7 @@ function setInputBoxText(text: string, inputEl: HTMLElement | HTMLInputElement |
  * 将工具执行的结果分发交付给聊天页面输入框
  * @param text 要发送的内容
  * @param domSelectors 网页对应选择器配置对象 (从 settings/init 下发)
- * @returns 包含 `{ uploaded, delivered }` 的 Promise 对象，表示是否走附件上传、以及输入框文字是否已确认写入
+ * @returns 包含交付状态的 Promise 对象，表示是否派发附件 paste、是否确认写入输入框、以及尝试过哪些动作
  * @description
  * - 这是一个关键的分发函数，它会自动判断内容是否超过了内联文本的最大限制(`maxInlineChars`)。
  * - 如果超过了限制且平台支持作为附件上传，它将尝试调用对应的上传函数 (`paste` 模式)。
@@ -92,50 +99,65 @@ export async function deliverResult(text: string, domSelectors: SiteSelectors): 
   const finalInlineLength = finalInlineText.length;
 
   if (!maxInlineChars || finalInlineLength <= maxInlineChars) {
-    const delivered = await writeToInputBoxWithVerification(text, domSelectors.inputArea);
-    return { uploaded: false, delivered };
+    const writeResult = await writeToInputBoxWithVerification(text, domSelectors.inputArea);
+    if (!writeResult.delivered) {
+      notifyResultDeliveryFailure(false);
+    }
+    return toDeliveryStatus(false, writeResult, false);
   }
 
-  const uploaded = await pasteTextAsAttachment(text, domSelectors);
+  const pasteDispatched = await pasteTextAsAttachment(text, domSelectors);
 
-  if (!uploaded) {
-    Logger.log("Attachment upload failed. Falling back to inline result.", "warn");
-    const delivered = await writeToInputBoxWithVerification(text, domSelectors.inputArea);
-    return { uploaded: false, delivered };
+  if (!pasteDispatched) {
+    Logger.log("Attachment paste dispatch failed. Falling back to inline result.", "warn");
+    const writeResult = await writeToInputBoxWithVerification(text, domSelectors.inputArea);
+    if (!writeResult.delivered) {
+      notifyResultDeliveryFailure(false);
+    }
+    return toDeliveryStatus(false, writeResult, false);
   }
 
-  Logger.log(`Attached oversized result as TXT (${finalInlineLength} chars inline)`, "action");
+  Logger.log(`Dispatched oversized result TXT paste (${finalInlineLength} chars inline)`, "action");
 
   // Also provide a textual indication inside the input box to the LLM
   const oversizePrompt = i18n.resources.oversize ?? `The result exceeds the character limit. It has been attached as a text file. Please read the attached file for the full details.`;
-  const delivered = await writeToInputBoxWithVerification(oversizePrompt, domSelectors.inputArea);
+  const writeResult = await writeToInputBoxWithVerification(oversizePrompt, domSelectors.inputArea);
+  if (!writeResult.delivered) {
+    notifyResultDeliveryFailure(true);
+  }
 
-  return { uploaded: true, delivered };
+  return toDeliveryStatus(true, writeResult, true);
 }
 
-async function writeToInputBoxWithVerification(text: string, inputSelector: string): Promise<boolean> {
+async function writeToInputBoxWithVerification(text: string, inputSelector: string): Promise<InputWriteResult> {
   const inputEl = getInputAreaBySelector(inputSelector);
   if (!inputEl) {
     Logger.log(t("input_not_found"), "error");
-    return false;
+    return { delivered: false, attemptedWrite: false };
   }
 
   const final = buildFinalInputText(inputEl, text);
+  let attemptedWrite = false;
 
   for (let attempt = 0; attempt < INPUT_WRITE_VERIFY_DELAYS_MS.length; attempt++) {
     const latestInputEl = getInputAreaBySelector(inputSelector);
     if (!latestInputEl) {
       Logger.log(t("input_not_found"), "error");
-      return false;
+      return { delivered: false, attemptedWrite };
     }
 
-    setInputBoxText(final, latestInputEl, attempt > 0);
+    attemptedWrite = true;
+    try {
+      setInputBoxText(final, latestInputEl, attempt > 0);
+    } catch (error) {
+      Logger.log(`Input write attempt failed: ${getErrorMessage(error)}`, "warn");
+    }
     await delay(INPUT_WRITE_VERIFY_DELAYS_MS[attempt]);
 
     const verifiedInputEl = getInputAreaBySelector(inputSelector) ?? latestInputEl;
     if (isInputTextDelivered(verifiedInputEl, final)) {
       Logger.log(t("result_written"), "action");
-      return true;
+      return { delivered: true, attemptedWrite };
     }
 
     if (attempt < INPUT_WRITE_VERIFY_DELAYS_MS.length - 1) {
@@ -147,11 +169,29 @@ async function writeToInputBoxWithVerification(text: string, inputSelector: stri
   }
 
   Logger.log("Input write failed after verification retries. Auto-send skipped.", "error");
+  return { delivered: false, attemptedWrite };
+}
+
+function toDeliveryStatus(
+  uploaded: boolean,
+  writeResult: InputWriteResult,
+  attemptedUpload: boolean
+): DeliverResultStatus {
+  return {
+    uploaded,
+    delivered: writeResult.delivered,
+    attemptedWrite: writeResult.attemptedWrite,
+    attemptedUpload,
+  };
+}
+
+function notifyResultDeliveryFailure(attemptedUpload: boolean): void {
   void showUserAttentionNotification({
     title: "Result Delivery Failed",
-    message: "Could not write result to input box.",
+    message: attemptedUpload
+      ? "Could not verify the oversized result prompt. Check the input box and attachment manually."
+      : "Could not write result to input box. Check the page manually.",
   });
-  return false;
 }
 
 function buildFinalInputText(
@@ -207,7 +247,7 @@ function setTextControlValue(inputEl: HTMLInputElement | HTMLTextAreaElement, te
  * 模拟 `pasteFile` (粘贴文件) 模式上传文本内容为附件
  * @param text 要作为附件的纯文本内容
  * @param domSelectors 网页对应选择器配置对象 (从 settings/init 下发)
- * @returns 成功返回 `true`，失败返回 `false`
+ * @returns 派发 paste 事件返回 `true`，找不到输入框或派发失败返回 `false`
  * @description
  * - 寻找页面上的文本输入区域。
  * - 使用 `DataTransfer` 创造一个虚拟剪贴板，把带有时间戳名字的 TXT 文本文件放入剪贴板内。
@@ -218,19 +258,28 @@ async function pasteTextAsAttachment(text: string, domSelectors: SiteSelectors):
   const inputEl = getInputAreaElement(domSelectors);
   if (!inputEl) {return false;}
 
-  const filename = `${BRANDING.resultFilePrefix}-${Date.now()}.txt`;
-  const file = new File([text], filename, { type: "text/plain" });
-  const clipboardData = new DataTransfer();
-  clipboardData.items.add(file);
+  try {
+    const filename = `${BRANDING.resultFilePrefix}-${Date.now()}.txt`;
+    const file = new File([text], filename, { type: "text/plain" });
+    const clipboardData = new DataTransfer();
+    clipboardData.items.add(file);
 
-  inputEl.focus();
-  const pasteEvent = new ClipboardEvent("paste", {
-    bubbles: true,
-    cancelable: true,
-    clipboardData,
-  });
-  inputEl.dispatchEvent(pasteEvent);
+    inputEl.focus();
+    const pasteEvent = new ClipboardEvent("paste", {
+      bubbles: true,
+      cancelable: true,
+      clipboardData,
+    });
+    inputEl.dispatchEvent(pasteEvent);
+  } catch (error) {
+    Logger.log(`Attachment paste dispatch failed: ${getErrorMessage(error)}`, "warn");
+    return false;
+  }
 
   await delay(800);
   return true;
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

@@ -339,24 +339,31 @@ function handleResultDelivery(resultBatch: BufferedResultBatch, selectors: SiteS
   }
 
   isResultDeliveryRunning = true;
-  let delivered = false;
+  let batchFinalized = false;
   void UI.deliverResult(resultBatch.output, selectors)
     .then((delivery) => {
       if (!delivery.delivered) {
-        Logger.log("Result delivery failed. Auto-send skipped.", "error");
+        requestRegistry.markFlushed(resultBatch.ids);
+        batchFinalized = true;
+        Logger.log(
+          "Result delivery could not be verified. Marked batch flushed to avoid duplicate delivery; auto-send skipped.",
+          "error"
+        );
         return;
       }
 
-      delivered = true;
       requestRegistry.markFlushed(resultBatch.ids);
+      batchFinalized = true;
       UI.triggerAutoSend(CONFIG, selectors);
     })
     .catch((error) => {
+      requestRegistry.markFlushed(resultBatch.ids);
+      batchFinalized = true;
       Logger.log(`Result delivery failed: ${getErrorMessage(error)}`, "error");
     })
     .finally(() => {
       isResultDeliveryRunning = false;
-      const shouldRerun = isResultDeliveryRerunNeeded && delivered;
+      const shouldRerun = isResultDeliveryRerunNeeded && batchFinalized;
       isResultDeliveryRerunNeeded = false;
       if (shouldRerun) {
         scheduleMainLoop(50);
