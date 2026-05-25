@@ -50,9 +50,15 @@ webcode 用来把 ChatGPT、Gemini、DeepSeek 等这类网页 AI 接到本地 VS
 - `列出当前工作区的文件结构。 @webcode`
 - `把项目文档生成到 docs 目录里。 /webcode`
 
+## 内置工具
+
+webcode 内置 `read_file`、`write_file`、`edit_file`、`search_files`、`search_code`、`execute_command`、`run_in_terminal`、`terminal_session` 等本地工具，用于文件读写、代码搜索、命令执行和终端会话管理。
+
+具体工具清单见 [内置工具说明](doc/BUILTIN_TOOLS.md)。
+
 ## MCP
 
-webcode 自带文件读写、代码搜索、命令执行等本地工具，不需要额外配置 MCP server。需要接入浏览器自动化、GitHub、数据库或其他外部能力时，可以通过 `webcodeGateway.servers` 配置第三方 MCP server。
+需要接入浏览器自动化、GitHub、数据库或其他外部能力时，可以通过 `webcodeGateway.servers` 配置第三方 MCP server。
 
 具体配置方式见 [MCP 服务配置指南](doc/MCP_GUIDE.md)。
 

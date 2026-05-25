@@ -50,9 +50,15 @@ For example:
 - `List the files in the current workspace. @webcode`
 - `Create project docs under the docs directory. /webcode`
 
+## Built-in Tools
+
+webcode includes built-in local tools such as `read_file`, `write_file`, `edit_file`, `search_files`, `search_code`, `execute_command`, `run_in_terminal`, and `terminal_session` for file reads and writes, code search, command execution, and terminal session management.
+
+See the [built-in tools reference](doc/BUILTIN_TOOLS_en.md).
+
 ## MCP
 
-webcode includes built-in local tools for file reads and writes, code search, and command execution, so those capabilities do not need extra MCP server configuration. Use `webcodeGateway.servers` when you want to attach third-party MCP servers for browser automation, GitHub, databases, or other external capabilities.
+Use `webcodeGateway.servers` when you want to attach third-party MCP servers for browser automation, GitHub, databases, or other external capabilities.
 
 See the [MCP server configuration guide](doc/MCP_GUIDE_en.md).
 
