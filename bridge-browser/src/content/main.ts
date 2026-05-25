@@ -10,7 +10,7 @@ import { CompletionNotifier } from "./completion_notifier";
 import { hasPromptResourceChange, loadPromptsFromStorage } from "./prompt_resources";
 import { logToolSummary, ToolCallTracker } from "./tool_call_tracker";
 import { ToolExecutor } from "./tool_executor";
-import { ToolRequestRegistry } from "./tool_request_registry";
+import { type BufferedResultBatch, ToolRequestRegistry } from "./tool_request_registry";
 
 // === 配置与状态 ===
 interface ConfigState {
@@ -185,6 +185,8 @@ const toolExecutor = new ToolExecutor({
 });
 
 const completionNotifier = new CompletionNotifier();
+let isResultDeliveryRunning = false;
+let isResultDeliveryRerunNeeded = false;
 
 /**
  * 延迟调度一次主循环扫描。
@@ -306,12 +308,7 @@ function runMainLoop() {
           `Batch finished: ${resultBatch.outputCount} tools. Writing...`,
           "success"
         );
-
-        // 写回前先把这些 request_id 标记为 flushed，避免 deliverResult 触发 DOM 变化后重复写入。
-        requestRegistry.markFlushed(resultBatch.ids);
-        void UI.deliverResult(resultBatch.output, selectors).then(() => {
-          UI.triggerAutoSend(CONFIG, selectors);
-        });
+        handleResultDelivery(resultBatch, selectors);
       } else {
         // 某些路径可能没有文本输出；它们完成后也要标记为已处理。
         if (resultBatch.hasAnyResult) {
@@ -333,6 +330,38 @@ function runMainLoop() {
       }
     }
   }
+}
+
+function handleResultDelivery(resultBatch: BufferedResultBatch, selectors: SiteSelectors): void {
+  if (isResultDeliveryRunning) {
+    isResultDeliveryRerunNeeded = true;
+    return;
+  }
+
+  isResultDeliveryRunning = true;
+  let delivered = false;
+  void UI.deliverResult(resultBatch.output, selectors)
+    .then((delivery) => {
+      if (!delivery.delivered) {
+        Logger.log("Result delivery failed. Auto-send skipped.", "error");
+        return;
+      }
+
+      delivered = true;
+      requestRegistry.markFlushed(resultBatch.ids);
+      UI.triggerAutoSend(CONFIG, selectors);
+    })
+    .catch((error) => {
+      Logger.log(`Result delivery failed: ${getErrorMessage(error)}`, "error");
+    })
+    .finally(() => {
+      isResultDeliveryRunning = false;
+      const shouldRerun = isResultDeliveryRerunNeeded && delivered;
+      isResultDeliveryRerunNeeded = false;
+      if (shouldRerun) {
+        scheduleMainLoop(50);
+      }
+    });
 }
 
 /**
@@ -400,6 +429,10 @@ function startObserver() {
       // Optional: Inform user that connection is missing
     }
   });
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 initDOMConfig();
