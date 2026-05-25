@@ -4,9 +4,7 @@ Language: English | [中文](README.md)
 
 webcode connects ChatGPT, Gemini, DeepSeek, and other web AI products to local VS Code so they can read, write, and edit local files, run commands, and use MCP and Skills.
 
-## Quick Start: Edge Isolated Keepalive
-
-The recommended setup is `Edge Isolated Keepalive`. You only need to install the `webcode gateway` VS Code extension; this mode uses a dedicated Microsoft Edge profile and special launch flags so pages can keep rendering and working in the background. It also auto-loads the bundled webcode bridge extension, so no separate browser-extension installation is needed.
+## Quick Start
 
 ### 1. Install the VS Code Extension
 
@@ -23,10 +21,10 @@ The recommended setup is `Edge Isolated Keepalive`. You only need to install the
 
 When the status bar shows a port number, the local gateway is running. The AI launch menu opens automatically after startup, so you do not need to click the status bar a second time.
 
-### 3. Open a Supported AI Product with Edge Isolated Keepalive
+### 3. Open a Supported AI Product
 
 1. Choose the target site in the launch menu, such as `Open Gemini`, `Open ChatGPT`, or another supported entry.
-2. webcode opens Microsoft Edge in isolated keepalive mode by default.
+2. webcode opens Microsoft Edge in [`Edge Isolated Keepalive`](doc/BROWSER_MODE_GUIDE_en.md) mode by default.
 3. The isolated Edge profile auto-loads the bundled webcode bridge extension.
 4. The bridge page completes the handshake with the local gateway automatically.
 5. After the handshake succeeds, the browser redirects to the target AI site.
@@ -34,8 +32,6 @@ When the status bar shows a port number, the local gateway is running. The AI la
 On first use, sign in to the target AI site once in the isolated Edge profile. After signing in, return to VS Code and open the same target site from the webcode launch menu again; some sites redirect or change domains after login, which can invalidate the token from the first connection. After the second launch, when the bridge extension shows `ON`, the connection is ready to use.
 
 If the gateway is already running, click `webcode: <port>` in the status bar to open the same launch menu again.
-
-Other browser modes are available from `Custom Launch...`. Regular Chrome/Edge, system default, and user-profile keepalive modes require the browser extension to be installed manually; download it from the [Chrome Web Store](https://chromewebstore.google.com/detail/webcode-bridge/kghhldphcmpiimophipabdhldfipgiio) or [GitHub Releases](https://github.com/three-water666/webcode/releases). Chrome for Testing / Chromium isolated mode can also auto-load the bundled bridge extension, but it requires Chrome for Testing, Chromium, or `webcodeGateway.isolatedChrome.executablePath`; Edge isolated mode is the recommended path.
 
 ### 4. Use It in Chat
 

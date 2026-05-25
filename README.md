@@ -4,9 +4,7 @@
 
 webcode 用来把 ChatGPT、Gemini、DeepSeek 等这类网页 AI 接到本地 VS Code 中，支持读、写、编辑本地文件，运行命令，还支持 MCP 和 Skills。
 
-## 快速开始：Edge 独立保活模式
-
-推荐使用 `Edge 独立保活模式`。只需要安装 VS Code 扩展 `webcode gateway`；这个模式会使用独立的 Microsoft Edge profile，并用特殊启动参数让网页置于后台时也能继续渲染和工作，同时自动加载内置的 webcode bridge，不需要手动安装浏览器插件。
+## 快速开始
 
 ### 1. 安装 VS Code 扩展
 
@@ -23,10 +21,10 @@ webcode 用来把 ChatGPT、Gemini、DeepSeek 等这类网页 AI 接到本地 VS
 
 当状态栏显示端口号时，说明本地 Gateway 已经启动。启动成功后会自动打开 AI 启动菜单，不需要再点一次状态栏。
 
-### 3. 用 Edge 独立保活模式打开目标网页 AI
+### 3. 打开目标网页 AI
 
 1. 在启动菜单里选择目标站点，例如 `Open Gemini`、`Open ChatGPT` 或其他支持的入口。
-2. webcode 默认会用 `Edge 独立保活模式` 打开 Microsoft Edge。
+2. webcode 默认会用 [`Edge 独立保活模式`](doc/BROWSER_MODE_GUIDE.md) 打开 Microsoft Edge。
 3. 独立 Edge profile 会自动加载内置的 webcode bridge。
 4. 桥接页会自动与本地 Gateway 完成握手。
 5. 握手成功后，浏览器会自动跳转到对应的 AI 站点。
@@ -34,8 +32,6 @@ webcode 用来把 ChatGPT、Gemini、DeepSeek 等这类网页 AI 接到本地 VS
 首次使用时，需要在这个独立 Edge profile 中登录一次目标 AI 站点。登录完成后，请回到 VS Code，再从 webcode 启动菜单重新打开一次同一个目标站点；有些网站登录后会跳转或变更域名，导致第一次连接使用的 token 失效。重新跳转后，当 bridge 显示 `ON` 时，表示连接已经可以使用。
 
 如果 Gateway 已经在运行，点击状态栏里的 `webcode: <端口>` 可以重新打开同一个启动菜单。
-
-其他浏览器方式可以从 `自定义启动...` 里选择。普通 Chrome/Edge、系统默认浏览器、用户配置保活模式都需要手动安装浏览器插件，可从 [Chrome Web Store](https://chromewebstore.google.com/detail/webcode-bridge/kghhldphcmpiimophipabdhldfipgiio) 或 [GitHub Releases](https://github.com/three-water666/webcode/releases) 下载。`Chrome for Testing / Chromium 独立保活模式` 也能自动加载内置 bridge，但需要额外安装 Chrome for Testing / Chromium，或配置 `webcodeGateway.isolatedChrome.executablePath`；首选仍然是 `Edge 独立保活模式`。
 
 ### 4. 在对话中使用
 
