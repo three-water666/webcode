@@ -4,6 +4,8 @@ import { type MessageRequest } from '../types';
 import { getErrorMessage } from './errors';
 
 const NOTIFICATION_ID_PREFIX = "webcode-tab";
+const NOTIFICATION_CLICK_KEEPALIVE_INTERVAL_MS = 20_000;
+const NOTIFICATION_CLICK_KEEPALIVE_TIMEOUT_MS = 60_000;
 
 export async function updateWindowAttention(
   sender: chrome.runtime.MessageSender,
@@ -120,20 +122,11 @@ export async function focusNotificationSourceTab(notificationId: string): Promis
     const tabId = getNotificationSourceTabId(notificationId);
     if (tabId === null) {return;}
 
-    const tab = await chrome.tabs.get(tabId);
-    if (typeof tab.windowId === "number" && tab.windowId !== chrome.windows.WINDOW_ID_NONE) {
-      const targetWindow = await chrome.windows.get(tab.windowId);
-      const updateInfo: chrome.windows.UpdateInfo = {
-        drawAttention: false,
-        focused: true,
-      };
-      if (targetWindow.state === "minimized") {
-        updateInfo.state = "normal";
-      }
-      await chrome.windows.update(tab.windowId, updateInfo);
-    }
+    const tab = await chrome.tabs.update(tabId, { active: true });
 
-    await chrome.tabs.update(tabId, { active: true });
+    if (typeof tab.windowId === "number" && tab.windowId !== chrome.windows.WINDOW_ID_NONE) {
+      await focusWindow(tab.windowId);
+    }
   } catch (error) {
     console.warn(`${BRANDING.logPrefix} Failed to focus notification source tab:`, error);
   } finally {
@@ -141,4 +134,32 @@ export async function focusNotificationSourceTab(notificationId: string): Promis
       void chrome.runtime.lastError;
     });
   }
+}
+
+export function handleNotificationClicked(notificationId: string): void {
+  // MV3 notification click handlers cannot await this async tab/window focus chain.
+  // Keep the service worker alive briefly, with a hard timeout to avoid leaks.
+  const keepAliveInterval = setInterval(() => {
+    void chrome.runtime.getPlatformInfo();
+  }, NOTIFICATION_CLICK_KEEPALIVE_INTERVAL_MS);
+  const keepAliveTimeout = setTimeout(() => {
+    clearInterval(keepAliveInterval);
+  }, NOTIFICATION_CLICK_KEEPALIVE_TIMEOUT_MS);
+
+  void focusNotificationSourceTab(notificationId).finally(() => {
+    clearInterval(keepAliveInterval);
+    clearTimeout(keepAliveTimeout);
+  });
+}
+
+async function focusWindow(windowId: number): Promise<void> {
+  const targetWindow = await chrome.windows.get(windowId);
+  if (targetWindow.state === "minimized") {
+    await chrome.windows.update(windowId, { state: "normal" });
+  }
+
+  await chrome.windows.update(windowId, {
+    drawAttention: false,
+    focused: true,
+  });
 }
