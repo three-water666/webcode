@@ -55,11 +55,11 @@ export function showAutoInitConfirm(): Promise<boolean> {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Enter") {
         event.preventDefault();
-        event.stopPropagation();
+        event.stopImmediatePropagation();
         cleanup(true);
       } else if (event.key === "Escape") {
         event.preventDefault();
-        event.stopPropagation();
+        event.stopImmediatePropagation();
         cleanup(false);
       }
     };

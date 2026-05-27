@@ -93,7 +93,10 @@ export class AutoInitPromptController {
     const candidate = this.getTriggeredPromptCandidate(true);
     if (!candidate) {return;}
 
-    await this.promptAndMaybeInsert(candidate);
+    const initPrompt = await this.loadInitPrompt();
+    if (!initPrompt) {return;}
+
+    await this.promptAndMaybeInsert(candidate, initPrompt);
   }
 
   private handleKeyDown(event: KeyboardEvent): void {
@@ -115,19 +118,25 @@ export class AutoInitPromptController {
       this.getForgottenPromptCandidate(requireActiveInput);
     if (!candidate) {return;}
 
+    const initPrompt = this.getLoadedInitPrompt();
+    if (!initPrompt) {
+      void this.loadInitPrompt();
+      return;
+    }
+
     event.preventDefault();
     event.stopImmediatePropagation();
-    void this.promptAndMaybeInsert(candidate);
+    void this.promptAndMaybeInsert(candidate, initPrompt);
   }
 
-  private async promptAndMaybeInsert(candidate: AutoInitPromptCandidate): Promise<void> {
+  private async promptAndMaybeInsert(
+    candidate: AutoInitPromptCandidate,
+    initPrompt: string
+  ): Promise<void> {
     this.lastPromptedText = candidate.currentText;
     this.modalOpen = true;
 
     try {
-      const initPrompt = await this.getInitPrompt();
-      if (!initPrompt) {return;}
-
       const confirmed = await UI.showAutoInitConfirm();
       if (!confirmed) {return;}
 
@@ -141,9 +150,11 @@ export class AutoInitPromptController {
   }
 
   private getTriggeredPromptCandidate(requireActiveInput: boolean): AutoInitPromptCandidate | null {
-    if (!this.options.getSelectors() || !this.options.isClientConnected() || this.modalOpen) {
+    const selectors = this.options.getSelectors();
+    if (!selectors || !this.options.isClientConnected() || this.modalOpen) {
       return null;
     }
+    if (!isPristineConversation(selectors)) {return null;}
 
     const inputEl = this.findCurrentInputElement(requireActiveInput);
     if (!inputEl) {return null;}
@@ -164,8 +175,7 @@ export class AutoInitPromptController {
     if (!selectors || !this.options.isClientConnected() || this.modalOpen) {
       return null;
     }
-    if (UI.isStopButtonVisible(selectors)) {return null;}
-    if (hasVisibleMessageBlock(selectors)) {return null;}
+    if (!isPristineConversation(selectors)) {return null;}
 
     const inputEl = this.findCurrentInputElement(requireActiveInput);
     if (!inputEl) {return null;}
@@ -183,11 +193,20 @@ export class AutoInitPromptController {
     };
   }
 
-  private async getInitPrompt(): Promise<string | null> {
-    if (!i18n.resources.init) {
-      await this.options.loadPromptsFromStorage();
-    }
+  private getLoadedInitPrompt(): string | null {
     return i18n.resources.init ?? null;
+  }
+
+  private async loadInitPrompt(): Promise<string | null> {
+    if (!i18n.resources.init) {
+      try {
+        await this.options.loadPromptsFromStorage();
+      } catch (error) {
+        Logger.log(`Initialization prompt load failed: ${getErrorMessage(error)}`, "error");
+        return null;
+      }
+    }
+    return this.getLoadedInitPrompt();
   }
 
   private insertInitPrompt(context: AutoInitPromptContext): void {
@@ -327,6 +346,15 @@ function hasVisibleMessageBlock(selectors: SiteSelectors): boolean {
   }
 }
 
+function isPristineConversation(selectors: SiteSelectors): boolean {
+  if (UI.isStopButtonVisible(selectors)) {return false;}
+  return !hasVisibleMessageBlock(selectors);
+}
+
 function hasInitPromptMarker(text: string): boolean {
   return text.includes(PROTOCOL.initToolName);
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
