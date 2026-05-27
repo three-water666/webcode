@@ -1,3 +1,4 @@
+import { PROTOCOL } from "@webcode/shared";
 import type { SiteSelectors } from "../modules/config";
 import { i18n } from "../modules/i18n";
 import { Logger } from "../modules/logger";
@@ -13,12 +14,17 @@ interface AutoInitPromptContext {
   inputEl: HTMLElement;
   currentText: string;
   initPrompt: string;
+  mode: AutoInitPromptMode;
 }
 
 interface AutoInitTrigger {
   replacementStart: number;
   end: number;
 }
+
+type AutoInitPromptMode = "replace-trigger" | "append-forgotten";
+
+type AutoInitPromptCandidate = Omit<AutoInitPromptContext, "initPrompt">;
 
 const AUTO_INIT_CHECK_DELAYS_MS = [0, 50, 150, 350];
 const AUTO_INIT_EVENT_TYPES = [
@@ -38,6 +44,7 @@ export class AutoInitPromptController {
   private listenerStarted = false;
   private modalOpen = false;
   private lastPromptedText = "";
+  private lastObservedUrl = location.href;
 
   public constructor(private readonly options: AutoInitPromptControllerOptions) {}
 
@@ -48,48 +55,131 @@ export class AutoInitPromptController {
     for (const eventType of AUTO_INIT_EVENT_TYPES) {
       document.addEventListener(eventType, () => this.scheduleCheck(), true);
     }
+    document.addEventListener("keydown", (event) => this.handleKeyDown(event), true);
+    document.addEventListener("click", (event) => this.handleClick(event), true);
   }
 
   public scheduleCheck(): void {
     for (const delay of AUTO_INIT_CHECK_DELAYS_MS) {
       setTimeout(() => {
+        this.refreshPromptDedupState();
         void this.maybePromptAutoInit();
       }, delay);
     }
   }
 
-  private async maybePromptAutoInit(): Promise<void> {
-    const context = await this.getPromptContext();
-    if (!context) {return;}
+  private refreshPromptDedupState(): void {
+    const currentUrl = location.href;
+    if (currentUrl !== this.lastObservedUrl) {
+      this.lastObservedUrl = currentUrl;
+      this.lastPromptedText = "";
+      return;
+    }
 
-    this.lastPromptedText = context.currentText;
-    this.modalOpen = true;
-    const confirmed = await UI.showAutoInitConfirm();
-    this.modalOpen = false;
+    const selectors = this.options.getSelectors();
+    if (!selectors) {return;}
+    if (hasVisibleMessageBlock(selectors)) {
+      this.lastPromptedText = "";
+      return;
+    }
 
-    if (!confirmed) {return;}
-    this.insertInitPrompt(context);
+    const inputEl = this.findCurrentInputElement(false);
+    if (inputEl && !getInputText(inputEl).trim()) {
+      this.lastPromptedText = "";
+    }
   }
 
-  private async getPromptContext(): Promise<AutoInitPromptContext | null> {
+  private async maybePromptAutoInit(): Promise<void> {
+    const candidate = this.getTriggeredPromptCandidate(true);
+    if (!candidate) {return;}
+
+    await this.promptAndMaybeInsert(candidate);
+  }
+
+  private handleKeyDown(event: KeyboardEvent): void {
+    if (!isEnterSendIntent(event)) {return;}
+    this.maybePromptBeforeSend(event, true);
+  }
+
+  private handleClick(event: MouseEvent): void {
+    if (!isPrimaryClick(event)) {return;}
+
+    const selectors = this.options.getSelectors();
+    if (!selectors || !isSendButtonEvent(event, selectors.sendButton)) {return;}
+
+    this.maybePromptBeforeSend(event, false);
+  }
+
+  private maybePromptBeforeSend(event: Event, requireActiveInput: boolean): void {
+    const candidate = this.getTriggeredPromptCandidate(requireActiveInput) ??
+      this.getForgottenPromptCandidate(requireActiveInput);
+    if (!candidate) {return;}
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    void this.promptAndMaybeInsert(candidate);
+  }
+
+  private async promptAndMaybeInsert(candidate: AutoInitPromptCandidate): Promise<void> {
+    this.lastPromptedText = candidate.currentText;
+    this.modalOpen = true;
+
+    try {
+      const initPrompt = await this.getInitPrompt();
+      if (!initPrompt) {return;}
+
+      const confirmed = await UI.showAutoInitConfirm();
+      if (!confirmed) {return;}
+
+      this.insertInitPrompt({
+        ...candidate,
+        initPrompt,
+      });
+    } finally {
+      this.modalOpen = false;
+    }
+  }
+
+  private getTriggeredPromptCandidate(requireActiveInput: boolean): AutoInitPromptCandidate | null {
     if (!this.options.getSelectors() || !this.options.isClientConnected() || this.modalOpen) {
       return null;
     }
 
-    const inputEl = this.findCurrentInputElement(true);
+    const inputEl = this.findCurrentInputElement(requireActiveInput);
     if (!inputEl) {return null;}
 
     const currentText = getInputText(inputEl);
     if (!findAutoInitTrigger(currentText)) {return null;}
     if (currentText === this.lastPromptedText) {return null;}
 
-    const initPrompt = await this.getInitPrompt();
-    if (!initPrompt) {return null;}
+    return {
+      inputEl,
+      currentText,
+      mode: "replace-trigger",
+    };
+  }
+
+  private getForgottenPromptCandidate(requireActiveInput: boolean): AutoInitPromptCandidate | null {
+    const selectors = this.options.getSelectors();
+    if (!selectors || !this.options.isClientConnected() || this.modalOpen) {
+      return null;
+    }
+    if (UI.isStopButtonVisible(selectors)) {return null;}
+    if (hasVisibleMessageBlock(selectors)) {return null;}
+
+    const inputEl = this.findCurrentInputElement(requireActiveInput);
+    if (!inputEl) {return null;}
+
+    const currentText = getInputText(inputEl);
+    if (!currentText.trim()) {return null;}
+    if (currentText === this.lastPromptedText) {return null;}
+    if (findAutoInitTrigger(currentText)) {return null;}
+    if (hasInitPromptMarker(currentText)) {return null;}
 
     return {
       inputEl,
       currentText,
-      initPrompt,
+      mode: "append-forgotten",
     };
   }
 
@@ -110,10 +200,11 @@ export class AutoInitPromptController {
     if (!latestInput) {return;}
 
     const latestText = getInputText(latestInput);
-    const latestTrigger = findAutoInitTrigger(latestText);
-    if (!latestTrigger) {return;}
+    if (hasInitPromptMarker(latestText)) {return;}
 
-    const replacement = buildInitReplacement(latestText, latestTrigger, context.initPrompt);
+    const replacement = buildReplacementForContext(context, latestText);
+    if (!replacement) {return;}
+
     if (UI.replaceInputBoxText(replacement, selectors.inputArea)) {
       this.lastPromptedText = replacement;
       Logger.log("Inserted webcode initialization prompt", "action");
@@ -168,6 +259,45 @@ function buildInitReplacement(text: string, trigger: AutoInitTrigger, initPrompt
   return `${beforeTrigger}${prefix}${initPrompt.trim()}\n\n${afterTrigger}`;
 }
 
+function buildReplacementForContext(context: AutoInitPromptContext, latestText: string): string | null {
+  if (context.mode === "replace-trigger") {
+    const latestTrigger = findAutoInitTrigger(latestText);
+    if (!latestTrigger) {return null;}
+    return buildInitReplacement(latestText, latestTrigger, context.initPrompt);
+  }
+
+  if (!latestText.trim()) {return null;}
+  return buildForgottenInitReplacement(latestText, context.initPrompt);
+}
+
+function buildForgottenInitReplacement(text: string, initPrompt: string): string {
+  const beforeInitPrompt = text.trimEnd();
+  const prefix = beforeInitPrompt.trim() ? "\n\n" : "";
+  return `${beforeInitPrompt}${prefix}${initPrompt.trim()}`;
+}
+
+function isEnterSendIntent(event: KeyboardEvent): boolean {
+  if (event.defaultPrevented) {return false;}
+  if (event.key !== "Enter") {return false;}
+  if (event.isComposing) {return false;}
+  return !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey;
+}
+
+function isPrimaryClick(event: MouseEvent): boolean {
+  return !event.defaultPrevented && event.button === 0;
+}
+
+function isSendButtonEvent(event: MouseEvent, sendButtonSelector: string): boolean {
+  const target = event.target;
+  if (!(target instanceof Element)) {return false;}
+
+  try {
+    return Boolean(target.closest(sendButtonSelector));
+  } catch {
+    return false;
+  }
+}
+
 function isActiveInput(inputEl: HTMLElement): boolean {
   const activeEl = document.activeElement;
   return activeEl === inputEl || Boolean(activeEl) && inputEl.contains(activeEl);
@@ -186,4 +316,17 @@ function isVisibleElement(element: HTMLElement): boolean {
 
   const rect = element.getBoundingClientRect();
   return rect.width > 0 && rect.height > 0;
+}
+
+function hasVisibleMessageBlock(selectors: SiteSelectors): boolean {
+  try {
+    return Array.from(document.querySelectorAll<HTMLElement>(selectors.messageBlocks))
+      .some((element) => isVisibleElement(element));
+  } catch {
+    return true;
+  }
+}
+
+function hasInitPromptMarker(text: string): boolean {
+  return text.includes(PROTOCOL.initToolName);
 }
