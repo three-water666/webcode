@@ -136,7 +136,8 @@ async function writeToInputBoxWithVerification(text: string, inputSelector: stri
     return { delivered: false, attemptedWrite: false };
   }
 
-  const final = buildFinalInputText(inputEl, text);
+  const initialText = getInputText(inputEl);
+  const final = buildFinalInputTextFromCurrentText(initialText, text);
   let attemptedWrite = false;
 
   for (let attempt = 0; attempt < INPUT_WRITE_VERIFY_DELAYS_MS.length; attempt++) {
@@ -155,7 +156,7 @@ async function writeToInputBoxWithVerification(text: string, inputSelector: stri
     await delay(INPUT_WRITE_VERIFY_DELAYS_MS[attempt]);
 
     const verifiedInputEl = getInputAreaBySelector(inputSelector) ?? latestInputEl;
-    if (isInputTextDelivered(verifiedInputEl, final)) {
+    if (isInputTextDelivered(verifiedInputEl, final, initialText)) {
       Logger.log(t("result_written"), "action");
       return { delivered: true, attemptedWrite };
     }
@@ -198,7 +199,11 @@ function buildFinalInputText(
   inputEl: HTMLElement | HTMLInputElement | HTMLTextAreaElement,
   text: string
 ): string {
-  let cur = getInputText(inputEl);
+  return buildFinalInputTextFromCurrentText(getInputText(inputEl), text);
+}
+
+function buildFinalInputTextFromCurrentText(currentText: string, text: string): string {
+  let cur = currentText;
   cur = cur.replace(/\r\n/g, "\n").replace(/\n+/g, "\n").trim();
   const sep = cur ? "\n\n" : "";
   return cur + sep + text;
@@ -206,14 +211,25 @@ function buildFinalInputText(
 
 function isInputTextDelivered(
   inputEl: HTMLElement | HTMLInputElement | HTMLTextAreaElement,
-  expectedFinalText: string
+  expectedFinalText: string,
+  initialText: string
 ): boolean {
-  const current = normalizeInputText(getInputText(inputEl));
-  const expected = normalizeInputText(expectedFinalText);
-  if (current === expected || current.trim() === expected.trim()) {
+  const current = normalizeInputTextForComparison(getInputText(inputEl));
+  const expected = normalizeInputTextForComparison(expectedFinalText);
+  if (current === expected) {
     return true;
   }
-  return false;
+
+  if (!current) {
+    return false;
+  }
+
+  const initial = normalizeInputTextForComparison(initialText);
+  if (!initial) {
+    return true;
+  }
+
+  return getContentFingerprint(current) !== getContentFingerprint(initial);
 }
 
 function getInputText(inputEl: HTMLElement | HTMLInputElement | HTMLTextAreaElement): string {
@@ -224,7 +240,22 @@ function getInputText(inputEl: HTMLElement | HTMLInputElement | HTMLTextAreaElem
 }
 
 function normalizeInputText(text: string): string {
-  return text.replace(/\r\n/g, "\n").replace(/\u00a0/g, " ");
+  return text
+    .replace(/\r\n?/g, "\n")
+    .replace(/\u00a0/g, " ")
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, "");
+}
+
+function normalizeInputTextForComparison(text: string): string {
+  return normalizeInputText(text)
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+}
+
+function getContentFingerprint(text: string): string {
+  return text.replace(/\s+/g, "");
 }
 
 function isTextControl(inputEl: HTMLElement): inputEl is HTMLInputElement | HTMLTextAreaElement {

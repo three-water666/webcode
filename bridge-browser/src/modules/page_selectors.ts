@@ -9,11 +9,17 @@ export interface LatestResponseCodeBlocks {
 export function getInputAreaBySelector(
   inputSelector: string
 ): HTMLElement | null {
-  return document.querySelector<HTMLElement>(inputSelector);
+  const candidates = Array.from(document.querySelectorAll<HTMLElement>(inputSelector));
+  if (candidates.length === 0) {return null;}
+
+  return candidates.find((candidate) => isActiveInput(candidate))
+    ?? candidates.find((candidate) => isElementVisible(candidate))
+    ?? candidates[0]
+    ?? null;
 }
 
 export function getInputAreaElement(domSelectors: SiteSelectors): HTMLElement | null {
-  return document.querySelector<HTMLElement>(domSelectors.inputArea);
+  return getInputAreaBySelector(domSelectors.inputArea);
 }
 
 export function getInputAreaCandidates(domSelectors: SiteSelectors): HTMLElement[] {
@@ -41,6 +47,11 @@ export function hasStopButton(domSelectors: SiteSelectors): boolean {
 export function isStopButtonVisible(domSelectors: SiteSelectors): boolean {
   const stopBtn = getStopButton(domSelectors);
   return Boolean(stopBtn && isElementVisible(stopBtn));
+}
+
+function isActiveInput(inputEl: HTMLElement): boolean {
+  const activeEl = document.activeElement;
+  return activeEl === inputEl || Boolean(activeEl) && inputEl.contains(activeEl);
 }
 
 export function isSendButtonActuallyStopButton(
