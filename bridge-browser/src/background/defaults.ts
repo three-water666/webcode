@@ -3,8 +3,8 @@ import { BRANDING } from '@webcode/shared';
 export async function handleInstalled() {
   // 初始化用户配置 (storage.sync)
   const syncKeys = ["autoSend"];
-  const existingSync = await chrome.storage.sync.get(syncKeys);
-  const syncToSet: Record<string, any> = {};
+  const existingSync = await chrome.storage.sync.get(syncKeys) as Record<string, unknown>;
+  const syncToSet: Record<string, unknown> = {};
 
   if (existingSync.autoSend === undefined) {syncToSet.autoSend = true;}
 

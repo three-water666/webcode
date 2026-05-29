@@ -187,27 +187,39 @@ function validateArrayMembers(value: unknown[], schema: JsonObject, path: string
 }
 
 function validateScalarConstraints(value: unknown, schema: JsonObject, path: string): string[] {
+    if (typeof value === 'string') {
+        return validateStringConstraints(value, schema, path);
+    }
+    if (typeof value === 'number') {
+        return validateNumberConstraints(value, schema, path);
+    }
+    return [];
+}
+
+function validateStringConstraints(value: string, schema: JsonObject, path: string): string[] {
     const errors: string[] = [];
 
-    if (typeof value === 'string') {
-        if (typeof schema.minLength === 'number' && value.length < schema.minLength) {
-            errors.push(`${path} must be at least ${schema.minLength} character(s).`);
-        }
-        if (typeof schema.maxLength === 'number' && value.length > schema.maxLength) {
-            errors.push(`${path} must be at most ${schema.maxLength} character(s).`);
-        }
-        if (typeof schema.pattern === 'string' && !matchesPattern(value, schema.pattern)) {
-            errors.push(`${path} must match pattern ${JSON.stringify(schema.pattern)}.`);
-        }
+    if (typeof schema.minLength === 'number' && value.length < schema.minLength) {
+        errors.push(`${path} must be at least ${schema.minLength} character(s).`);
+    }
+    if (typeof schema.maxLength === 'number' && value.length > schema.maxLength) {
+        errors.push(`${path} must be at most ${schema.maxLength} character(s).`);
+    }
+    if (typeof schema.pattern === 'string' && !matchesPattern(value, schema.pattern)) {
+        errors.push(`${path} must match pattern ${JSON.stringify(schema.pattern)}.`);
     }
 
-    if (typeof value === 'number') {
-        if (typeof schema.minimum === 'number' && value < schema.minimum) {
-            errors.push(`${path} must be >= ${schema.minimum}.`);
-        }
-        if (typeof schema.maximum === 'number' && value > schema.maximum) {
-            errors.push(`${path} must be <= ${schema.maximum}.`);
-        }
+    return errors;
+}
+
+function validateNumberConstraints(value: number, schema: JsonObject, path: string): string[] {
+    const errors: string[] = [];
+
+    if (typeof schema.minimum === 'number' && value < schema.minimum) {
+        errors.push(`${path} must be >= ${schema.minimum}.`);
+    }
+    if (typeof schema.maximum === 'number' && value > schema.maximum) {
+        errors.push(`${path} must be <= ${schema.maximum}.`);
     }
 
     return errors;

@@ -83,7 +83,7 @@ function parseToolCallRequest(
     }
 
     const name = payload.name;
-    const rawArgs = (payload.arguments ?? {}) as Record<string, unknown>;
+    const rawArgs = payload.arguments ?? {};
     const toolDefinition = options.getToolDefinition(name);
 
     if (!toolDefinition) {

@@ -26,6 +26,13 @@ type PatchHunk = {
     lines: PatchLine[];
 };
 
+type ParsedHunk = {
+    hunk: PatchHunk;
+    nextIndex: number;
+};
+
+const HUNK_HEADER_PATTERN = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
+
 export const editFileTool: LocalTool = {
     serverId: 'internal',
     definition: {
@@ -173,48 +180,17 @@ function applyUnifiedPatch(originalContent: string, patch: string): string {
 function parseUnifiedPatch(patch: string): PatchHunk[] {
     const lines = stripPatchFence(normalizeLineEndings(patch)).split('\n');
     const hunks: PatchHunk[] = [];
-    const hunkHeaderPattern = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
     let index = 0;
 
     while (index < lines.length) {
-        const headerMatch = lines[index].match(hunkHeaderPattern);
-        if (!headerMatch) {
+        const parsedHunk = parseHunkAt(lines, index);
+        if (!parsedHunk) {
             index++;
             continue;
         }
 
-        const hunk: PatchHunk = {
-            oldStart: Number(headerMatch[1]),
-            oldCount: headerMatch[2] === undefined ? 1 : Number(headerMatch[2]),
-            newCount: headerMatch[4] === undefined ? 1 : Number(headerMatch[4]),
-            lines: []
-        };
-
-        index++;
-        while (index < lines.length && !hunkHeaderPattern.test(lines[index])) {
-            const line = lines[index];
-            const marker = line[0];
-
-            if (line.startsWith('\\ No newline at end of file')) {
-                index++;
-                continue;
-            }
-            if (marker === ' ') {
-                hunk.lines.push({ type: 'context', text: line.slice(1) });
-            } else if (marker === '-') {
-                hunk.lines.push({ type: 'remove', text: line.slice(1) });
-            } else if (marker === '+') {
-                hunk.lines.push({ type: 'add', text: line.slice(1) });
-            } else if (line === '') {
-                throw new Error(`Invalid empty line inside patch hunk at original line ${hunk.oldStart}. Empty context lines must start with a space.`);
-            } else if (!line.startsWith('diff ') && !line.startsWith('index ') && !line.startsWith('--- ') && !line.startsWith('+++ ')) {
-                throw new Error(`Invalid patch hunk line at original line ${hunk.oldStart}: ${line}`);
-            }
-
-            index++;
-        }
-
-        hunks.push(hunk);
+        hunks.push(parsedHunk.hunk);
+        index = parsedHunk.nextIndex;
     }
 
     if (hunks.length === 0) {
@@ -222,6 +198,71 @@ function parseUnifiedPatch(patch: string): PatchHunk[] {
     }
 
     return hunks;
+}
+
+function parseHunkAt(lines: string[], index: number): ParsedHunk | null {
+    const headerMatch = lines[index].match(HUNK_HEADER_PATTERN);
+    if (!headerMatch) {
+        return null;
+    }
+
+    const hunk = createPatchHunk(headerMatch);
+    let nextIndex = index + 1;
+    while (nextIndex < lines.length && !HUNK_HEADER_PATTERN.test(lines[nextIndex])) {
+        appendPatchHunkLine(hunk, lines[nextIndex]);
+        nextIndex++;
+    }
+
+    return { hunk, nextIndex };
+}
+
+function createPatchHunk(headerMatch: RegExpMatchArray): PatchHunk {
+    return {
+        oldStart: Number(headerMatch[1]),
+        oldCount: headerMatch[2] === undefined ? 1 : Number(headerMatch[2]),
+        newCount: headerMatch[4] === undefined ? 1 : Number(headerMatch[4]),
+        lines: []
+    };
+}
+
+function appendPatchHunkLine(hunk: PatchHunk, line: string): void {
+    if (line.startsWith('\\ No newline at end of file')) {
+        return;
+    }
+
+    const patchLine = parsePatchLine(line);
+    if (patchLine) {
+        hunk.lines.push(patchLine);
+        return;
+    }
+
+    if (line === '') {
+        throw new Error(`Invalid empty line inside patch hunk at original line ${hunk.oldStart}. Empty context lines must start with a space.`);
+    }
+    if (!isPatchMetadataLine(line)) {
+        throw new Error(`Invalid patch hunk line at original line ${hunk.oldStart}: ${line}`);
+    }
+}
+
+function parsePatchLine(line: string): PatchLine | null {
+    const text = line.slice(1);
+    switch (line[0]) {
+        case ' ':
+            return { type: 'context', text };
+        case '-':
+            return { type: 'remove', text };
+        case '+':
+            return { type: 'add', text };
+        default:
+            return null;
+    }
+}
+
+function isPatchMetadataLine(line: string): boolean {
+    return line.startsWith('diff ') ||
+        line.startsWith('index ') ||
+        line.startsWith('--- ') ||
+        line.startsWith('+++ ');
 }
 
 function stripPatchFence(patch: string): string {

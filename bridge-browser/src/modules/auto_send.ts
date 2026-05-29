@@ -64,7 +64,12 @@ export function triggerAutoSend(
   const maxRetries = AUTO_SEND_ACTIONS.length;
 
   const getInputEl = () => getInputAreaElement(domSelectors);
-  const getInputValue = (inputEl: HTMLElement) => (inputEl as any).value ?? inputEl.innerText ?? "";
+  const getInputValue = (inputEl: HTMLElement): string => {
+    if (inputEl instanceof HTMLInputElement || inputEl instanceof HTMLTextAreaElement) {
+      return inputEl.value;
+    }
+    return inputEl.innerText;
+  };
   const isSendComplete = () => {
     const latestInput = getInputEl();
     if (latestInput && getInputValue(latestInput).trim().length === 0) {

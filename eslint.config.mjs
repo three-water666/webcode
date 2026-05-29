@@ -9,29 +9,29 @@ const commonRules = {
     "eqeqeq": ["error", "always", { null: "ignore" }],
     "no-constant-binary-expression": "error",
     "no-duplicate-imports": "error",
-    "no-else-return": "warn",
+    "no-else-return": "error",
     "no-fallthrough": "error",
-    "no-implicit-coercion": "warn",
+    "no-implicit-coercion": "error",
     "no-unreachable": "error",
     "no-unreachable-loop": "error",
-    "no-useless-assignment": "warn",
-    "no-useless-return": "warn",
+    "no-useless-assignment": "error",
+    "no-useless-return": "error",
     "no-var": "error",
-    "prefer-const": "warn",
-    "complexity": ["warn", 12],
-    "max-depth": ["warn", 4],
-    "max-lines": ["warn", {
+    "prefer-const": "error",
+    "complexity": ["error", 12],
+    "max-depth": ["error", 4],
+    "max-lines": ["error", {
         max: 400,
         skipBlankLines: true,
         skipComments: true,
     }],
-    "max-lines-per-function": ["warn", {
+    "max-lines-per-function": ["error", {
         max: 90,
         skipBlankLines: true,
         skipComments: true,
         IIFEs: true,
     }],
-    "max-len": ["warn", {
+    "max-len": ["error", {
         code: 140,
         ignoreComments: true,
         ignoreRegExpLiterals: true,
@@ -39,8 +39,8 @@ const commonRules = {
         ignoreTemplateLiterals: true,
         ignoreUrls: true,
     }],
-    "max-nested-callbacks": ["warn", 3],
-    "max-params": ["warn", 5],
+    "max-nested-callbacks": ["error", 3],
+    "max-params": ["error", 5],
 };
 
 export default typescriptEslint.config(
@@ -57,7 +57,7 @@ export default typescriptEslint.config(
     },
     {
         linterOptions: {
-            reportUnusedDisableDirectives: "warn",
+            reportUnusedDisableDirectives: "error",
         },
     },
     {
@@ -96,28 +96,28 @@ export default typescriptEslint.config(
                 ignoreRestSiblings: true,
                 varsIgnorePattern: "^_",
             }],
-            "@typescript-eslint/consistent-type-imports": ["warn", {
+            "@typescript-eslint/consistent-type-imports": ["error", {
                 fixStyle: "inline-type-imports",
                 prefer: "type-imports",
             }],
-            "@typescript-eslint/no-empty-function": "warn",
-            "@typescript-eslint/no-explicit-any": "warn",
-            "@typescript-eslint/no-floating-promises": "warn",
+            "@typescript-eslint/no-empty-function": "error",
+            "@typescript-eslint/no-explicit-any": "error",
+            "@typescript-eslint/no-floating-promises": "error",
             "@typescript-eslint/no-misused-promises": ["error", {
                 checksVoidReturn: false,
             }],
-            "@typescript-eslint/no-non-null-assertion": "warn",
-            "@typescript-eslint/no-unnecessary-type-assertion": "warn",
-            "@typescript-eslint/no-unsafe-argument": "warn",
-            "@typescript-eslint/no-unsafe-assignment": "warn",
-            "@typescript-eslint/no-unsafe-call": "warn",
-            "@typescript-eslint/no-unsafe-member-access": "warn",
-            "@typescript-eslint/no-unsafe-return": "warn",
-            "@typescript-eslint/prefer-promise-reject-errors": "warn",
-            "@typescript-eslint/prefer-nullish-coalescing": "warn",
-            "@typescript-eslint/prefer-optional-chain": "warn",
-            "@typescript-eslint/require-await": "warn",
-            "@typescript-eslint/switch-exhaustiveness-check": "warn",
+            "@typescript-eslint/no-non-null-assertion": "error",
+            "@typescript-eslint/no-unnecessary-type-assertion": "error",
+            "@typescript-eslint/no-unsafe-argument": "error",
+            "@typescript-eslint/no-unsafe-assignment": "error",
+            "@typescript-eslint/no-unsafe-call": "error",
+            "@typescript-eslint/no-unsafe-member-access": "error",
+            "@typescript-eslint/no-unsafe-return": "error",
+            "@typescript-eslint/prefer-promise-reject-errors": "error",
+            "@typescript-eslint/prefer-nullish-coalescing": "error",
+            "@typescript-eslint/prefer-optional-chain": "error",
+            "@typescript-eslint/require-await": "error",
+            "@typescript-eslint/switch-exhaustiveness-check": "error",
             "no-restricted-imports": ["error", {
                 patterns: [
                     {
@@ -137,8 +137,8 @@ export default typescriptEslint.config(
                     },
                 ],
             }],
-            "semi": ["warn", "always"],
-            "@typescript-eslint/naming-convention": ["warn", {
+            "semi": ["error", "always"],
+            "@typescript-eslint/naming-convention": ["error", {
                 selector: "import",
                 format: ["camelCase", "PascalCase"],
             }],

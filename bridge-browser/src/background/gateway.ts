@@ -1,8 +1,10 @@
 import { PROTOCOL } from '@webcode/shared';
 
+import { isRecord, type MessageRequest, type ToolExecutionPayload } from '../types';
+import { getErrorMessage } from './errors';
 import { getSession } from './sessions';
 
-export async function executeTool(request: any, tabId: number | null | undefined) {
+export async function executeTool(request: MessageRequest, tabId: number | null | undefined) {
   if (!tabId) {return { success: false, error: "No Session Tab" };}
   const session = await getSession(tabId);
   if (!session) {
@@ -13,6 +15,11 @@ export async function executeTool(request: any, tabId: number | null | undefined
   }
   const { port, token } = session;
   const apiEndpoint = `http://127.0.0.1:${port}/v1/tools/call`;
+  const payload = getToolPayload(request);
+  if (!payload) {
+    return { success: false, error: "Invalid tool payload." };
+  }
+
   try {
     const response = await fetch(apiEndpoint, {
       method: "POST",
@@ -21,20 +28,12 @@ export async function executeTool(request: any, tabId: number | null | undefined
         [PROTOCOL.authHeaderName]: token,
       },
       body: JSON.stringify({
-        name: request.payload.name,
-        arguments: request.payload.arguments ?? {},
+        name: payload.name,
+        arguments: payload.arguments ?? {},
       }),
     });
     if (response.ok) {
-      const resJson = await response.json();
-      const textContent = formatGatewayToolContent(resJson);
-      if (resJson?.isError === true) {
-        return {
-          success: false,
-          error: textContent || "Tool execution failed.",
-        };
-      }
-      return { success: true, data: textContent };
+      return parseSuccessfulGatewayResponse(await response.json());
     }
     if (response.status === 403) {
       return { success: false, error: "Session Expired/Invalid Token." };
@@ -44,29 +43,56 @@ export async function executeTool(request: any, tabId: number | null | undefined
       success: false,
       error: errorText || `${response.status} - ${response.statusText}`,
     };
-  } catch (err: any) {
-    return { success: false, error: `Connection Failed: ${err.message}` };
+  } catch (err: unknown) {
+    return { success: false, error: `Connection Failed: ${getErrorMessage(err)}` };
   }
 }
 
-function formatGatewayToolContent(result: any): string {
-  if (Array.isArray(result?.content)) {
-    return result.content.map((item: any) => item?.text ?? "").filter(Boolean).join("\n");
+function getToolPayload(request: MessageRequest): ToolExecutionPayload | null {
+  return request.payload && typeof request.payload.name === "string" ? request.payload : null;
+}
+
+function parseSuccessfulGatewayResponse(result: unknown): { success: boolean; data?: string; error?: string } {
+  const textContent = formatGatewayToolContent(result);
+  if (isRecord(result) && result.isError === true) {
+    return {
+      success: false,
+      error: textContent || "Tool execution failed.",
+    };
   }
-  return JSON.stringify(result);
+  return { success: true, data: textContent };
+}
+
+function formatGatewayToolContent(result: unknown): string {
+  if (isRecord(result) && Array.isArray(result.content)) {
+    return result.content
+      .map(getGatewayTextContent)
+      .filter((text) => text.length > 0)
+      .join("\n");
+  }
+  return stringifyUnknown(result);
 }
 
 async function readGatewayError(response: Response): Promise<string> {
   try {
-    const resJson = await response.json();
-    if (Array.isArray(resJson?.content)) {
+    const resJson: unknown = await response.json();
+    if (isRecord(resJson) && Array.isArray(resJson.content)) {
       return formatGatewayToolContent(resJson);
     }
-    if (typeof resJson?.error === "string") {
+    if (isRecord(resJson) && typeof resJson.error === "string") {
       return resJson.error;
     }
-    return JSON.stringify(resJson);
+    return stringifyUnknown(resJson);
   } catch {
     return `${response.status} - ${response.statusText}`;
   }
+}
+
+function getGatewayTextContent(item: unknown): string {
+  return isRecord(item) && typeof item.text === "string" ? item.text : "";
+}
+
+function stringifyUnknown(value: unknown): string {
+  const json = JSON.stringify(value);
+  return typeof json === "string" ? json : String(value);
 }

@@ -1,10 +1,31 @@
 import * as fs from 'fs/promises';
+import type { Dirent } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as crypto from 'crypto';
 
 export type WorkspacePathOptions = {
     forWrite?: boolean;
+};
+
+type WalkOptions = {
+    excludePatterns?: string[];
+    includePattern?: string;
+};
+
+type WalkContext = {
+    rootPath: string;
+    visitor: (filePath: string, relativePath: string) => Promise<boolean | void>;
+    options: WalkOptions;
+};
+
+type DiffBounds = {
+    prefix: number;
+    suffix: number;
+    oldStart: number;
+    newStart: number;
+    oldEnd: number;
+    newEnd: number;
 };
 
 export const DEFAULT_EXCLUDED_DIRECTORIES = [
@@ -57,8 +78,8 @@ export async function resolveWorkspacePath(
         const realPath = await fs.realpath(absolutePath);
         assertAllowedPath(realPath, allowedDirectories);
         return realPath;
-    } catch (error: any) {
-        if (error?.code !== 'ENOENT') {
+    } catch (error: unknown) {
+        if (!hasErrorCode(error, 'ENOENT')) {
             throw error;
         }
         if (!options.forWrite) {
@@ -109,53 +130,76 @@ export async function atomicWriteFile(filePath: string, content: string): Promis
 export async function walkWorkspaceFiles(
     rootPath: string,
     visitor: (filePath: string, relativePath: string) => Promise<boolean | void>,
-    options: {
-        excludePatterns?: string[];
-        includePattern?: string;
-    } = {}
+    options: WalkOptions = {}
 ): Promise<void> {
-    async function walk(currentPath: string): Promise<boolean> {
-        const entries = await fs.readdir(currentPath, { withFileTypes: true }).catch(() => null);
-        if (entries === null) {
-            // Skip directories that cannot be read (e.g. EACCES, ENOENT).
-            return false;
-        }
-        for (const entry of entries) {
-            const absolute = path.join(currentPath, entry.name);
-            const relative = path.relative(rootPath, absolute);
-            const normalizedRelative = toPosixPath(relative);
+    await walkDirectory({ rootPath, visitor, options }, rootPath);
+}
 
-            if (entry.isDirectory()) {
-                if (DEFAULT_EXCLUDED_DIRECTORY_SET.has(entry.name) || matchesAnyPattern(normalizedRelative, options.excludePatterns ?? [])) {
-                    continue;
-                }
-                const shouldStop = await walk(absolute);
-                if (shouldStop) {
-                    return true;
-                }
-                continue;
-            }
-
-            if (!entry.isFile()) {
-                continue;
-            }
-            if (matchesAnyPattern(normalizedRelative, options.excludePatterns ?? [])) {
-                continue;
-            }
-            if (options.includePattern && !matchesPattern(normalizedRelative, options.includePattern) && !matchesPattern(entry.name, options.includePattern)) {
-                continue;
-            }
-
-            const shouldStop = await visitor(absolute, normalizedRelative);
-            if (shouldStop) {
-                return true;
-            }
-        }
-
+async function walkDirectory(context: WalkContext, currentPath: string): Promise<boolean> {
+    const entries = await fs.readdir(currentPath, { withFileTypes: true }).catch(() => null);
+    if (entries === null) {
+        // Skip directories that cannot be read (e.g. EACCES, ENOENT).
         return false;
     }
 
-    await walk(rootPath);
+    for (const entry of entries) {
+        const shouldStop = await visitWorkspaceEntry(context, currentPath, entry);
+        if (shouldStop) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+async function visitWorkspaceEntry(
+    context: WalkContext,
+    currentPath: string,
+    entry: Dirent
+): Promise<boolean> {
+    const absolute = path.join(currentPath, entry.name);
+    const normalizedRelative = toPosixPath(path.relative(context.rootPath, absolute));
+
+    if (entry.isDirectory()) {
+        return visitWorkspaceDirectory(context, absolute, normalizedRelative, entry.name);
+    }
+    if (!entry.isFile() || shouldSkipFile(context, normalizedRelative, entry.name)) {
+        return false;
+    }
+
+    return (await context.visitor(absolute, normalizedRelative)) === true;
+}
+
+async function visitWorkspaceDirectory(
+    context: WalkContext,
+    absolute: string,
+    normalizedRelative: string,
+    entryName: string
+): Promise<boolean> {
+    if (shouldSkipDirectory(context, normalizedRelative, entryName)) {
+        return false;
+    }
+
+    return walkDirectory(context, absolute);
+}
+
+function shouldSkipDirectory(context: WalkContext, normalizedRelative: string, entryName: string): boolean {
+    return DEFAULT_EXCLUDED_DIRECTORY_SET.has(entryName) ||
+        matchesAnyPattern(normalizedRelative, context.options.excludePatterns ?? []);
+}
+
+function shouldSkipFile(context: WalkContext, normalizedRelative: string, entryName: string): boolean {
+    if (matchesAnyPattern(normalizedRelative, context.options.excludePatterns ?? [])) {
+        return true;
+    }
+
+    return !matchesIncludePattern(context.options.includePattern, normalizedRelative, entryName);
+}
+
+function matchesIncludePattern(includePattern: string | undefined, normalizedRelative: string, entryName: string): boolean {
+    return !includePattern ||
+        matchesPattern(normalizedRelative, includePattern) ||
+        matchesPattern(entryName, includePattern);
 }
 
 export function matchesFileQuery(relativePath: string, fileName: string, query: string): boolean {
@@ -208,52 +252,80 @@ export function createUnifiedDiff(originalContent: string, newContent: string, f
         return 'No changes.';
     }
 
+    const bounds = getDiffBounds(originalLines, newLines);
+    const hunkLines = createDiffHeader(filepath, bounds);
+    appendDiffBody(hunkLines, originalLines, newLines, bounds);
+
+    return `\`\`\`diff\n${hunkLines.join('\n')}\n\`\`\``;
+}
+
+function getDiffBounds(originalLines: string[], newLines: string[]): DiffBounds {
+    const prefix = getCommonPrefixLength(originalLines, newLines);
+    const suffix = getCommonSuffixLength(originalLines, newLines, prefix);
+    const contextLines = 3;
+
+    return {
+        prefix,
+        suffix,
+        oldStart: Math.max(0, prefix - contextLines),
+        newStart: Math.max(0, prefix - contextLines),
+        oldEnd: Math.min(originalLines.length, originalLines.length - suffix + contextLines),
+        newEnd: Math.min(newLines.length, newLines.length - suffix + contextLines)
+    };
+}
+
+function getCommonPrefixLength(originalLines: string[], newLines: string[]): number {
     let prefix = 0;
-    while (
-        prefix < originalLines.length &&
-        prefix < newLines.length &&
-        originalLines[prefix] === newLines[prefix]
-    ) {
+    while (prefix < originalLines.length && prefix < newLines.length && originalLines[prefix] === newLines[prefix]) {
         prefix++;
     }
 
+    return prefix;
+}
+
+function getCommonSuffixLength(originalLines: string[], newLines: string[], prefix: number): number {
     let suffix = 0;
-    while (
-        suffix < originalLines.length - prefix &&
-        suffix < newLines.length - prefix &&
-        originalLines[originalLines.length - 1 - suffix] === newLines[newLines.length - 1 - suffix]
-    ) {
+    while (hasMatchingSuffixLine(originalLines, newLines, prefix, suffix)) {
         suffix++;
     }
 
-    const contextLines = 3;
-    const oldStart = Math.max(0, prefix - contextLines);
-    const newStart = Math.max(0, prefix - contextLines);
-    const oldEnd = Math.min(originalLines.length, originalLines.length - suffix + contextLines);
-    const newEnd = Math.min(newLines.length, newLines.length - suffix + contextLines);
+    return suffix;
+}
 
-    const hunkLines = [
+function hasMatchingSuffixLine(originalLines: string[], newLines: string[], prefix: number, suffix: number): boolean {
+    return suffix < originalLines.length - prefix &&
+        suffix < newLines.length - prefix &&
+        originalLines[originalLines.length - 1 - suffix] === newLines[newLines.length - 1 - suffix];
+}
+
+function createDiffHeader(filepath: string, bounds: DiffBounds): string[] {
+    return [
         `--- ${filepath}`,
         `+++ ${filepath}`,
-        `@@ -${oldStart + 1},${oldEnd - oldStart} +${newStart + 1},${newEnd - newStart} @@`
+        `@@ -${bounds.oldStart + 1},${bounds.oldEnd - bounds.oldStart} +${bounds.newStart + 1},${bounds.newEnd - bounds.newStart} @@`
     ];
+}
 
-    for (let index = oldStart; index < prefix; index++) {
+function appendDiffBody(
+    hunkLines: string[],
+    originalLines: string[],
+    newLines: string[],
+    bounds: DiffBounds
+): void {
+    for (let index = bounds.oldStart; index < bounds.prefix; index++) {
         hunkLines.push(` ${originalLines[index]}`);
     }
-    for (let index = prefix; index < originalLines.length - suffix; index++) {
+    for (let index = bounds.prefix; index < originalLines.length - bounds.suffix; index++) {
         hunkLines.push(`-${originalLines[index]}`);
     }
-    for (let index = prefix; index < newLines.length - suffix; index++) {
+    for (let index = bounds.prefix; index < newLines.length - bounds.suffix; index++) {
         hunkLines.push(`+${newLines[index]}`);
     }
-    for (let index = originalLines.length - suffix; index < oldEnd; index++) {
+    for (let index = originalLines.length - bounds.suffix; index < bounds.oldEnd; index++) {
         if (index >= 0 && index < originalLines.length) {
             hunkLines.push(` ${originalLines[index]}`);
         }
     }
-
-    return `\`\`\`diff\n${hunkLines.join('\n')}\n\`\`\``;
 }
 
 export function getNumberArg(value: unknown, fallback: number): number {
@@ -266,6 +338,13 @@ export function getStringArrayArg(value: unknown): string[] {
 
 function hasGlobSyntax(value: string): boolean {
     return /[*?]/.test(value);
+}
+
+function hasErrorCode(error: unknown, code: string): boolean {
+    return typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        error.code === code;
 }
 
 async function getAllowedWorkspaceDirectories(workspaceRoot: string): Promise<string[]> {

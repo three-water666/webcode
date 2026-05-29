@@ -7,6 +7,7 @@ import {
     resolveShellExecutionPlan
 } from '../servers/commandShell';
 import { assertShellCommandRiskAllowed } from '../servers/commandRisk';
+import { getErrorMessage } from '../gateway/errorUtils';
 
 export const runInTerminalTool: LocalTool = {
     serverId: 'internal',
@@ -58,8 +59,8 @@ export const runInTerminalTool: LocalTool = {
                     path: execution.shell.path
                 }
             });
-        } catch (error: any) {
-            return errorResult(`Error: ${error.message}\nPolicy: ${describeShellCommandPolicy(process.platform)}`);
+        } catch (error: unknown) {
+            return errorResult(`Error: ${getErrorMessage(error)}\nPolicy: ${describeShellCommandPolicy(process.platform)}`);
         }
     }
 };

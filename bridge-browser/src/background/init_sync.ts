@@ -1,5 +1,7 @@
 import { BRANDING, PROTOCOL } from '@webcode/shared';
 
+import { getSyncedAiSites, isRecord } from '../types';
+
 export async function fetchInitDataFromGateway(port: number, token: string) {
   try {
     console.log(`${BRANDING.logPrefix} Fetching initialization data from Gateway...`);
@@ -10,13 +12,13 @@ export async function fetchInitDataFromGateway(port: number, token: string) {
         console.warn(`${BRANDING.logPrefix} Gateway did not respond to /v1/init (might be an older version)`);
         return;
     }
-    const data = await resp.json();
+    const data: unknown = await resp.json();
 
-    if (data.prompts) {
+    if (isRecord(data) && isRecord(data.prompts)) {
       console.log(`${BRANDING.logPrefix} Overwriting local rules with Gateway Defaults.`);
 
       await chrome.storage.local.set({
-        syncedAiSites: data.syncedAiSites ?? [], // Save dynamically injected AI sites & selectors
+        syncedAiSites: getSyncedAiSites(data.syncedAiSites), // Save dynamically injected AI sites & selectors
         ...data.prompts // prompt_en, prompt_zh, train_en... etc.
       });
     }
