@@ -38,9 +38,11 @@ export async function handleTabUpdated(
     if (isSafe) {
       updateBadge(tabId, true);
       // [Sync] Restore connection state in Content Script after reload
-      chrome.tabs.sendMessage(tabId, { type: "STATUS_UPDATE", connected: true, workspaceId: session.workspaceId }).catch(() => {});
+      void chrome.tabs
+        .sendMessage(tabId, { type: "STATUS_UPDATE", connected: true, workspaceId: session.workspaceId })
+        .catch(ignoreRuntimeError);
       if (session.showLog) {
-        chrome.tabs.sendMessage(tabId, { type: "TOGGLE_LOG", show: true }).catch(() => {});
+        void chrome.tabs.sendMessage(tabId, { type: "TOGGLE_LOG", show: true }).catch(ignoreRuntimeError);
       }
     } else {
       await removeSession(tabId);
@@ -50,5 +52,9 @@ export async function handleTabUpdated(
 }
 
 export function handleTabRemoved(tabId: number) {
-  removeSession(tabId);
+  void removeSession(tabId);
+}
+
+function ignoreRuntimeError(_error: unknown): void {
+  void chrome.runtime.lastError;
 }

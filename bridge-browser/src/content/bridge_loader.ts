@@ -90,7 +90,7 @@ import { BRANDING } from '@webcode/shared';
 
           if (!statusText || !loader || !card) {return;}
 
-          if (response && response.success) {
+          if (response?.success) {
             document.body.dataset.bridgeState = "connected";
             statusText.innerText = i18n.connectedRedirecting;
             statusText.style.color = "#4CAF50";

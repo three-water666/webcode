@@ -61,18 +61,18 @@ export const terminalSessionTool: LocalTool = {
             ]
         }
     },
-    async execute(args, context) {
+    execute(args, context) {
         if (args.action === 'list') {
-            return jsonResult(context.terminalSessionManager.listSessions());
+            return Promise.resolve(jsonResult(context.terminalSessionManager.listSessions()));
         }
 
         if (args.action === 'read') {
             const tailLines = typeof args.tail_lines === 'number' ? args.tail_lines : 200;
-            return jsonResult(context.terminalSessionManager.readSessionOutput(String(args.session_id), tailLines));
+            return Promise.resolve(jsonResult(context.terminalSessionManager.readSessionOutput(String(args.session_id), tailLines)));
         }
 
         if (args.action === 'stop') {
-            return jsonResult(context.terminalSessionManager.stopSession(String(args.session_id)));
+            return Promise.resolve(jsonResult(context.terminalSessionManager.stopSession(String(args.session_id))));
         }
 
         throw new Error('action must be one of "list", "read", or "stop".');

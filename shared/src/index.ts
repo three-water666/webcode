@@ -54,7 +54,7 @@ export function isBootstrapOnlyToolName(name: string): name is BootstrapOnlyTool
  */
 export interface ToolExecutionPayload {
   name: string;
-  arguments: any;
+  arguments?: Record<string, unknown>;
   request_id?: string;
   purpose?: string;
 }

@@ -11,7 +11,7 @@ export const listToolsTool: LocalTool = {
             properties: {}
         }
     },
-    async execute(_args, context) {
-        return jsonResult(context.listTools());
+    execute(_args, context) {
+        return Promise.resolve(jsonResult(context.listTools()));
     }
 };

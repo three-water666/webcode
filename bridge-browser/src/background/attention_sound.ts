@@ -8,7 +8,7 @@ let creatingOffscreenDocument: Promise<void> | null = null;
 export async function playAttentionSound(): Promise<{ success: boolean; error?: string }> {
   try {
     await ensureOffscreenDocument();
-    const response = await chrome.runtime.sendMessage({
+    const response: unknown = await chrome.runtime.sendMessage({
       type: PLAY_ATTENTION_SOUND,
     });
 
@@ -34,17 +34,15 @@ async function ensureOffscreenDocument(): Promise<void> {
     return;
   }
 
-  if (!creatingOffscreenDocument) {
-    creatingOffscreenDocument = chrome.offscreen
-      .createDocument({
-        url: OFFSCREEN_DOCUMENT_PATH,
-        reasons: [chrome.offscreen.Reason.AUDIO_PLAYBACK],
-        justification: "Play a short webcode attention sound.",
-      })
-      .finally(() => {
-        creatingOffscreenDocument = null;
-      });
-  }
+  creatingOffscreenDocument ??= chrome.offscreen
+    .createDocument({
+      url: OFFSCREEN_DOCUMENT_PATH,
+      reasons: [chrome.offscreen.Reason.AUDIO_PLAYBACK],
+      justification: "Play a short webcode attention sound.",
+    })
+    .finally(() => {
+      creatingOffscreenDocument = null;
+    });
 
   await creatingOffscreenDocument;
 }

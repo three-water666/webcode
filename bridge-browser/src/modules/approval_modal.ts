@@ -175,7 +175,7 @@ export function showConfirmationModal(
 
   const safeArgs = escapeHtml(JSON.stringify(payload.arguments ?? {}, null, 2));
   const safeName = escapeHtml(payload.name);
-  const safePurpose = escapeHtml((payload as any).purpose ?? "No purpose provided.");
+  const safePurpose = escapeHtml(payload.purpose ?? "No purpose provided.");
   const commandValue = normalizeCommandValue(payload.arguments?.command) ?? "";
   const isCommandScopedApproval = (payload.name === "execute_command" || payload.name === "run_in_terminal") && Boolean(commandValue);
   const safeAlwaysTarget = escapeHtml(isCommandScopedApproval ? commandValue : payload.name);

@@ -57,8 +57,8 @@ async function readProjectRuleFile(root: string, fileName: string): Promise<Proj
             fileName,
             content: content.trimEnd()
         };
-    } catch (error: any) {
-        if (error?.code === 'ENOENT' || error?.code === 'EISDIR') {
+    } catch (error: unknown) {
+        if (hasErrorCode(error, 'ENOENT') || hasErrorCode(error, 'EISDIR')) {
             return null;
         }
         throw error;
@@ -80,4 +80,11 @@ function formatProjectRulesForPrompt(documents: ProjectRuleDocument[]): string {
         '',
         sections
     ].join('\n');
+}
+
+function hasErrorCode(error: unknown, code: string): boolean {
+    return typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        error.code === code;
 }

@@ -11,6 +11,7 @@ import {
     assessShellCommandRisk,
     formatCommandRiskAssessment
 } from '../servers/commandRisk';
+import { getErrorMessage } from '../gateway/errorUtils';
 
 export const executeCommandTool: LocalTool = {
     serverId: 'internal',
@@ -35,8 +36,8 @@ export const executeCommandTool: LocalTool = {
         let commandLine: string;
         try {
             commandLine = normalizeShellCommand(args.command);
-        } catch (error: any) {
-            return errorResult(`Command Error: ${error.message}\nPolicy: ${describeShellCommandPolicy(process.platform)}`);
+        } catch (error: unknown) {
+            return errorResult(`Command Error: ${getErrorMessage(error)}\nPolicy: ${describeShellCommandPolicy(process.platform)}`);
         }
 
         const risk = assessShellCommandRisk(commandLine);
@@ -67,8 +68,8 @@ export const executeCommandTool: LocalTool = {
                 },
                 status: isError ? 'error' : (result.stderr ? 'completed_with_stderr' : 'success')
             }, isError);
-        } catch (error: any) {
-            return errorResult(`Execution System Error: ${error.message}\nPolicy: ${describeShellCommandPolicy(process.platform)}`);
+        } catch (error: unknown) {
+            return errorResult(`Execution System Error: ${getErrorMessage(error)}\nPolicy: ${describeShellCommandPolicy(process.platform)}`);
         }
     }
 };

@@ -4,6 +4,7 @@ import * as UI from "../modules/ui";
 import { type SiteSelectors } from "../modules/config";
 import { looksLikeToolCall, parseToolCall } from "../modules/toolCallProtocol";
 import { BRANDING, PROTOCOL } from "@webcode/shared";
+import { getSyncedAiSites, isMessageRequest, isSiteSelectors, isStatusResponse } from "../types";
 import { AutoInitPromptController } from "./auto_init_prompt";
 import { createApprovalState, parseStoredApprovalEntries, type ApprovalState } from "./approval_policy";
 import { CompletionNotifier } from "./completion_notifier";
@@ -64,17 +65,20 @@ void loadPromptsFromStorage();
 void loadWorkspaceData(currentWorkspaceId);
 
 // 监听消息 (日志开关 & 状态同步)
-chrome.runtime.onMessage.addListener((request) => {
+chrome.runtime.onMessage.addListener((request: unknown) => {
+  if (!isMessageRequest(request)) {return;}
+
   if (request.type === "TOGGLE_LOG") {
-    Logger.toggle(request.show);
-    Logger.log("Logger Visible: " + request.show, "info");
+    const show = request.show === true;
+    Logger.toggle(show);
+    Logger.log("Logger Visible: " + show, "info");
   }
   if (request.type === "STATUS_UPDATE") {
     const wasConnected = isClientConnected;
-    isClientConnected = request.connected;
+    isClientConnected = request.connected === true;
 
     const wasWorkspaceId = currentWorkspaceId;
-    if (request.workspaceId) {
+    if (typeof request.workspaceId === "string") {
       currentWorkspaceId = request.workspaceId;
     }
 
@@ -112,19 +116,19 @@ const autoInitPrompt = new AutoInitPromptController({
 function initDOMConfig() {
   chrome.storage.sync.get(
     ["autoSend"],
-    (items) => {
-      CONFIG.autoSend = items.autoSend ?? true;
+    (items: Record<string, unknown>) => {
+      CONFIG.autoSend = typeof items.autoSend === "boolean" ? items.autoSend : true;
 
-      chrome.storage.local.get(["syncedAiSites"], (localItems) => {
-        const sites = localItems.syncedAiSites ?? [];
+      chrome.storage.local.get(["syncedAiSites"], (localItems: Record<string, unknown>) => {
+        const sites = getSyncedAiSites(localItems.syncedAiSites);
         const currentUrl = location.href;
 
         // Find matching site by URL prefix
-        const matchedSite = sites.find((site: any) => currentUrl.startsWith(site.address));
+        const matchedSite = sites.find((site) => currentUrl.startsWith(site.address));
 
-        if (matchedSite?.selectors) {
+        if (matchedSite && isSiteSelectors(matchedSite.selectors)) {
           DOM = matchedSite.selectors;
-          currentPlatform = matchedSite.name;
+          currentPlatform = matchedSite.name ?? matchedSite.address;
           completionNotifier.reset();
           autoInitPrompt.setupTrigger();
           autoInitPrompt.scheduleCheck();
@@ -139,12 +143,15 @@ function initDOMConfig() {
 
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === "sync") {
-    if (changes.autoSend) { CONFIG.autoSend = changes.autoSend.newValue; }
+    if (changes.autoSend) {
+      const nextAutoSend = changes.autoSend.newValue as unknown;
+      CONFIG.autoSend = typeof nextAutoSend === "boolean" ? nextAutoSend : true;
+    }
   }
   if (namespace === "local") {
     const approvalStorageKey = `allowed_tools_${currentWorkspaceId}`;
     if (changes[approvalStorageKey]) {
-      approvalState = parseStoredApprovalEntries(changes[approvalStorageKey].newValue);
+      approvalState = parseStoredApprovalEntries(changes[approvalStorageKey].newValue as unknown);
       Logger.log(`Allowed tools updated (Workspace: ${currentWorkspaceId})`, "action");
     }
     if (changes.syncedAiSites) {
@@ -402,8 +409,9 @@ const observer = new MutationObserver(() => {
 function startObserver() {
   if (!currentPlatform || !DOM) {return;}
   // Initialize observer only once
-  if ((window as any)[PROTOCOL.observerStartedFlag]) {return;}
-  (window as any)[PROTOCOL.observerStartedFlag] = true;
+  const observerWindow = window as unknown as Record<string, boolean | undefined>;
+  if (observerWindow[PROTOCOL.observerStartedFlag]) {return;}
+  observerWindow[PROTOCOL.observerStartedFlag] = true;
 
   // 1. Start observing immediately (but logic inside is guarded by isClientConnected)
   observer.observe(document.body, {
@@ -415,10 +423,10 @@ function startObserver() {
   });
 
   // 2. Check initial status
-  chrome.runtime.sendMessage({ type: "GET_STATUS" }, async (response) => {
-    if (response?.connected) {
+  chrome.runtime.sendMessage({ type: "GET_STATUS" }, async (response: unknown) => {
+    if (isStatusResponse(response) && response.connected) {
       isClientConnected = true;
-      if (response.workspaceId) {
+      if (typeof response.workspaceId === "string") {
         currentWorkspaceId = response.workspaceId;
         await loadWorkspaceData(currentWorkspaceId);
       }

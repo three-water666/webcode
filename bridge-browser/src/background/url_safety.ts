@@ -1,4 +1,4 @@
-import { type Session } from '../types';
+import { getSyncedAiSites, type Session } from '../types';
 
 export function isBridgePageUrl(url: string): boolean {
   return url.startsWith('http://127.0.0.1:') || url.startsWith('http://localhost:');
@@ -17,12 +17,12 @@ export async function checkUrlSafety(
   }
 
   // Check against dynamic sites configuration
-  const localItems = await chrome.storage.local.get(["syncedAiSites"]);
-  const sites = localItems.syncedAiSites ?? [];
+  const localItems = await chrome.storage.local.get(["syncedAiSites"]) as Record<string, unknown>;
+  const sites = getSyncedAiSites(localItems.syncedAiSites);
 
   // Allow if the URL starts with any configured address or fallback address
   const baseUrl = getBaseUrl(url);
-  const inDynamic = sites.some((site: any) => baseUrl.startsWith(site.address));
+  const inDynamic = sites.some((site) => baseUrl.startsWith(site.address));
 
   return inDynamic;
 }

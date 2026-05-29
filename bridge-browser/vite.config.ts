@@ -1,12 +1,19 @@
 import { defineConfig, type Plugin } from 'vite';
-import { crx } from '@crxjs/vite-plugin';
+import { crx, defineManifest } from '@crxjs/vite-plugin';
 import manifest from './manifest.json';
 import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 
+interface SharedBrandingConfig {
+  productName: string;
+  slug: string;
+  repositoryUrl: string;
+}
+
 const sharedIndexPath = normalizePath(resolve(__dirname, '../shared/src/index.ts'));
 const sharedBrandingPath = resolve(__dirname, '../shared/src/branding.json');
-const sharedBrandingConfig = JSON.parse(readFileSync(sharedBrandingPath, 'utf8'));
+const sharedBrandingConfig = JSON.parse(readFileSync(sharedBrandingPath, 'utf8')) as SharedBrandingConfig;
+const extensionManifest = defineManifest(manifest);
 
 function normalizePath(path: string): string {
   return path.replace(/\\/g, '/');
@@ -34,7 +41,7 @@ function inlineSharedBrandingConfig(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [inlineSharedBrandingConfig(), crx({ manifest: manifest as any })],
+  plugins: [inlineSharedBrandingConfig(), crx({ manifest: extensionManifest })],
   server: {
     port: 5173,
     strictPort: true,

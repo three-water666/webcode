@@ -57,8 +57,8 @@ export async function resolveWorkspacePath(
         const realPath = await fs.realpath(absolutePath);
         assertAllowedPath(realPath, allowedDirectories);
         return realPath;
-    } catch (error: any) {
-        if (error?.code !== 'ENOENT') {
+    } catch (error: unknown) {
+        if (!hasErrorCode(error, 'ENOENT')) {
             throw error;
         }
         if (!options.forWrite) {
@@ -126,7 +126,10 @@ export async function walkWorkspaceFiles(
             const normalizedRelative = toPosixPath(relative);
 
             if (entry.isDirectory()) {
-                if (DEFAULT_EXCLUDED_DIRECTORY_SET.has(entry.name) || matchesAnyPattern(normalizedRelative, options.excludePatterns ?? [])) {
+                if (
+                    DEFAULT_EXCLUDED_DIRECTORY_SET.has(entry.name) ||
+                    matchesAnyPattern(normalizedRelative, options.excludePatterns ?? [])
+                ) {
                     continue;
                 }
                 const shouldStop = await walk(absolute);
@@ -142,7 +145,11 @@ export async function walkWorkspaceFiles(
             if (matchesAnyPattern(normalizedRelative, options.excludePatterns ?? [])) {
                 continue;
             }
-            if (options.includePattern && !matchesPattern(normalizedRelative, options.includePattern) && !matchesPattern(entry.name, options.includePattern)) {
+            if (
+                options.includePattern &&
+                !matchesPattern(normalizedRelative, options.includePattern) &&
+                !matchesPattern(entry.name, options.includePattern)
+            ) {
                 continue;
             }
 
@@ -266,6 +273,13 @@ export function getStringArrayArg(value: unknown): string[] {
 
 function hasGlobSyntax(value: string): boolean {
     return /[*?]/.test(value);
+}
+
+function hasErrorCode(error: unknown, code: string): boolean {
+    return typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        error.code === code;
 }
 
 async function getAllowedWorkspaceDirectories(workspaceRoot: string): Promise<string[]> {

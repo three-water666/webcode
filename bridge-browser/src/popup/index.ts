@@ -1,4 +1,4 @@
-import { type Session } from '../types';
+import { isMessageRequest, isStatusResponse, isStoredSession, isSuccessResponse } from '../types';
 import { BRANDING } from '@webcode/shared';
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -90,24 +90,26 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   if (!currentTabId) {return;}
 
-  chrome.runtime.onMessage.addListener((request) => {
+  chrome.runtime.onMessage.addListener((request: unknown) => {
+    if (!isMessageRequest(request)) {return;}
+
     if (request.type === "LOG_VISIBLE_CHANGED" && request.tabId === currentTabId) {
-      showLogInput.checked = Boolean(request.show);
+      showLogInput.checked = request.show === true;
     }
   });
 
   // 向 Background 查询状态
   chrome.runtime.sendMessage(
     { type: "GET_STATUS", tabId: currentTabId },
-    (response) => {
-      if (response?.connected) {
+    (response: unknown) => {
+      if (isStatusResponse(response) && response.connected) {
         connectedView.classList.remove("hidden");
         disconnectedView.classList.add("hidden");
         statusDot.classList.add("online");
-        portDisplay.innerText = response.port;
+        portDisplay.innerText = String(response.port ?? "");
 
         // 回填 Log 开关状态
-        showLogInput.checked = response.showLog;
+        showLogInput.checked = response.showLog === true;
       } else {
         connectedView.classList.add("hidden");
         statusDot.classList.remove("online");
@@ -115,8 +117,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // [Security] Manual attach is only available on normal web pages
         const currentUrl = tabs[0].url ?? "";
 
-        // eslint-disable-next-line @typescript-eslint/require-await
-        const checkSafety = async () => {
+        const checkSafety = () => {
           if (currentUrl.startsWith('http://127.0.0.1:') || currentUrl.startsWith('http://localhost:')) {
             return true;
           }
@@ -124,61 +125,60 @@ document.addEventListener("DOMContentLoaded", async () => {
           return currentUrl.startsWith('https://') || currentUrl.startsWith('http://');
         };
 
-        checkSafety().then(isAllowed => {
-          if (!isAllowed) {
-            availableView.classList.add("hidden");
-            disconnectedView.classList.remove("hidden");
-            return;
+        const isAllowed = checkSafety();
+        if (!isAllowed) {
+          availableView.classList.add("hidden");
+          disconnectedView.classList.remove("hidden");
+          return;
+        }
+
+        // Scan for existing gateways
+        chrome.storage.local.get(null, (items: Record<string, unknown>) => {
+          const uniqueGateways = new Map<number, string>();
+          for (const [key, val] of Object.entries(items)) {
+            if (key.startsWith("session_") && isStoredSession(val)) {
+              uniqueGateways.set(val.port, val.token);
+            }
           }
 
-          // Scan for existing gateways
-          chrome.storage.local.get(null, (items) => {
-            const uniqueGateways = new Map<number, string>();
-            for (const [key, val] of Object.entries(items)) {
-              if (key.startsWith("session_") && (val as Session).port && (val as Session).token) {
-                uniqueGateways.set((val as Session).port, (val as Session).token);
-              }
-            }
+          if (uniqueGateways.size > 0) {
+            availableView.classList.remove("hidden");
+            disconnectedView.classList.add("hidden");
+            gatewayList.innerHTML = "";
 
-            if (uniqueGateways.size > 0) {
-              availableView.classList.remove("hidden");
-              disconnectedView.classList.add("hidden");
-              gatewayList.innerHTML = "";
-
-              uniqueGateways.forEach((token, port) => {
-                const btn = document.createElement("button");
-                btn.className = "btn";
-                btn.style.marginBottom = "8px";
-                btn.style.display = "flex";
-                btn.style.justifyContent = "space-between";
-                btn.innerHTML = `<span>🔗 ${t("connect_to")} <b>${port}</b></span> <span>⚡</span>`;
-                btn.onclick = () => {
-                  chrome.runtime.sendMessage(
-                    {
-                      type: "CONNECT_EXISTING",
-                      port,
-                      token,
-                      tabId: currentTabId,
-                      targetOrigin: (() => {
-                        try {
-                          return new URL(currentUrl).origin;
-                        } catch {
-                          return undefined;
-                        }
-                      })(),
-                    },
-                    (res) => {
-                      if (res?.success) {window.close();} // Close popup on success
-                    }
-                  );
-                };
-                gatewayList.appendChild(btn);
-              });
-            } else {
-              availableView.classList.add("hidden");
-              disconnectedView.classList.remove("hidden");
-            }
-          });
+            uniqueGateways.forEach((token, port) => {
+              const btn = document.createElement("button");
+              btn.className = "btn";
+              btn.style.marginBottom = "8px";
+              btn.style.display = "flex";
+              btn.style.justifyContent = "space-between";
+              btn.innerHTML = `<span>🔗 ${t("connect_to")} <b>${port}</b></span> <span>⚡</span>`;
+              btn.onclick = () => {
+                chrome.runtime.sendMessage(
+                  {
+                    type: "CONNECT_EXISTING",
+                    port,
+                    token,
+                    tabId: currentTabId,
+                    targetOrigin: (() => {
+                      try {
+                        return new URL(currentUrl).origin;
+                      } catch {
+                        return undefined;
+                      }
+                    })(),
+                  },
+                  (res: unknown) => {
+                    if (isSuccessResponse(res) && res.success) {window.close();} // Close popup on success
+                  }
+                );
+              };
+              gatewayList.appendChild(btn);
+            });
+          } else {
+            availableView.classList.add("hidden");
+            disconnectedView.classList.remove("hidden");
+          }
         });
       }
     }
@@ -186,10 +186,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // 2. 复制初始化提示词
   copyInitBtn.addEventListener("click", () => {
-    chrome.storage.local.get([initKey], (items) => {
+    chrome.storage.local.get([initKey], (items: Record<string, unknown>) => {
       const initContent = items[initKey];
-      if (initContent) {
-        navigator.clipboard.writeText(initContent).then(() => {
+      if (typeof initContent === "string" && initContent) {
+        void navigator.clipboard.writeText(initContent).then(() => {
           const originalText = copyInitBtn.innerText;
           copyInitBtn.innerText = t("copied_init");
           copyInitBtn.style.backgroundColor = "#0d8a6a";
@@ -197,6 +197,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             copyInitBtn.innerText = originalText;
             copyInitBtn.style.backgroundColor = "";
           }, 3000);
+        }).catch(() => {
+          copyInitBtn.innerText = t("init_missing");
         });
       } else {
         copyInitBtn.innerText = t("init_missing");
@@ -205,17 +207,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   // Auto Send (Global Config)
-  chrome.storage.sync.get(["autoSend"], (items) => {
+  chrome.storage.sync.get(["autoSend"], (items: Record<string, unknown>) => {
     autoSendInput.checked =
-      items.autoSend !== undefined ? items.autoSend : true;
+      typeof items.autoSend === "boolean" ? items.autoSend : true;
   });
   autoSendInput.addEventListener("change", () => {
-    chrome.storage.sync.set({ autoSend: autoSendInput.checked });
+    void chrome.storage.sync.set({ autoSend: autoSendInput.checked });
   });
 
   // Log Toggle (Tab Session)
   showLogInput.addEventListener("change", () => {
-    chrome.runtime.sendMessage({
+    void chrome.runtime.sendMessage({
       type: "SET_LOG_VISIBLE",
       tabId: currentTabId,
       show: showLogInput.checked,
