@@ -10,7 +10,7 @@ Make sure there is a space before the trigger word, for example:
 Read the current project structure. /webcode
 ```
 
-If the page still does not trigger, click the browser extension popup and use its button to manually copy the initialization prompt, then paste it into the current chat and send it.
+If the page still does not trigger, refresh the current page, confirm the browser extension popup shows that it is connected, then type the trigger again. In a new conversation, if the first message forgets the trigger, webcode also shows the initialization confirmation when you click Send or press Enter.
 
 ## What if the AI returns a tool call and the tool succeeds, but the page does not change?
 

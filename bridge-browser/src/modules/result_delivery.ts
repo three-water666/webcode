@@ -285,12 +285,16 @@ function setTextControlValue(inputEl: HTMLInputElement | HTMLTextAreaElement, te
  * - 构造并在这个输入区域上主动派发一个 `ClipboardEvent`（即“粘贴”事件）。
  * - 绝大多数先进的 AI 网页平台会立刻读取这个事件并自动把它当作一个图片或者文本文件上传。
  */
-async function pasteTextAsAttachment(text: string, domSelectors: SiteSelectors): Promise<boolean> {
+export async function pasteTextAsAttachment(
+  text: string,
+  domSelectors: SiteSelectors,
+  filenamePrefix: string = BRANDING.resultFilePrefix
+): Promise<boolean> {
   const inputEl = getInputAreaElement(domSelectors);
   if (!inputEl) {return false;}
 
   try {
-    const filename = `${BRANDING.resultFilePrefix}-${Date.now()}.txt`;
+    const filename = `${filenamePrefix}-${Date.now()}.txt`;
     const file = new File([text], filename, { type: "text/plain" });
     const clipboardData = new DataTransfer();
     clipboardData.items.add(file);

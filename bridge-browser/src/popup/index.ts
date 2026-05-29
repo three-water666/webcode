@@ -6,7 +6,6 @@ type PopupElements = {
   disconnectedView: HTMLElement;
   statusDot: HTMLElement;
   portDisplay: HTMLElement;
-  copyInitBtn: HTMLButtonElement;
   autoSendInput: HTMLInputElement;
   showLogInput: HTMLInputElement;
   availableView: HTMLElement;
@@ -26,7 +25,6 @@ type PopupElements = {
 
 type PopupContext = {
   elements: PopupElements;
-  initKey: string;
   t: (key: string) => string;
 };
 
@@ -40,8 +38,6 @@ const UI: Record<string, Record<string, string>> = {
     title: BRANDING.bridgeName,
     connected_text: "✅ Connected to VS Code",
     port_label: "Port",
-    copy_init: "Copy Initialization Prompt",
-    copy_init_title: "Copy the initialization prompt",
     auto_send: "Auto Send Message",
     show_log: "Show Floating Log",
     available_gateways: "⚡ Available Gateways",
@@ -51,15 +47,11 @@ const UI: Record<string, Record<string, string>> = {
     not_installed_title: "👉 Not Installed?",
     marketplace_hint: "Search in VS Code Marketplace:",
     connect_to: "Connect to",
-    copied_init: "Initialization prompt copied",
-    init_missing: "Init Prompt Not Found",
   },
   zh: {
     title: BRANDING.bridgeName,
     connected_text: "✅ 已连接到 VS Code",
     port_label: "端口",
-    copy_init: "复制初始化提示词",
-    copy_init_title: "复制初始化提示词",
     auto_send: "自动发送消息",
     show_log: "显示悬浮日志",
     available_gateways: "⚡ 可用网关",
@@ -69,8 +61,6 @@ const UI: Record<string, Record<string, string>> = {
     not_installed_title: "👉 未安装？",
     marketplace_hint: "在 VS Code 扩展市场中搜索：",
     connect_to: "连接到",
-    copied_init: "初始化提示词已复制",
-    init_missing: "未找到初始化提示词",
   },
 };
 
@@ -100,7 +90,6 @@ function createPopupContext(): PopupContext {
 
   return {
     elements: getPopupElements(),
-    initKey: lang === "zh" ? "init_zh" : "init_en",
     t,
   };
 }
@@ -111,7 +100,6 @@ function getPopupElements(): PopupElements {
     disconnectedView: document.getElementById("disconnectedView") as HTMLElement,
     statusDot: document.getElementById("statusDot") as HTMLElement,
     portDisplay: document.getElementById("portDisplay") as HTMLElement,
-    copyInitBtn: document.getElementById("copyInitBtn") as HTMLButtonElement,
     autoSendInput: document.getElementById("autoSend") as HTMLInputElement,
     showLogInput: document.getElementById("showLog") as HTMLInputElement,
     availableView: document.getElementById("availableView") as HTMLElement,
@@ -135,8 +123,6 @@ function initializeLabels(context: PopupContext): void {
   elements.title.textContent = t("title");
   elements.connectedText.textContent = t("connected_text");
   elements.portLabel.textContent = t("port_label");
-  elements.copyInitBtn.textContent = t("copy_init");
-  elements.copyInitBtn.title = t("copy_init_title");
   elements.autoSendLabel.textContent = t("auto_send");
   elements.showLogLabel.textContent = t("show_log");
   elements.availableGateways.innerHTML = `<span>⚡</span> ${t("available_gateways").replace(/^⚡\s*/, "")}`;
@@ -283,45 +269,8 @@ function getTargetOrigin(currentUrl: string): string | undefined {
 }
 
 function bindPopupControls(currentTabId: number, context: PopupContext): void {
-  bindCopyInitButton(context);
   bindAutoSendToggle(context.elements.autoSendInput);
   bindLogToggle(currentTabId, context.elements.showLogInput);
-}
-
-function bindCopyInitButton(context: PopupContext): void {
-  context.elements.copyInitBtn.addEventListener("click", () => {
-    chrome.storage.local.get([context.initKey], (items: Record<string, unknown>) => {
-      handleStoredInitPrompt(items[context.initKey], context);
-    });
-  });
-}
-
-function handleStoredInitPrompt(initContent: unknown, context: PopupContext): void {
-  if (typeof initContent !== "string" || !initContent) {
-    context.elements.copyInitBtn.innerText = context.t("init_missing");
-    return;
-  }
-
-  void copyInitPrompt(initContent, context);
-}
-
-async function copyInitPrompt(initContent: string, context: PopupContext): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(initContent);
-    showCopySuccess(context);
-  } catch {
-    context.elements.copyInitBtn.innerText = context.t("init_missing");
-  }
-}
-
-function showCopySuccess(context: PopupContext): void {
-  const originalText = context.elements.copyInitBtn.innerText;
-  context.elements.copyInitBtn.innerText = context.t("copied_init");
-  context.elements.copyInitBtn.style.backgroundColor = "#0d8a6a";
-  setTimeout(() => {
-    context.elements.copyInitBtn.innerText = originalText;
-    context.elements.copyInitBtn.style.backgroundColor = "";
-  }, 3000);
 }
 
 function bindAutoSendToggle(autoSendInput: HTMLInputElement): void {
