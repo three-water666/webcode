@@ -1,10 +1,54 @@
-/* eslint-disable max-lines-per-function */
-import { type HandshakeResponse } from '../types';
 import { BRANDING } from '@webcode/shared';
+import { type HandshakeResponse } from '../types';
 
-(function () {
-  const isZh = navigator.language.toLowerCase().startsWith("zh");
-  const i18n = isZh ? {
+type BridgeLoaderI18n = {
+  invalidLinkParameters: string;
+  extensionNotDetectedTitle: string;
+  extensionNotDetectedDesc: string;
+  connectedRedirecting: string;
+  connectionConflictTitle: string;
+  connectionConflictBody: (port: number) => string;
+  connectHere: string;
+  switchingConnection: string;
+  connectionFailed: (message: string) => string;
+  unknownError: string;
+};
+
+type HandshakeElements = {
+  loader: HTMLElement | null;
+  statusText: HTMLElement | null;
+  card: HTMLElement | null;
+};
+
+type ReadyHandshakeElements = {
+  loader: HTMLElement;
+  statusText: HTMLElement;
+  card: HTMLElement;
+};
+
+type HandshakeParams = {
+  port: number;
+  token: string;
+  target: string;
+  targetOrigin?: string;
+  workspaceId: string;
+};
+
+const I18N: Record<"en" | "zh", BridgeLoaderI18n> = {
+  en: {
+    invalidLinkParameters: "Invalid Link Parameters",
+    extensionNotDetectedTitle: "❌ Extension Not Detected",
+    extensionNotDetectedDesc: `Please ensure '${BRANDING.bridgeName}' extension is installed and enabled.`,
+    connectedRedirecting: "✅ Connected! Redirecting...",
+    connectionConflictTitle: "⚠️ Connection Conflict",
+    connectionConflictBody: (port: number) =>
+      `VS Code (Port ${port}) is already connected to another tab.<br>Do you want to switch the connection here?`,
+    connectHere: "Yes, Connect Here",
+    switchingConnection: "Switching connection...",
+    connectionFailed: (message: string) => `Connection Failed: ${message}`,
+    unknownError: "Unknown Error",
+  },
+  zh: {
     invalidLinkParameters: "链接参数无效",
     extensionNotDetectedTitle: "❌ 未检测到扩展",
     extensionNotDetectedDesc: `请确认已安装并启用 “${BRANDING.bridgeName}” 浏览器扩展。`,
@@ -15,148 +59,192 @@ import { BRANDING } from '@webcode/shared';
     switchingConnection: "正在切换连接...",
     connectionFailed: (message: string) => `连接失败：${message}`,
     unknownError: "未知错误",
-  } : {
-    invalidLinkParameters: "Invalid Link Parameters",
-    extensionNotDetectedTitle: "❌ Extension Not Detected",
-    extensionNotDetectedDesc: `Please ensure '${BRANDING.bridgeName}' extension is installed and enabled.`,
-    connectedRedirecting: "✅ Connected! Redirecting...",
-    connectionConflictTitle: "⚠️ Connection Conflict",
-    connectionConflictBody: (port: number) => `VS Code (Port ${port}) is already connected to another tab.<br>Do you want to switch the connection here?`,
-    connectHere: "Yes, Connect Here",
-    switchingConnection: "Switching connection...",
-    connectionFailed: (message: string) => `Connection Failed: ${message}`,
-    unknownError: "Unknown Error",
+  },
+};
+
+const i18n = I18N[navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en"];
+
+document.documentElement.setAttribute("data-extension-installed", "true");
+
+if (document.readyState === "loading") {
+  window.addEventListener("DOMContentLoaded", startHandshake);
+} else {
+  startHandshake();
+}
+
+function startHandshake(): void {
+  console.log(`${BRANDING.logPrefix} Bridge starting handshake...`);
+
+  const elements = getHandshakeElements();
+  const params = readHandshakeParams();
+  if (!params) {
+    showInvalidLinkParameters(elements.statusText);
+    return;
+  }
+
+  attemptHandshake(params, elements);
+}
+
+function getHandshakeElements(): HandshakeElements {
+  return {
+    loader: document.getElementById("loader"),
+    statusText: document.querySelector("p"),
+    card: document.getElementById("main-card"),
   };
+}
 
-  // === 核心修复：等待 DOM 加载完成 ===
-  // 标记插件已安装，供页面检测
-  document.documentElement.setAttribute("data-extension-installed", "true");
+function readHandshakeParams(): HandshakeParams | null {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("token");
+  const target = params.get("target");
+  const portStr = window.location.port;
 
-  function startHandshake() {
-    console.log(`${BRANDING.logPrefix} Bridge starting handshake...`);
+  if (!token || !target || !portStr) {
+    return null;
+  }
 
-    // 1. 从 URL 获取参数
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get("token");
-    const target = params.get("target");
-    const portStr = window.location.port;
+  return {
+    port: Number.parseInt(portStr, 10),
+    token,
+    target,
+    targetOrigin: readTargetOrigin(target),
+    workspaceId: readWorkspaceId(),
+  };
+}
 
-    const workspaceId = readWorkspaceId();
+function readTargetOrigin(target: string): string | undefined {
+  try {
+    return new URL(target).origin;
+  } catch {
+    return undefined;
+  }
+}
 
-    const loader = document.getElementById("loader");
-    const statusText = document.querySelector("p") as HTMLElement | null;
-    const card = document.getElementById("main-card");
-
-    if (!token || !target || !portStr) {
-      if (statusText) {
-        statusText.innerText = i18n.invalidLinkParameters;
-        statusText.style.color = "#ff6b6b";
-      }
-      return;
+function attemptHandshake(params: HandshakeParams, elements: HandshakeElements, force = false): void {
+  chrome.runtime.sendMessage(
+    {
+      type: "HANDSHAKE",
+      port: params.port,
+      token: params.token,
+      targetOrigin: params.targetOrigin,
+      workspaceId: params.workspaceId,
+      force,
+    },
+    (response: HandshakeResponse) => {
+      handleHandshakeResponse(response, params, elements);
     }
+  );
+}
 
-    const port = parseInt(portStr);
-    let targetOrigin: string | undefined;
-    try {
-      targetOrigin = new URL(target).origin;
-    } catch {
-      targetOrigin = undefined;
-    }
+function handleHandshakeResponse(
+  response: HandshakeResponse,
+  params: HandshakeParams,
+  elements: HandshakeElements
+): void {
+  if (chrome.runtime.lastError) {
+    showExtensionNotDetected(elements);
+    return;
+  }
 
-    function attemptHandshake(force = false) {
-      // 发送握手请求给 Background
-      chrome.runtime.sendMessage(
-        {
-          type: "HANDSHAKE",
-          port: port,
-          token: token,
-          targetOrigin: targetOrigin ?? undefined,
-          workspaceId: workspaceId,
-          force: force,
-        },
-        (response: HandshakeResponse) => {
-          if (chrome.runtime.lastError) {
-            console.error(`${BRANDING.logPrefix} Runtime error during handshake:`, chrome.runtime.lastError);
-            if (statusText && loader) {
-                document.body.dataset.bridgeState = "error";
-                statusText.innerHTML = `
+  if (!hasReadyHandshakeElements(elements)) {
+    return;
+  }
+
+  if (response?.success) {
+    showConnected(params.target, elements);
+  } else if (response?.error === "BUSY") {
+    showConnectionConflict(params, elements);
+  } else {
+    showConnectionFailed(response, elements);
+  }
+}
+
+function showInvalidLinkParameters(statusText: HTMLElement | null): void {
+  if (!statusText) {
+    return;
+  }
+
+  statusText.innerText = i18n.invalidLinkParameters;
+  statusText.style.color = "#ff6b6b";
+}
+
+function showExtensionNotDetected(elements: HandshakeElements): void {
+  console.error(`${BRANDING.logPrefix} Runtime error during handshake:`, chrome.runtime.lastError);
+  if (!elements.statusText || !elements.loader) {
+    return;
+  }
+
+  document.body.dataset.bridgeState = "error";
+  elements.statusText.innerHTML = `
                             <span style="color:#ff6b6b">${i18n.extensionNotDetectedTitle}</span><br>
                             <span style="font-size:0.8em; opacity:0.8">${i18n.extensionNotDetectedDesc}</span>
                         `;
-                loader.style.display = "none";
-            }
-            return;
-          }
+  elements.loader.style.display = "none";
+}
 
-          if (!statusText || !loader || !card) {return;}
+function hasReadyHandshakeElements(elements: HandshakeElements): elements is ReadyHandshakeElements {
+  return Boolean(elements.statusText && elements.loader && elements.card);
+}
 
-          if (response?.success) {
-            document.body.dataset.bridgeState = "connected";
-            statusText.innerText = i18n.connectedRedirecting;
-            statusText.style.color = "#4CAF50";
-            setTimeout(() => {
-              window.location.href = target as string;
-            }, 500);
-          } else if (response?.error === "BUSY") {
-            // === 冲突处理 UI ===
-            document.body.dataset.bridgeState = "conflict";
-            loader.style.display = "none";
-            statusText.innerHTML = `
+function showConnected(target: string, elements: ReadyHandshakeElements): void {
+  document.body.dataset.bridgeState = "connected";
+  elements.statusText.innerText = i18n.connectedRedirecting;
+  elements.statusText.style.color = "#4CAF50";
+  setTimeout(() => {
+    window.location.href = target;
+  }, 500);
+}
+
+function showConnectionConflict(params: HandshakeParams, elements: ReadyHandshakeElements): void {
+  document.body.dataset.bridgeState = "conflict";
+  elements.loader.style.display = "none";
+  elements.statusText.innerHTML = `
                         <span style="color:#f39c12; font-weight:bold">${i18n.connectionConflictTitle}</span><br><br>
-                        ${i18n.connectionConflictBody(port)}
+                        ${i18n.connectionConflictBody(params.port)}
                     `;
 
-            const oldBtn = card.querySelector("button");
-            if (oldBtn) {oldBtn.remove();}
+  elements.card.querySelector("button")?.remove();
+  elements.card.appendChild(createConnectHereButton(params, elements));
+}
 
-            const btn = document.createElement("button");
-            btn.innerText = i18n.connectHere;
-            btn.style.marginTop = "20px";
-            btn.onclick = () => {
-              document.body.dataset.bridgeState = "switching";
-              statusText.innerText = i18n.switchingConnection;
-              loader.style.display = "block";
-              btn.remove();
-              attemptHandshake(true);
-            };
-            card.appendChild(btn);
-          } else {
-            document.body.dataset.bridgeState = "error";
-            statusText.innerText = i18n.connectionFailed(
-              response?.error ?? i18n.unknownError
-            );
-            statusText.style.color = "#ff6b6b";
-          }
-        }
-      );
+function createConnectHereButton(params: HandshakeParams, elements: HandshakeElements): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.innerText = i18n.connectHere;
+  button.style.marginTop = "20px";
+  button.onclick = () => {
+    document.body.dataset.bridgeState = "switching";
+    if (elements.statusText) {
+      elements.statusText.innerText = i18n.switchingConnection;
     }
-
-    // 启动握手
-    attemptHandshake();
-  }
-
-  // 核心修复：更鲁棒的 DOM 加载检测
-  if (document.readyState === "loading") {
-    window.addEventListener("DOMContentLoaded", startHandshake);
-  } else {
-    startHandshake();
-  }
-
-  function readWorkspaceId(): string {
-    const dataEl = document.getElementById("mcp-data");
-    const rawData = dataEl?.textContent ?? "";
-    try {
-      const parsed: unknown = JSON.parse(rawData);
-      if (isRecord(parsed) && typeof parsed.workspaceId === "string" && parsed.workspaceId) {
-        return parsed.workspaceId;
-      }
-    } catch {
+    if (elements.loader) {
+      elements.loader.style.display = "block";
     }
+    button.remove();
+    attemptHandshake(params, elements, true);
+  };
+  return button;
+}
 
-    return "global";
+function showConnectionFailed(response: HandshakeResponse, elements: ReadyHandshakeElements): void {
+  document.body.dataset.bridgeState = "error";
+  elements.statusText.innerText = i18n.connectionFailed(response?.error ?? i18n.unknownError);
+  elements.statusText.style.color = "#ff6b6b";
+}
+
+function readWorkspaceId(): string {
+  const dataEl = document.getElementById("mcp-data");
+  const rawData = dataEl?.textContent ?? "";
+  try {
+    const parsed: unknown = JSON.parse(rawData);
+    if (isRecord(parsed) && typeof parsed.workspaceId === "string" && parsed.workspaceId) {
+      return parsed.workspaceId;
+    }
+  } catch {
   }
 
-  function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null;
-  }
-})();
+  return "global";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
