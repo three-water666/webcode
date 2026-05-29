@@ -56,7 +56,7 @@ export const APPROVAL_MODAL_STYLE = `
 export function renderApprovalModalHtml(content: ApprovalModalContent): string {
   return `
           <h2><span class="warn-icon">✋</span> ${t("hitl_title")}</h2>
-          
+
           <div id="view-main">
               <div class="field">
                   <span class="label">${t("label_tool")}</span>
@@ -83,7 +83,7 @@ export function renderApprovalModalHtml(content: ApprovalModalContent): string {
           </div>
 
           <input type="text" class="reason" placeholder="${t("placeholder_reason")}">
-          
+
           <div class="buttons">
               <button class="btn-always">${t("btn_always")}</button>
               <button class="btn-back">${t("btn_back")}</button>

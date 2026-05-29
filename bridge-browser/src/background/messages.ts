@@ -119,6 +119,7 @@ function handleConnectExisting(
 
   void chrome.storage.local.remove("session_null");
   if (!request.port || !request.token) {
+    sendResponse({ success: false, error: "Missing port or token" });
     return;
   }
 
