@@ -36,6 +36,36 @@
         margin-bottom: 12px;
         border: 1px solid #333;
       }
+      .connected-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .connected-stack .card {
+        margin-bottom: 0;
+      }
+      .status-card {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .connection-label {
+        color: #fff;
+        font-weight: 600;
+        line-height: 1.35;
+      }
+      .status-meta {
+        flex: none;
+        color: #a6a6a6;
+        font-size: 11px;
+        line-height: 1.4;
+        text-align: right;
+        white-space: nowrap;
+      }
+      .settings-card {
+        padding: 4px 12px;
+      }
       .btn {
         display: block;
         width: 100%;
@@ -78,14 +108,18 @@
       .checkbox-row {
         display: flex;
         align-items: center;
+        justify-content: space-between;
         gap: 8px;
         font-size: 12px;
-        margin-bottom: 6px;
+        min-height: 34px;
+        margin-bottom: 0;
+        border-bottom: 1px solid #333;
       }
       .checkbox-row:last-child {
-        margin-bottom: 0;
+        border-bottom: none;
       }
       input[type="checkbox"] {
+        flex: none;
         cursor: pointer;
       }
     </style>
@@ -97,20 +131,24 @@
     </h2>
 
     <div id="connectedView" class="hidden">
-      <div class="card">
-        <p id="connectedText" style="margin-bottom: 8px">✅ Connected to VS Code</p>
-        <p style="font-size: 11px; opacity: 0.7">
-          <span id="portLabel">Port</span>: <span id="portDisplay">-</span>
-        </p>
-      </div>
-      <button id="copyInitBtn" class="btn" title="Copy the initialization prompt">Copy Initialization Prompt</button>
-      <div class="card" style="margin-top: 10px">
-        <label class="checkbox-row">
-          <input type="checkbox" id="autoSend" checked /> <span id="autoSendLabel">Auto Send Message</span>
-        </label>
-        <label class="checkbox-row">
-          <input type="checkbox" id="showLog" /> <span id="showLogLabel">Show Floating Log</span>
-        </label>
+      <div class="connected-stack">
+        <div class="card status-card">
+          <p id="connectedText" class="connection-label">✅ Connected to VS Code</p>
+          <p class="status-meta">
+            <span id="portLabel">Port</span>:
+            <span id="portDisplay">-</span>
+          </p>
+        </div>
+        <div class="card settings-card">
+          <label class="checkbox-row">
+            <span id="autoSendLabel">Auto Send Message</span>
+            <input type="checkbox" id="autoSend" checked />
+          </label>
+          <label class="checkbox-row">
+            <span id="showLogLabel">Show Floating Log</span>
+            <input type="checkbox" id="showLog" />
+          </label>
+        </div>
       </div>
     </div>
 

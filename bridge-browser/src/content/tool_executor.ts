@@ -4,6 +4,7 @@ import * as UI from "../modules/ui";
 import { i18n, t } from "../modules/i18n";
 import { Logger } from "../modules/logger";
 import type { ToolExecutionPayload } from "../types";
+import { buildWebcodeInitPrompt } from "./init_context";
 import {
   buildStoredApprovalEntries,
   getApprovalLabel,
@@ -100,64 +101,12 @@ export class ToolExecutor {
    */
   private async initializeWebcode(payload: ToolExecutionPayload): Promise<void> {
     const requestId = getRequestId(payload);
-    let finalPrompt = i18n.lang === "zh"
-      ? `以下是 ${PROTOCOL.initToolName} 的返回结果，请不要再次发送 ${PROTOCOL.initToolName} 初始化命令。\n\n`
-      : `The following is the result returned by ${PROTOCOL.initToolName}. Do not send the ${PROTOCOL.initToolName} initialization command again.\n\n`;
-    finalPrompt += i18n.resources.prompt ?? "";
-
-    Logger.log(`Initializing ${BRANDING.productName} with prompt, project rules, tool list, and skill list`, "action");
-
-    try {
-      const projectRules = (await this.executeInitToolCall("get_project_rules")).trim();
-      if (projectRules) {
-        finalPrompt += `\n\n${projectRules}`;
-      }
-    } catch (error) {
-      Logger.log(`Project rules fetch failed: ${getErrorMessage(error)}`, "error");
-    }
-
-    try {
-      const [toolsResult, skillsResult] = await Promise.all([
-        this.executeInitToolCall("list_tools"),
-        this.executeInitToolCall("list_skills"),
-      ]);
-
-      finalPrompt += `\n\n# Available Tools\n\`\`\`json\n${escapeInlineNewlines(toolsResult)}\n\`\`\``;
-      finalPrompt += `\n\n# Available Skills\n\`\`\`json\n${escapeInlineNewlines(skillsResult)}\n\`\`\``;
-    } catch (error) {
-      Logger.log(`Initialization data fetch failed: ${getErrorMessage(error)}`, "error");
-      finalPrompt += `\n\n# Initialization Note\nFailed to fetch the tool or skill list. Re-run \`${PROTOCOL.initToolName}\` if needed.`;
-    }
+    const finalPrompt = await buildWebcodeInitPrompt();
 
     this.options.requestRegistry.saveRawResult(requestId, finalPrompt);
     this.options.requestRegistry.markSettled(requestId);
     // 给当前调用栈一点时间收尾，再让主循环批处理回填，和普通工具完成路径保持一致。
     this.options.scheduleMainLoop(50);
-  }
-
-  private executeInitToolCall(name: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage(
-        {
-          type: "EXECUTE_TOOL",
-          payload: { name, arguments: {} },
-        },
-        (response: unknown) => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-            return;
-          }
-
-          const result = normalizeToolResponse(response);
-          if (!result.success) {
-            reject(new Error(result.error ?? `Failed to execute ${name}`));
-            return;
-          }
-
-          resolve(formatToolOutput(result.data, getInitToolFallback(name)));
-        }
-      );
-    });
   }
 
   /**
@@ -266,21 +215,12 @@ export class ToolExecutor {
   }
 }
 
-function escapeInlineNewlines(value: string): string {
-  return value.replace(/\r/g, "\\r").replace(/\n/g, "\\n");
-}
-
 function formatSuccessfulResult(toolName: string, data: unknown): string {
   return formatToolOutput(data, getToolResultFallback(toolName));
 }
 
 function formatToolOutput(data: unknown, fallback: string): string {
   return stringifyToolData(data, fallback);
-}
-
-function getInitToolFallback(toolName: string): string {
-  // Initialization asks for a prompt fragment plus JSON-like tool/skill lists.
-  return toolName === "get_project_rules" ? "" : "[]";
 }
 
 function getToolResultFallback(_toolName: string): string {

@@ -39,7 +39,7 @@
 
 | 工具名 | 作用 |
 | --- | --- |
-| `webcode_init` | 初始化虚拟工具。浏览器捕获后会调用 bootstrap-only tools，把系统 prompt、工具列表和 skill 列表回填到对话框。实际名称来自 `shared/src/index.ts` 的 `PROTOCOL.initToolName`。 |
+| `webcode_init` | 初始化虚拟工具，保留给手动初始化提示词和旧流程兼容。浏览器捕获后会调用 bootstrap-only tools，把系统 prompt、工具列表和 skill 列表回填到对话框。`/webcode` 和 `@webcode` 触发词会直接生成同样的初始化结果。实际名称来自 `shared/src/index.ts` 的 `PROTOCOL.initToolName`。 |
 
 ## 4. 不在本文档统计范围内的工具
 

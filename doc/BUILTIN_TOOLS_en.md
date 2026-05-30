@@ -40,7 +40,7 @@ These capabilities do not come from an MCP server. They are recognized by `bridg
 
 | Tool | Purpose |
 | --- | --- |
-| `webcode_init` | Initializes virtual tools. After the browser captures it, the browser calls bootstrap-only tools and writes the system prompt, tool list, and skill list back into the chat box. The actual name comes from `PROTOCOL.initToolName` in `shared/src/index.ts`. |
+| `webcode_init` | Initializes virtual tools and remains available for manually pasted initialization prompts and older flows. After the browser captures it, the browser calls bootstrap-only tools and writes the system prompt, tool list, and skill list back into the chat box. `/webcode` and `@webcode` triggers now generate the same initialization result directly. The actual name comes from `PROTOCOL.initToolName` in `shared/src/index.ts`. |
 
 ## 4. Outside This Document
 

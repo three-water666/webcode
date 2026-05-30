@@ -37,8 +37,10 @@ If the gateway is already running, click `webcode: <port>` in the status bar to 
 
 1. Open a new chat on the target AI site.
 2. Enter your actual task first, then add `/webcode` or `@webcode` at the end of the same message.
-3. When webcode asks whether to add the initialization prompt, choose `Add` or press Enter.
-4. webcode replaces the trigger word with the initialization prompt. Review the message, then send it yourself.
+3. When webcode asks whether to add the initialization context, choose `Add` or press Enter.
+4. webcode replaces the trigger word with the full initialization context. Review the message, then send it yourself.
+
+If the initialization context exceeds the current AI site's input limit, webcode first attaches the full context as a txt file and keeps a short instruction in the input box.
 
 For example:
 
