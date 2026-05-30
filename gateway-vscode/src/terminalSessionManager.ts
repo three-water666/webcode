@@ -11,7 +11,6 @@ export interface TerminalSessionProfileSummary {
   label: string;
   shellKind: TerminalShellKind;
   source: string;
-  path: string | null;
 }
 
 export interface TerminalSessionSummary {
@@ -372,8 +371,7 @@ function summarizeProfile(profile: WebcodeTerminalProfile): TerminalSessionProfi
     id: profile.id,
     label: profile.label,
     shellKind: profile.shellKind,
-    source: profile.source,
-    path: profile.resolvedPath ?? null
+    source: profile.source
   };
 }
 

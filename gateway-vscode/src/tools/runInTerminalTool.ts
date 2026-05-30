@@ -61,7 +61,7 @@ export const runInTerminalTool: LocalTool = {
                 profile: session.profile,
                 shell: {
                     id: profile.id,
-                    path: profile.resolvedPath ?? null
+                    syntax: profile.syntax
                 }
             });
         } catch (error: unknown) {

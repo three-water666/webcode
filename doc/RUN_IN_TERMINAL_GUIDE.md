@@ -138,8 +138,8 @@ terminal.sendText(commandLine, true);
 ```text
 Available terminal profiles:
 - default: VS Code default terminal (...). Syntax: PowerShell.
-- git-bash: Git Bash. Syntax: POSIX/bash. Path: D:\Git\bin\bash.exe.
-- pwsh: PowerShell 7. Syntax: PowerShell. Path: C:\Program Files\PowerShell\7\pwsh.exe.
+- git-bash: Git Bash. Syntax: POSIX/bash.
+- pwsh: PowerShell 7. Syntax: PowerShell.
 ```
 
 这样 AI 在第一次选择工具时就能根据命令语法选择 profile。

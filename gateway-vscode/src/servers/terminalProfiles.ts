@@ -75,8 +75,7 @@ export function describeTerminalProfiles(profiles: WebcodeTerminalProfile[]): st
     }
 
     return profiles.map(profile => {
-        const pathText = profile.resolvedPath ? ` Path: ${profile.resolvedPath}.` : '';
-        return `- ${profile.id}: ${profile.label}. Syntax: ${profile.syntax}.${pathText}`;
+        return `- ${profile.id}: ${profile.label}. Syntax: ${profile.syntax}.`;
     }).join('\n');
 }
 
