@@ -10,6 +10,7 @@ import { TerminalSessionManager } from './terminalSessionManager';
 import {
     createLocalToolMap,
     type LocalTool,
+    type ToolDefinitionContext,
     type ToolDefinition,
     type ToolExecutionContext
 } from './tools';
@@ -63,11 +64,26 @@ export class GatewayManager {
     }
 
     private _generateGroupedTools() {
-        return generateGroupedTools(this.toolRouter, this.localTools);
+        return generateGroupedTools(this.toolRouter, this.localTools, tool => this.getLocalToolDefinition(tool));
     }
 
     private getToolDefinition(name: string): ToolDefinition | null {
-        return this.localTools.get(name)?.definition ?? this.toolRouter.get(name)?.definition ?? null;
+        const localTool = this.localTools.get(name);
+        if (localTool) {
+            return this.getLocalToolDefinition(localTool);
+        }
+
+        return this.toolRouter.get(name)?.definition ?? null;
+    }
+
+    private getLocalToolDefinition(tool: LocalTool): ToolDefinition {
+        return tool.getDefinition?.(this.createToolDefinitionContext()) ?? tool.definition;
+    }
+
+    private createToolDefinitionContext(): ToolDefinitionContext {
+        return {
+            commandShellPath: this.commandShellPath
+        };
     }
 
     private resetWatchdog() {

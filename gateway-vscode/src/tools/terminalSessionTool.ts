@@ -47,8 +47,8 @@ export const terminalSessionTool: LocalTool = {
                     properties: {
                         action: {
                             type: 'string',
-                            enum: ['stop'],
-                            description: 'Stop a run_in_terminal session.'
+                            enum: ['stop', 'close'],
+                            description: 'Stop interrupts the active command with Ctrl+C and keeps the terminal open. Close closes the terminal tab.'
                         },
                         session_id: {
                             type: 'string',
@@ -75,6 +75,10 @@ export const terminalSessionTool: LocalTool = {
             return Promise.resolve(jsonResult(context.terminalSessionManager.stopSession(String(args.session_id))));
         }
 
-        throw new Error('action must be one of "list", "read", or "stop".');
+        if (args.action === 'close') {
+            return Promise.resolve(jsonResult(context.terminalSessionManager.closeSession(String(args.session_id))));
+        }
+
+        throw new Error('action must be one of "list", "read", "stop", or "close".');
     }
 };

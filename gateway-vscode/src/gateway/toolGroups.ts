@@ -12,16 +12,18 @@ type ToolGroup = {
 
 export function generateGroupedTools(
     toolRouter: Map<string, RemoteToolRoute>,
-    localTools: Map<string, LocalTool>
+    localTools: Map<string, LocalTool>,
+    getLocalToolDefinition: (tool: LocalTool) => ToolDefinition = tool => tool.definition
 ) {
     const allTools = Array.from(toolRouter.values()).map(t => ({ ...t.definition, _server: t.serverId }));
 
     for (const tool of localTools.values()) {
-        if (isBootstrapOnlyToolName(tool.definition.name)) {
+        const definition = getLocalToolDefinition(tool);
+        if (isBootstrapOnlyToolName(definition.name)) {
             continue;
         }
 
-        allTools.push({ ...tool.definition, _server: tool.serverId ?? 'internal' });
+        allTools.push({ ...definition, _server: tool.serverId ?? 'internal' });
     }
 
     const groups: Record<string, ToolGroup> = {};
