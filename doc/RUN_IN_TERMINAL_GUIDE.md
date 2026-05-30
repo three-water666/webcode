@@ -51,7 +51,7 @@ bash.exe -lc "<command>"
 支持动作：
 
 - `list`：列出会话状态。
-- `read`：读取已采集的最近输出。
+- `read`：读取已采集的最近输出，可用 `delay_seconds` 等待一段时间后再读。
 - `stop`：向终端发送 `Ctrl+C`，中断当前命令，保留终端窗口。
 - `close`：关闭终端标签页。
 
@@ -176,6 +176,19 @@ $env:CI='true'; pnpm build
 | `unavailable` | 已降级为 `sendText`，用户可见，但 AI 无法可靠采集输出和退出码。 |
 
 缓存输出会限制最大长度，防止长时间运行的开发服务器无限占用内存。读取时可以通过 `tail_lines` 获取最近输出。
+
+`read` 支持 `delay_seconds`：
+
+```json
+{
+  "action": "read",
+  "session_id": "abc12345",
+  "tail_lines": 200,
+  "delay_seconds": 5
+}
+```
+
+`delay_seconds` 的范围是 0 到 10，默认 0。设置为 0 表示立刻读取；设置为 5 表示等待 5 秒后再读取。这个参数适合构建、测试、打包等短时间内会结束的命令，可以减少 AI 为了等待最终输出而连续多次调用 `read`。
 
 ## 退出状态
 

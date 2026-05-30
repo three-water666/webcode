@@ -5,7 +5,7 @@ export const terminalSessionTool: LocalTool = {
     serverId: 'internal',
     definition: {
         name: 'terminal_session',
-        description: 'Manage terminal sessions created by run_in_terminal: list sessions, read recent output, or stop a session.',
+        description: 'Manage terminal sessions created by run_in_terminal: list sessions, read recent output, interrupt commands, or close terminals.',
         inputSchema: {
             oneOf: [
                 {
@@ -25,7 +25,7 @@ export const terminalSessionTool: LocalTool = {
                         action: {
                             type: 'string',
                             enum: ['read'],
-                            description: 'Read recent output from a run_in_terminal session.'
+                            description: 'Read recent output from a run_in_terminal session, optionally after a short delay.'
                         },
                         session_id: {
                             type: 'string',
@@ -38,6 +38,13 @@ export const terminalSessionTool: LocalTool = {
                             maximum: 2000,
                             description: 'Number of recent lines to return. Default: 200.',
                             default: 200
+                        },
+                        delay_seconds: {
+                            type: 'integer',
+                            minimum: 0,
+                            maximum: 10,
+                            description: 'Seconds to wait before reading output. Use 0 for an immediate read. Default: 0.',
+                            default: 0
                         }
                     },
                     required: ['action', 'session_id']
@@ -61,24 +68,36 @@ export const terminalSessionTool: LocalTool = {
             ]
         }
     },
-    execute(args, context) {
+    async execute(args, context) {
         if (args.action === 'list') {
-            return Promise.resolve(jsonResult(context.terminalSessionManager.listSessions()));
+            return jsonResult(context.terminalSessionManager.listSessions());
         }
 
         if (args.action === 'read') {
             const tailLines = typeof args.tail_lines === 'number' ? args.tail_lines : 200;
-            return Promise.resolve(jsonResult(context.terminalSessionManager.readSessionOutput(String(args.session_id), tailLines)));
+            const delaySeconds = typeof args.delay_seconds === 'number' ? args.delay_seconds : 0;
+            await delay(delaySeconds * 1000);
+            return jsonResult(context.terminalSessionManager.readSessionOutput(String(args.session_id), tailLines));
         }
 
         if (args.action === 'stop') {
-            return Promise.resolve(jsonResult(context.terminalSessionManager.stopSession(String(args.session_id))));
+            return jsonResult(context.terminalSessionManager.stopSession(String(args.session_id)));
         }
 
         if (args.action === 'close') {
-            return Promise.resolve(jsonResult(context.terminalSessionManager.closeSession(String(args.session_id))));
+            return jsonResult(context.terminalSessionManager.closeSession(String(args.session_id)));
         }
 
         throw new Error('action must be one of "list", "read", "stop", or "close".');
     }
 };
+
+function delay(milliseconds: number): Promise<void> {
+    if (milliseconds <= 0) {
+        return Promise.resolve();
+    }
+
+    return new Promise(resolve => {
+        setTimeout(resolve, milliseconds);
+    });
+}
