@@ -353,6 +353,10 @@ function hasErrorCode(error: unknown, code: string): boolean {
         error.code === code;
 }
 
+/**
+ * Checks the nearest existing ancestor by realpath before recursive mkdir, so
+ * symlinked ancestors cannot redirect new directories outside the workspace.
+ */
 async function assertExistingAncestorAllowed(directoryPath: string, allowedDirectories: string[]): Promise<void> {
     let currentPath = path.resolve(path.normalize(directoryPath));
 
@@ -368,7 +372,9 @@ async function assertExistingAncestorAllowed(directoryPath: string, allowedDirec
 
             const parentPath = path.dirname(currentPath);
             if (parentPath === currentPath) {
-                throw error;
+                throw new Error(
+                    `Cannot create parent directories: no existing ancestor found for "${directoryPath}".`
+                );
             }
             currentPath = parentPath;
         }
