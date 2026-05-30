@@ -6,6 +6,7 @@ import * as crypto from 'crypto';
 
 export type WorkspacePathOptions = {
     forWrite?: boolean;
+    createParentDirectories?: boolean;
 };
 
 type WalkOptions = {
@@ -87,6 +88,11 @@ export async function resolveWorkspacePath(
         }
 
         const parentDirectory = path.dirname(absolutePath);
+        if (options.createParentDirectories) {
+            await assertExistingAncestorAllowed(parentDirectory, allowedDirectories);
+            await fs.mkdir(parentDirectory, { recursive: true });
+        }
+
         const realParent = await fs.realpath(parentDirectory);
         assertAllowedPath(realParent, allowedDirectories);
         return absolutePath;
@@ -345,6 +351,28 @@ function hasErrorCode(error: unknown, code: string): boolean {
         error !== null &&
         'code' in error &&
         error.code === code;
+}
+
+async function assertExistingAncestorAllowed(directoryPath: string, allowedDirectories: string[]): Promise<void> {
+    let currentPath = path.resolve(path.normalize(directoryPath));
+
+    while (true) {
+        try {
+            const realPath = await fs.realpath(currentPath);
+            assertAllowedPath(realPath, allowedDirectories);
+            return;
+        } catch (error: unknown) {
+            if (!hasErrorCode(error, 'ENOENT')) {
+                throw error;
+            }
+
+            const parentPath = path.dirname(currentPath);
+            if (parentPath === currentPath) {
+                throw error;
+            }
+            currentPath = parentPath;
+        }
+    }
 }
 
 async function getAllowedWorkspaceDirectories(workspaceRoot: string): Promise<string[]> {

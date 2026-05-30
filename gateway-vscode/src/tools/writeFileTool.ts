@@ -7,6 +7,7 @@ export const writeFileTool: LocalTool = {
     definition: {
         name: 'write_file',
         description: 'Create or completely overwrite a UTF-8 text file inside the current VS Code workspace. ' +
+            'Parent directories are created automatically if they do not exist. ' +
             'If prior read_file output included line numbers such as "12: code", do not include those line number prefixes in the written content.',
         inputSchema: {
             type: 'object',
@@ -22,7 +23,10 @@ export const writeFileTool: LocalTool = {
         annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: true }
     },
     async execute(args, context) {
-        const filePath = await resolveWorkspacePath(context.workspaceRoot, args.path, { forWrite: true });
+        const filePath = await resolveWorkspacePath(context.workspaceRoot, args.path, {
+            forWrite: true,
+            createParentDirectories: true
+        });
         await atomicWriteFile(filePath, String(args.content));
         return textResult(`Successfully wrote ${String(args.path)}`);
     }
