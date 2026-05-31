@@ -55,7 +55,7 @@ export const terminalSessionTool: LocalTool = {
                         action: {
                             type: 'string',
                             enum: ['stop', 'close'],
-                            description: 'Stop interrupts the active command with Ctrl+C and keeps the terminal open. Close closes the terminal tab.'
+                            description: 'Stop sends Ctrl+C to request interrupting the active command and keeps the terminal open. Close closes the terminal tab.'
                         },
                         session_id: {
                             type: 'string',
@@ -75,7 +75,7 @@ export const terminalSessionTool: LocalTool = {
 
         if (args.action === 'read') {
             const tailLines = typeof args.tail_lines === 'number' ? args.tail_lines : 200;
-            const delaySeconds = typeof args.delay_seconds === 'number' ? args.delay_seconds : 0;
+            const delaySeconds = normalizeDelaySeconds(args.delay_seconds);
             await delay(delaySeconds * 1000);
             return jsonResult(context.terminalSessionManager.readSessionOutput(String(args.session_id), tailLines));
         }
@@ -100,4 +100,13 @@ function delay(milliseconds: number): Promise<void> {
     return new Promise(resolve => {
         setTimeout(resolve, milliseconds);
     });
+}
+
+function normalizeDelaySeconds(value: unknown): number {
+    const numeric = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(numeric)) {
+        return 0;
+    }
+
+    return Math.min(10, Math.max(0, Math.trunc(numeric)));
 }

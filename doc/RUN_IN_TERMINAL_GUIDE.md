@@ -52,7 +52,7 @@ bash.exe -lc "<command>"
 
 - `list`：列出会话状态。
 - `read`：读取已采集的最近输出，可用 `delay_seconds` 等待一段时间后再读。
-- `stop`：向终端发送 `Ctrl+C`，中断当前命令，保留终端窗口。
+- `stop`：向终端发送 `Ctrl+C`，请求中断当前命令，保留终端窗口。
 - `close`：关闭终端标签页。
 
 ## 运行模型
@@ -173,7 +173,7 @@ $env:CI='true'; pnpm build
 | --- | --- |
 | `pending` | 正在等待 shell integration 激活。 |
 | `shellIntegration` | shell integration 可用，输出和退出码可采集。 |
-| `unavailable` | 已降级为 `sendText`，用户可见，但 AI 无法可靠采集输出和退出码。 |
+| `unavailable` | 已降级为 `sendText`，用户可见，但 AI 无法可靠采集输出、退出码和结束状态。 |
 
 缓存输出会限制最大长度，防止长时间运行的开发服务器无限占用内存。读取时可以通过 `tail_lines` 获取最近输出。
 
@@ -197,16 +197,18 @@ session 状态包括：
 | status | 含义 |
 | --- | --- |
 | `starting` | 终端已创建，命令尚未真正开始或仍在等待 shell integration。 |
-| `running` | 命令已发送并正在运行，或无法确认是否结束。 |
+| `running` | 命令已发送并正在运行，且 shell integration 可用于后续结束事件。 |
+| `interrupting` | 已发送 `Ctrl+C` 请求中断，但 shell 还没有报告命令结束。 |
+| `unknown` | 命令已发送，但 shell integration 不可用，无法判断命令是否仍在运行。 |
 | `exited` | 命令结束且退出码为 0。 |
 | `failed` | 命令结束且退出码非 0。 |
-| `stopped` | 用户或 AI 请求中断，或终端被关闭。 |
+| `stopped` | 中断请求已被 shell 结束事件确认，或终端被关闭。 |
 
 命令失败不会关闭终端窗口。真实 VS Code shell 仍然保留，用户可以继续查看输出或手动输入命令。
 
 ## stop 与 close 的区别
 
-`terminal_session` 的 `stop` 语义是中断当前命令，不关闭终端：
+`terminal_session` 的 `stop` 语义是请求中断当前命令，不关闭终端：
 
 ```json
 {
@@ -222,6 +224,8 @@ terminal.sendText('\x03', false);
 ```
 
 这更接近用户手动按 `Ctrl+C`。对于 `pnpm dev`、Vite、webpack watch 等常驻命令，预期效果是停止当前进程并回到 shell prompt。
+
+`stop` 返回后，session 通常会先进入 `interrupting`。只有 shell integration 报告命令结束，或者用户关闭终端时，状态才会变成 `stopped`。如果命令忽略 `Ctrl+C`，它可能继续运行；如果 `capture` 是 `unavailable`，工具无法确认中断是否真正完成。
 
 如果需要关闭终端标签页，应使用 `close`：
 
@@ -270,7 +274,7 @@ PowerShell profile 使用独立策略，包括：
 - shell integration 依赖 VS Code 和用户 shell 配置。部分 shell 或用户自定义启动脚本可能导致 integration 不可用。
 - 降级到 `sendText` 时，AI 无法可靠判断命令是否结束，也无法拿到退出码。
 - `default` profile 的实际 shell 由 VS Code 决定。如果无法判断其语法类型，工具会更保守地处理或要求选择明确 profile。
-- `stop` 是发送 `Ctrl+C`，不是强杀进程树。正常程序应响应中断；如果进程忽略中断，后续可以考虑增加单独的 `kill` 动作。
+- `stop` 是发送 `Ctrl+C` 请求中断，不是强杀进程树。正常程序应响应中断；如果进程忽略中断，后续可以考虑增加单独的 `kill` 动作。
 - 当前不暴露 `cmd`，也没有专门支持 WSL profile。后续可按需求扩展。
 
 ## 后续可扩展方向

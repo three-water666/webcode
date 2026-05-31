@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { BRANDING } from '@webcode/shared';
 import type { TerminalShellKind, WebcodeTerminalProfile } from './servers/terminalProfiles';
 
-type TerminalSessionStatus = 'starting' | 'running' | 'exited' | 'failed' | 'stopped';
+type TerminalSessionStatus = 'starting' | 'running' | 'interrupting' | 'unknown' | 'exited' | 'failed' | 'stopped';
 type TerminalOutputCapture = 'pending' | 'shellIntegration' | 'unavailable';
 
 export interface TerminalSessionProfileSummary {
@@ -25,13 +25,13 @@ export interface TerminalSessionSummary {
   exitCode: number | null;
   signal: NodeJS.Signals | null;
   capture: TerminalOutputCapture;
+  stopRequested: boolean;
   profile: TerminalSessionProfileSummary;
 }
 
 interface TerminalSession extends TerminalSessionSummary {
   terminal: vscode.Terminal;
   output: string;
-  stopRequested: boolean;
   closeDisposable: vscode.Disposable | null;
 }
 
@@ -124,10 +124,10 @@ export class TerminalSessionManager {
       exitCode: null,
       signal: null,
       capture: 'pending',
+      stopRequested: false,
       profile: summarizeProfile(params.profile),
       terminal,
       output: '',
-      stopRequested: false,
       closeDisposable: null
     };
   }
@@ -203,10 +203,10 @@ export class TerminalSessionManager {
 
   private sendWithoutCapture(session: TerminalSession, commandLine: string, reason: string): void {
     session.capture = 'unavailable';
-    session.status = 'running';
+    session.status = 'unknown';
     this.appendOutput(
       session,
-      `[webcode] ${reason} Command was sent to the terminal, but output and exit code cannot be captured.\n`
+      `[webcode] ${reason} Command was sent to the terminal, but output, exit code, and completion status cannot be captured.\n`
     );
     session.terminal.sendText(commandLine, true);
   }
@@ -272,9 +272,9 @@ export class TerminalSessionManager {
     }
 
     session.stopRequested = true;
+    session.status = 'interrupting';
     session.terminal.sendText('\x03', false);
     this.appendOutput(session, '\n[interrupt requested]\n');
-    this.finishSession(session, { exitCode: null, stopped: true });
   }
 
   private registerCloseHandler(session: TerminalSession): vscode.Disposable {
@@ -324,6 +324,7 @@ export class TerminalSessionManager {
       exitCode: session.exitCode,
       signal: session.signal,
       capture: session.capture,
+      stopRequested: session.stopRequested,
       profile: session.profile
     };
   }

@@ -25,6 +25,7 @@ const BLOCKED_POWERSHELL_COMMANDS = new Map<string, string>([
 ]);
 
 const POWERSHELL_REMOVE_ALIASES = new Set(['remove-item', 'rm', 'rmdir', 'rd', 'del', 'erase']);
+const POWERSHELL_COMMANDS = new Set(['powershell', 'powershell.exe', 'pwsh', 'pwsh.exe']);
 const INTERPRETER_EVAL_FLAGS = new Map<string, string[]>([
     ['python', ['-c']],
     ['python.exe', ['-c']],
@@ -71,19 +72,20 @@ function assessPowerShellCommandRisk(command: string): CommandRiskAssessment {
 
 function assessPowerShellSegment(segment: string, blocked: string[], dangerous: string[]): void {
     const words = splitPowerShellWords(segment);
-    const commandName = normalizeCommandName(findPowerShellCommand(words));
+    const commandIndex = findPowerShellCommandIndex(words);
+    const commandName = normalizeCommandName(words[commandIndex]);
     if (!commandName) {
         return;
     }
 
-    const args = words.slice(1);
+    const args = words.slice(commandIndex + 1);
     const blockedReason = BLOCKED_POWERSHELL_COMMANDS.get(commandName);
     if (blockedReason) {
         blocked.push(blockedReason);
         return;
     }
 
-    if ((commandName === 'powershell' || commandName === 'pwsh') && hasPowerShellCommandFlag(args)) {
+    if (POWERSHELL_COMMANDS.has(commandName) && hasPowerShellCommandFlag(args)) {
         blocked.push(`Nested PowerShell command evaluation with ${commandName} is not allowed.`);
         return;
     }
@@ -223,17 +225,17 @@ function splitPowerShellWords(segment: string): string[] {
     return words;
 }
 
-function findPowerShellCommand(words: string[]): string | undefined {
+function findPowerShellCommandIndex(words: string[]): number {
     let index = 0;
-    while (isPowerShellAssignment(words[index])) {
+    while (isPowerShellAssignment(words[index]) || isPowerShellInvocationOperator(words[index])) {
         index += 1;
     }
 
-    return words[index];
+    return index;
 }
 
 function pipesIntoPowerShellEval(command: string): boolean {
-    return /\|\s*(?:invoke-expression|iex)(?:\s|$)/i.test(command);
+    return /\|\s*(?:[&.]\s*)?(?:invoke-expression|iex)(?:\s|$)/i.test(command);
 }
 
 function isPowerShellAssignment(value: string | undefined): boolean {
@@ -243,8 +245,18 @@ function isPowerShellAssignment(value: string | undefined): boolean {
 function hasPowerShellCommandFlag(args: string[]): boolean {
     return args.some(arg => {
         const lower = arg.toLowerCase();
-        return lower === '-command' || lower === '-c' || lower === '/c';
+        return lower === '-command'
+            || lower === '-c'
+            || lower === '/c'
+            || lower === '-encodedcommand'
+            || lower === '-enc'
+            || lower === '/encodedcommand'
+            || lower === '/enc';
     });
+}
+
+function isPowerShellInvocationOperator(value: string | undefined): boolean {
+    return value === '&' || value === '.';
 }
 
 function hasPowerShellRecursiveFlag(args: string[]): boolean {
