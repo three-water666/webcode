@@ -1,5 +1,7 @@
 import * as assert from 'assert';
 import * as path from 'path';
+import { matchesPattern } from '../tools/filesystemUtils';
+import { createSearchCodeFallbackNotice } from '../tools/searchCodeFallback';
 import { createSearchCandidate } from '../tools/searchCodeGitFiles';
 import { appendRipgrepMatch } from '../tools/searchCodeRipgrepOutput';
 import type { SearchCodeOptions } from '../tools/searchCodeTypes';
@@ -13,6 +15,24 @@ suite('Search Code Tool', () => {
     test('treats bare include names as recursive globs', () => {
         assert.strictEqual(normalizeIncludeGlob('package.json'), '**/package.json');
         assert.strictEqual(normalizeIncludeGlob('gateway-vscode/package.json'), 'gateway-vscode/package.json');
+    });
+
+    test('matches fallback include globs with brace alternation', () => {
+        const includePattern = '**/*.{js,ts,jsx,tsx}';
+
+        assert.ok(matchesPattern('src/modules/logger.ts', includePattern));
+        assert.ok(matchesPattern('logger.ts', includePattern));
+        assert.ok(matchesPattern('src/App.jsx', includePattern));
+        assert.ok(!matchesPattern('src/styles/logger.css', includePattern));
+    });
+
+    test('describes fallback search capabilities when ripgrep is unavailable', () => {
+        const notice = createSearchCodeFallbackNotice();
+
+        assert.ok(notice.includes('ripgrep is unavailable'));
+        assert.ok(notice.includes('in-process fallback'));
+        assert.ok(notice.includes('simple comma brace alternation'));
+        assert.ok(notice.includes('JavaScript RegExp'));
     });
 
     test('excludes common generated and test artifact directories by default', () => {

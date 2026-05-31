@@ -3,6 +3,7 @@ import type { Dirent } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { expandGlobBraceAlternation } from './globUtils';
 
 export type WorkspacePathOptions = {
     forWrite?: boolean;
@@ -239,12 +240,15 @@ export function matchesFileQuery(relativePath: string, fileName: string, query: 
 
 export function matchesPattern(value: string, pattern: string): boolean {
     const normalizedValue = toPosixPath(value);
-    if (pattern.startsWith('**/') && matchesCompiledPattern(normalizedValue, pattern.slice(3))) {
-        return true;
-    }
+    return expandGlobBraceAlternation(pattern).some(expandedPattern => {
+        if (expandedPattern.startsWith('**/') && matchesCompiledPattern(normalizedValue, expandedPattern.slice(3))) {
+            return true;
+        }
 
-    return matchesCompiledPattern(normalizedValue, pattern);
+        return matchesCompiledPattern(normalizedValue, expandedPattern);
+    });
 }
+
 
 function matchesCompiledPattern(normalizedValue: string, pattern: string): boolean {
     const escaped = pattern

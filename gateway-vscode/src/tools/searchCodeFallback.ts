@@ -18,6 +18,16 @@ import type { SearchCodeOptions } from './searchCodeTypes';
 const MAX_FALLBACK_FILE_SIZE_BYTES = 1024 * 1024 * 2;
 type FallbackMatcher = (line: string) => SearchMatchRange | null;
 
+export function createSearchCodeFallbackNotice(): string {
+    return [
+        'Notice: ripgrep is unavailable, so search_code is using the in-process fallback.',
+        'Fallback scope: fixed-string search and JavaScript RegExp search are supported.',
+        'File globs support *, ?, **, and simple comma brace alternation such as *.{js,ts}.',
+        'The fallback scans git-tracked files when available, otherwise readable workspace files.',
+        'Files larger than ' + MAX_FALLBACK_FILE_SIZE_BYTES + ' bytes and binary-looking files are skipped.'
+    ].join('\n');
+}
+
 export async function searchCodeInProcess(options: SearchCodeOptions): Promise<string[]> {
     const matcher = createFallbackMatcher(options.query, {
         caseSensitive: options.caseSensitive,

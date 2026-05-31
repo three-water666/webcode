@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import type { LocalTool } from './types';
 import { textResult } from './result';
 import { getNumberArg, getStringArrayArg, resolveWorkspaceDirectory } from './filesystemUtils';
-import { searchCodeInProcess } from './searchCodeFallback';
+import { createSearchCodeFallbackNotice, searchCodeInProcess } from './searchCodeFallback';
 import { appendRipgrepMatch } from './searchCodeRipgrepOutput';
 import {
     createRipgrepExcludeGlobs,
@@ -97,7 +97,11 @@ async function runRipgrepWithFallback(options: SearchCodeOptions): Promise<strin
         return await runRipgrep(options);
     } catch (error) {
         if (error instanceof RipgrepUnavailableError) {
-            return searchCodeInProcess(options);
+            const matches = await searchCodeInProcess(options);
+            return [
+                createSearchCodeFallbackNotice(),
+                ...(matches.length > 0 ? matches : ['No matches found.'])
+            ];
         }
 
         throw error;
