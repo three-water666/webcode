@@ -64,9 +64,16 @@ void loadPromptsFromStorage();
 // Load default workspace data
 void loadWorkspaceData(currentWorkspaceId);
 
+type RuntimeSendResponse = (response?: unknown) => void;
+
 // 监听消息 (日志开关 & 状态同步)
-chrome.runtime.onMessage.addListener((request: unknown) => {
+chrome.runtime.onMessage.addListener((request: unknown, _sender, sendResponse): boolean | void => {
   if (!isMessageRequest(request)) {return;}
+
+  if (request.type === "MANUAL_INIT") {
+    void handleManualInitRequest(sendResponse);
+    return true;
+  }
 
   if (request.type === "TOGGLE_LOG") {
     const show = request.show === true;
@@ -102,6 +109,17 @@ chrome.runtime.onMessage.addListener((request: unknown) => {
     }
   }
 });
+
+async function handleManualInitRequest(sendResponse: RuntimeSendResponse): Promise<void> {
+  try {
+    sendResponse(await autoInitPrompt.appendManualInitPrompt());
+  } catch (error) {
+    sendResponse({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
 
 // === DOM 选择器与配置 ===
 let DOM: SiteSelectors | null = null;
