@@ -3,6 +3,7 @@ import type { Dirent } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { expandGlobBraceAlternation } from './globUtils';
 
 export type WorkspacePathOptions = {
     forWrite?: boolean;
@@ -239,12 +240,15 @@ export function matchesFileQuery(relativePath: string, fileName: string, query: 
 
 export function matchesPattern(value: string, pattern: string): boolean {
     const normalizedValue = toPosixPath(value);
-    if (pattern.startsWith('**/') && matchesCompiledPattern(normalizedValue, pattern.slice(3))) {
-        return true;
-    }
+    return expandGlobBraceAlternation(pattern).some(expandedPattern => {
+        if (expandedPattern.startsWith('**/') && matchesCompiledPattern(normalizedValue, expandedPattern.slice(3))) {
+            return true;
+        }
 
-    return matchesCompiledPattern(normalizedValue, pattern);
+        return matchesCompiledPattern(normalizedValue, expandedPattern);
+    });
 }
+
 
 function matchesCompiledPattern(normalizedValue: string, pattern: string): boolean {
     const escaped = pattern
@@ -265,7 +269,7 @@ export function toPosixPath(value: string): string {
     return value.replace(/\\/g, '/');
 }
 
-export function createUnifiedDiff(originalContent: string, newContent: string, filepath: string): string {
+export function createUnifiedDiff(originalContent: string, newContent: string, filepath: string, maxChars = 20000): string {
     const originalLines = normalizeLineEndings(originalContent).split('\n');
     const newLines = normalizeLineEndings(newContent).split('\n');
 
@@ -277,7 +281,18 @@ export function createUnifiedDiff(originalContent: string, newContent: string, f
     const hunkLines = createDiffHeader(filepath, bounds);
     appendDiffBody(hunkLines, originalLines, newLines, bounds);
 
-    return `\`\`\`diff\n${hunkLines.join('\n')}\n\`\`\``;
+    return limitUnifiedDiffOutput('```diff\n' + hunkLines.join('\n') + '\n```', maxChars);
+}
+
+function limitUnifiedDiffOutput(diff: string, maxChars: number): string {
+    const safeMaxChars = Math.max(200, Math.floor(maxChars));
+    if (diff.length <= safeMaxChars) {
+        return diff;
+    }
+
+    const truncationNotice = '\n[diff output truncated to ' + safeMaxChars + ' characters; use read_file with line ranges or make a smaller edit to inspect the full change.]\n```';
+    const prefixLength = Math.max(0, safeMaxChars - truncationNotice.length);
+    return diff.slice(0, prefixLength) + truncationNotice;
 }
 
 function getDiffBounds(originalLines: string[], newLines: string[]): DiffBounds {

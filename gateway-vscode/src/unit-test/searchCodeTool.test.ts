@@ -1,5 +1,11 @@
 import * as assert from 'assert';
 import * as path from 'path';
+import { matchesPattern } from '../tools/filesystemUtils';
+import { createSearchCodeFallbackNotice } from '../tools/searchCodeFallback';
+import {
+    getVSCodeAppRootCandidatesFromPath,
+    getVSCodeRipgrepCandidates
+} from '../tools/searchCodeRipgrepPaths';
 import { createSearchCandidate } from '../tools/searchCodeGitFiles';
 import { appendRipgrepMatch } from '../tools/searchCodeRipgrepOutput';
 import type { SearchCodeOptions } from '../tools/searchCodeTypes';
@@ -13,6 +19,57 @@ suite('Search Code Tool', () => {
     test('treats bare include names as recursive globs', () => {
         assert.strictEqual(normalizeIncludeGlob('package.json'), '**/package.json');
         assert.strictEqual(normalizeIncludeGlob('gateway-vscode/package.json'), 'gateway-vscode/package.json');
+    });
+
+    test('matches fallback include globs with brace alternation', () => {
+        const includePattern = '**/*.{js,ts,jsx,tsx}';
+
+        assert.ok(matchesPattern('src/modules/logger.ts', includePattern));
+        assert.ok(matchesPattern('logger.ts', includePattern));
+        assert.ok(matchesPattern('src/App.jsx', includePattern));
+        assert.ok(!matchesPattern('src/styles/logger.css', includePattern));
+    });
+
+    test('describes fallback search capabilities when ripgrep is unavailable', () => {
+        const notice = createSearchCodeFallbackNotice();
+
+        assert.ok(notice.includes('ripgrep is unavailable'));
+        assert.ok(notice.includes('in-process fallback'));
+        assert.ok(notice.includes('simple comma brace alternation'));
+        assert.ok(notice.includes('JavaScript RegExp'));
+    });
+
+    test('infers VS Code app roots from Windows PATH bin directories', () => {
+        const candidates = getVSCodeAppRootCandidatesFromPath(
+            path.win32.join('D:\\', 'Microsoft VS Code', 'bin'),
+            'win32'
+        );
+
+        assert.ok(candidates.includes(path.win32.join('D:\\', 'Microsoft VS Code', 'resources', 'app')));
+    });
+
+    test('infers VS Code app roots from MSYS-style Windows PATH entries', () => {
+        const candidates = getVSCodeAppRootCandidatesFromPath(
+            '/d/Microsoft VS Code/bin:/c/Users/example/bin',
+            'win32'
+        );
+
+        assert.ok(candidates.includes(path.win32.join('D:\\', 'Microsoft VS Code', 'resources', 'app')));
+    });
+
+    test('includes VS Code ripgrep-universal platform arch candidates', () => {
+        const appRoot = path.win32.join('D:\\', 'Microsoft VS Code', 'resources', 'app');
+        const candidates = getVSCodeRipgrepCandidates(appRoot, '', 'win32', 'x64');
+
+        assert.ok(candidates.includes(path.win32.join(
+            appRoot,
+            'node_modules',
+            '@vscode',
+            'ripgrep-universal',
+            'bin',
+            'win32-x64',
+            'rg.exe'
+        )));
     });
 
     test('excludes common generated and test artifact directories by default', () => {

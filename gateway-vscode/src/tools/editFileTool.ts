@@ -32,6 +32,11 @@ type ParsedHunk = {
 };
 
 const HUNK_HEADER_PATTERN = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
+const MISSING_HUNK_ERROR_MESSAGE = [
+    'Patch must contain at least one unified diff hunk starting with @@.',
+    'Use edits for exact text replacements, or provide a standard unified diff hunk such as',
+    '@@ -1,2 +1,2 @@ with context, removed (-), and added (+) lines.'
+].join(' ');
 
 export const editFileTool: LocalTool = {
     serverId: 'internal',
@@ -129,10 +134,19 @@ function applyExactEdits(originalContent: string, edits: FileEdit[]): string {
             throw new Error(`Found ${matches} matches for edit oldText. Make oldText more specific or set replaceAll to true.`);
         }
 
-        modifiedContent = modifiedContent.replace(oldText, newText);
+        modifiedContent = replaceFirstLiteral(modifiedContent, oldText, newText);
     }
 
     return modifiedContent;
+}
+
+function replaceFirstLiteral(content: string, searchText: string, replacementText: string): string {
+    const index = content.indexOf(searchText);
+    if (index < 0) {
+        return content;
+    }
+
+    return content.slice(0, index) + replacementText + content.slice(index + searchText.length);
 }
 
 function countOccurrences(content: string, searchText: string): number {
@@ -194,7 +208,7 @@ function parseUnifiedPatch(patch: string): PatchHunk[] {
     }
 
     if (hunks.length === 0) {
-        throw new Error('Patch must contain at least one unified diff hunk starting with @@.');
+        throw new Error(MISSING_HUNK_ERROR_MESSAGE);
     }
 
     return hunks;
