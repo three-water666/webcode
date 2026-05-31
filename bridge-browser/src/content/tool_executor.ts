@@ -28,15 +28,80 @@ interface ToolExecutionResponse {
   data?: unknown;
 }
 
+interface QueuedApprovalRequest {
+  payload: ToolExecutionPayload;
+  requestId: string;
+  reject: (error: Error) => void;
+  resolve: (approved: boolean) => void;
+}
+
 export class ToolExecutor {
+  private readonly approvalQueue: QueuedApprovalRequest[] = [];
+  private readonly pendingApprovals = new Map<string, Promise<boolean>>();
   private readonly toolExecutionQueue: ToolExecutionPayload[] = [];
+  private isApprovalQueueRunning = false;
   private isToolExecutionQueueRunning = false;
 
   public constructor(private readonly options: ToolExecutorOptions) {}
 
   public execute(payload: ToolExecutionPayload): void {
+    // Normal capture flow assigns a stable request_id in ToolCallTracker before execution.
+    void this.queueApprovalIfNeeded(payload);
     this.toolExecutionQueue.push(payload);
     void this.processToolExecutionQueue();
+  }
+
+  private queueApprovalIfNeeded(payload: ToolExecutionPayload): Promise<boolean> | null {
+    if (!this.needsApproval(payload)) {return null;}
+
+    const requestId = getRequestId(payload);
+    const existingApproval = this.pendingApprovals.get(requestId);
+    if (existingApproval) {return existingApproval;}
+
+    const approval = new Promise<boolean>((resolve, reject) => {
+      this.approvalQueue.push({
+        payload,
+        requestId,
+        reject: (error) => reject(error),
+        resolve,
+      });
+    });
+    this.pendingApprovals.set(requestId, approval);
+    void this.processApprovalQueue();
+
+    return approval;
+  }
+
+  private async processApprovalQueue(): Promise<void> {
+    if (this.isApprovalQueueRunning) {return;}
+
+    this.isApprovalQueueRunning = true;
+    try {
+      while (this.approvalQueue.length > 0) {
+        const approvalRequest = this.approvalQueue.shift();
+        if (!approvalRequest) {continue;}
+
+        try {
+          if (!this.needsApproval(approvalRequest.payload)) {
+            this.pendingApprovals.delete(approvalRequest.requestId);
+            approvalRequest.resolve(true);
+            continue;
+          }
+
+          Logger.log(`${t("hitl_intercept")}: ${approvalRequest.payload.name}`, "warn");
+          const approved = await this.requestToolApproval(approvalRequest.payload);
+          approvalRequest.resolve(approved);
+        } catch (error) {
+          this.pendingApprovals.delete(approvalRequest.requestId);
+          approvalRequest.reject(toError(error));
+        }
+      }
+    } finally {
+      this.isApprovalQueueRunning = false;
+      if (this.approvalQueue.length > 0) {
+        void this.processApprovalQueue();
+      }
+    }
   }
 
   private async processToolExecutionQueue(): Promise<void> {
@@ -73,14 +138,32 @@ export class ToolExecutor {
       return;
     }
 
-    if (!isPayloadApproved(payload, this.options.getApprovalState())) {
-      Logger.log(`${t("hitl_intercept")}: ${payload.name}`, "warn");
-      payload.request_id = payload.request_id ?? "unknown_id";
-      const approved = await this.requestToolApproval(payload);
-      if (!approved) {return;}
-    }
+    const approved = await this.waitForApproval(payload);
+    if (!approved) {return;}
 
     await this.performExecution(payload);
+  }
+
+  private async waitForApproval(payload: ToolExecutionPayload): Promise<boolean> {
+    const requestId = getRequestId(payload);
+    if (!this.needsApproval(payload)) {
+      this.pendingApprovals.delete(requestId);
+      return true;
+    }
+
+    const approval = this.pendingApprovals.get(requestId) ?? this.queueApprovalIfNeeded(payload);
+    if (!approval) {return true;}
+
+    try {
+      return await approval;
+    } finally {
+      this.pendingApprovals.delete(requestId);
+    }
+  }
+
+  private needsApproval(payload: ToolExecutionPayload): boolean {
+    if (payload.name === PROTOCOL.initToolName || isBootstrapOnlyToolName(payload.name)) {return false;}
+    return !isPayloadApproved(payload, this.options.getApprovalState());
   }
 
   private failQueuedTool(payload: ToolExecutionPayload, error: unknown): void {
@@ -254,7 +337,7 @@ function stringifyToolData(data: unknown, fallback: string): string {
 }
 
 function getRequestId(payload: ToolExecutionPayload): string {
-  return payload.request_id ?? "unknown_id";
+  return normalizeRequestId(payload.request_id) ?? "unknown_id";
 }
 
 function getErrorMessage(error: unknown): string {
@@ -267,4 +350,10 @@ function toError(error: unknown): Error {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function normalizeRequestId(value: unknown): string | null {
+  if (typeof value !== "string") {return null;}
+  const trimmed = value.trim();
+  return trimmed || null;
 }
