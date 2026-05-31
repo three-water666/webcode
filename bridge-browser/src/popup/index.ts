@@ -6,6 +6,7 @@ type PopupElements = {
   disconnectedView: HTMLElement;
   statusDot: HTMLElement;
   portDisplay: HTMLElement;
+  manualInitBtn: HTMLButtonElement;
   autoSendInput: HTMLInputElement;
   showLogInput: HTMLInputElement;
   availableView: HTMLElement;
@@ -38,6 +39,13 @@ const UI: Record<string, Record<string, string>> = {
     title: BRANDING.bridgeName,
     connected_text: "✅ Connected to VS Code",
     port_label: "Port",
+    manual_init: "Manual Initialization",
+    manual_init_title: "Add initialization context to the current input",
+    manual_init_running: "Initializing...",
+    manual_init_done: "Initialization added",
+    manual_init_attached: "Initialization attached",
+    manual_init_failed: "Initialization failed",
+    manual_init_unavailable: "Cannot initialize here",
     auto_send: "Auto Send Message",
     show_log: "Show Floating Log",
     available_gateways: "⚡ Available Gateways",
@@ -52,6 +60,13 @@ const UI: Record<string, Record<string, string>> = {
     title: BRANDING.bridgeName,
     connected_text: "✅ 已连接到 VS Code",
     port_label: "端口",
+    manual_init: "手动初始化",
+    manual_init_title: "将初始化上下文追加到当前输入框",
+    manual_init_running: "初始化中...",
+    manual_init_done: "初始化上下文已添加",
+    manual_init_attached: "初始化上下文已作为 txt 附件添加",
+    manual_init_failed: "初始化失败",
+    manual_init_unavailable: "当前页面无法初始化",
     auto_send: "自动发送消息",
     show_log: "显示悬浮日志",
     available_gateways: "⚡ 可用网关",
@@ -100,6 +115,7 @@ function getPopupElements(): PopupElements {
     disconnectedView: document.getElementById("disconnectedView") as HTMLElement,
     statusDot: document.getElementById("statusDot") as HTMLElement,
     portDisplay: document.getElementById("portDisplay") as HTMLElement,
+    manualInitBtn: document.getElementById("manualInitBtn") as HTMLButtonElement,
     autoSendInput: document.getElementById("autoSend") as HTMLInputElement,
     showLogInput: document.getElementById("showLog") as HTMLInputElement,
     availableView: document.getElementById("availableView") as HTMLElement,
@@ -123,6 +139,8 @@ function initializeLabels(context: PopupContext): void {
   elements.title.textContent = t("title");
   elements.connectedText.textContent = t("connected_text");
   elements.portLabel.textContent = t("port_label");
+  elements.manualInitBtn.textContent = t("manual_init");
+  elements.manualInitBtn.title = t("manual_init_title");
   elements.autoSendLabel.textContent = t("auto_send");
   elements.showLogLabel.textContent = t("show_log");
   elements.availableGateways.innerHTML = `<span>⚡</span> ${t("available_gateways").replace(/^⚡\s*/, "")}`;
@@ -269,8 +287,50 @@ function getTargetOrigin(currentUrl: string): string | undefined {
 }
 
 function bindPopupControls(currentTabId: number, context: PopupContext): void {
+  bindManualInitButton(currentTabId, context);
   bindAutoSendToggle(context.elements.autoSendInput);
   bindLogToggle(currentTabId, context.elements.showLogInput);
+}
+
+function bindManualInitButton(currentTabId: number, context: PopupContext): void {
+  context.elements.manualInitBtn.addEventListener("click", () => {
+    context.elements.manualInitBtn.disabled = true;
+    context.elements.manualInitBtn.innerText = context.t("manual_init_running");
+
+    chrome.tabs.sendMessage(currentTabId, { type: "MANUAL_INIT" }, (response: unknown) => {
+      if (chrome.runtime.lastError) {
+        showManualInitStatus(context, "manual_init_unavailable", false);
+        return;
+      }
+
+      if (isSuccessResponse(response) && response.success) {
+        const labelKey = isAttachedResponse(response) ? "manual_init_attached" : "manual_init_done";
+        showManualInitStatus(context, labelKey, true);
+        return;
+      }
+
+      showManualInitStatus(context, "manual_init_failed", false);
+    });
+  });
+}
+
+function isAttachedResponse(response: unknown): boolean {
+  return typeof response === "object" &&
+    response !== null &&
+    "attached" in response &&
+    (response as { attached?: unknown }).attached === true;
+}
+
+function showManualInitStatus(context: PopupContext, labelKey: string, success: boolean): void {
+  const button = context.elements.manualInitBtn;
+  button.disabled = false;
+  button.innerText = context.t(labelKey);
+  button.style.backgroundColor = success ? "#0d8a6a" : "#8a3d3d";
+
+  setTimeout(() => {
+    button.innerText = context.t("manual_init");
+    button.style.backgroundColor = "";
+  }, 3000);
 }
 
 function bindAutoSendToggle(autoSendInput: HTMLInputElement): void {
