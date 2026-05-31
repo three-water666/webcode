@@ -68,7 +68,7 @@
         "http://localhost:34575/*",
         "http://localhost:34576/*"
       ],
-      "js": ["src/content/bridge_loader.ts"],
+      "js": ["bridge_marker.js", "src/content/bridge_loader.ts"],
       "run_at": "document_start"
     },
     {
