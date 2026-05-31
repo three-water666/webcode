@@ -80,6 +80,9 @@ chrome.runtime.onMessage.addListener((request: unknown, _sender, sendResponse): 
     Logger.toggle(show);
     Logger.log("Logger Visible: " + show, "info");
   }
+  if (request.type === "SET_LOG_SOUND_ENABLED") {
+    Logger.setSoundEnabled(request.soundEnabled === true);
+  }
   if (request.type === "STATUS_UPDATE") {
     const wasConnected = isClientConnected;
     isClientConnected = request.connected === true;
@@ -443,6 +446,7 @@ function startObserver() {
   // 2. Check initial status
   chrome.runtime.sendMessage({ type: "GET_STATUS" }, async (response: unknown) => {
     if (isStatusResponse(response) && response.connected) {
+      Logger.setSoundEnabled(response.soundEnabled === true);
       isClientConnected = true;
       if (typeof response.workspaceId === "string") {
         currentWorkspaceId = response.workspaceId;
