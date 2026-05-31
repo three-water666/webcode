@@ -32,6 +32,7 @@ export function createLocalToolMap(): Map<string, LocalTool> {
 export type {
     LocalTool,
     ToolDefinition,
+    ToolDefinitionContext,
     ToolExecutionContext,
     ToolResult
 } from './types';

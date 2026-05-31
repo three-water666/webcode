@@ -31,8 +31,13 @@ export type ToolExecutionContext = {
     getToolDefinition: (name: string) => ToolDefinition | null;
 };
 
+export type ToolDefinitionContext = {
+    commandShellPath?: string;
+};
+
 export type LocalTool = {
     definition: ToolDefinition;
+    getDefinition?: (context: ToolDefinitionContext) => ToolDefinition;
     serverId?: string;
     execute: (args: Record<string, unknown>, context: ToolExecutionContext) => Promise<ToolResult>;
 };
