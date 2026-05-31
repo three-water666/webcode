@@ -6,7 +6,7 @@ export interface AISiteConfig {
     selectors?: Partial<SiteSelectors>;
 }
 
-export type BuiltinPlatformId = 'chatgpt' | 'gemini' | 'aistudio' | 'deepseek' | 'glm' | 'claude';
+export type BuiltinPlatformId = 'chatgpt' | 'gemini' | 'aistudio' | 'deepseek' | 'glm' | 'claude' | 'qwen';
 
 export interface SiteSelectors {
     messageBlocks: string;
@@ -121,6 +121,25 @@ const BUILTIN_PLATFORMS: BuiltinPlatformDefinition[] = [
             inputArea: 'div[contenteditable="true"]',
             sendButton: 'button[aria-label="Send message"]',
             stopButton: 'button[aria-label="Stop response"]',
+        }
+    },
+    {
+        id: 'qwen',
+        defaultSite: {
+            name: 'Qwen',
+            address: 'https://chat.qwen.ai/',
+            showQuickLaunch: true
+        },
+        addressIncludes: ['chat.qwen.ai', 'qwen.ai'],
+        selectors: {
+            messageBlocks: '.qwen-chat-message-assistant',
+            codeBlocks: [
+                '.qwen-chat-message-assistant .qwen-markdown-code-body',
+                '.qwen-chat-message-assistant pre code'
+            ].join(', '),
+            inputArea: 'textarea.message-input-textarea',
+            sendButton: '.chat-prompt-send-button .send-button, .message-input-right-button-send .omni-button-content-btn',
+            stopButton: '.chat-prompt-send-button .stop-button',
         }
     }
 ];

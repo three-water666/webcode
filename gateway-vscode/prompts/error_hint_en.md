@@ -1,6 +1,6 @@
 ❌ **Format Error Warning**
 
-Your model response content does not meet the requirements. Top-level fields may only be `mcp_action`, `name`, `purpose`, `arguments`, and `request_id`. `name` and `purpose` are required. If the selected tool has inputs, `arguments` must exactly match that tool's `inputSchema`.
+Your model response content does not meet the requirements. Top-level fields may only be `mcp_action`, `name`, `purpose`, `arguments`, and `request_id`. `name` and `purpose` are required. If the selected tool has inputs, `arguments` must exactly match that tool's `inputSchema`. `request_id` must be new for every tool call in this conversation.
 
 ```json
 {
@@ -10,7 +10,7 @@ Your model response content does not meet the requirements. Top-level fields may
   "arguments": {
     "key": "value"
   },
-  "request_id": "step_x"
+  "request_id": "turn_unique_step_x"
 }
 ```
 

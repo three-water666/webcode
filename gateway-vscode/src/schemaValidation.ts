@@ -40,7 +40,7 @@ export function formatToolArgumentValidationError(toolName: string, schema: unkn
             name: toolName,
             purpose: 'Brief justification for this action',
             arguments: {},
-            request_id: 'step_1'
+            request_id: 'turn_unique_step_1'
         }, null, 2),
         '```'
     ].join('\n');

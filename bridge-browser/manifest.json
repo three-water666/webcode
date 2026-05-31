@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extensionName__",
-  "version": "0.8.4",
+  "version": "0.9.1",
   "description": "__MSG_extensionDescription__",
   "default_locale": "en",
   "icons": {
@@ -68,7 +68,7 @@
         "http://localhost:34575/*",
         "http://localhost:34576/*"
       ],
-      "js": ["src/content/bridge_loader.ts"],
+      "js": ["bridge_marker.js", "src/content/bridge_loader.ts"],
       "run_at": "document_start"
     },
     {

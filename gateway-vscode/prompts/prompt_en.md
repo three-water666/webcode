@@ -7,6 +7,7 @@ When calling tools, you must output a **JSON code block**, not plain text or inl
 
 ## 1. Request Format (You send to plugin)
 Top-level fields may only be `mcp_action`, `name`, `purpose`, `arguments`, and `request_id`. `name` and `purpose` are required. If the selected tool has inputs, `arguments` must exactly match that tool's `inputSchema`.
+Every tool call must use a new `request_id` that has not appeared earlier in this conversation. Do not reuse `step_1`, `step_2`, or any previous value in later replies.
 Use the tool `name` exactly as listed. Local/internal tools use bare names such as `read_file`; third-party MCP tools use `server:tool` names such as `github:search_repositories`.
 
 ```json
@@ -17,7 +18,7 @@ Use the tool `name` exactly as listed. Local/internal tools use bare names such 
   "arguments": {
     "key": "value"
   },
-  "request_id": "step_x"
+  "request_id": "turn_ab12_step_x"
 }
 ```
 
@@ -26,7 +27,7 @@ After execution, the plugin will return the result in the following format:
 ```json
 {
   "mcp_action": "result",
-  "request_id": "step_x",
+  "request_id": "turn_ab12_step_x",
   "output": "File content or command execution result..."
 }
 ```
@@ -43,7 +44,7 @@ Correct example:
   "arguments": {
     "command": "git tag --list --sort=-v:refname"
   },
-  "request_id": "step_1"
+  "request_id": "turn_ab12_step_1"
 }
 ```
 ```json
@@ -54,7 +55,7 @@ Correct example:
   "arguments": {
     "command": "git status --short"
   },
-  "request_id": "step_2"
+  "request_id": "turn_ab12_step_2"
 }
 ```
 Incorrect example:
@@ -66,7 +67,7 @@ Incorrect example:
   "arguments": {
     "command": "git tag --list --sort=-v:refname"
   },
-  "request_id": "step_1"
+  "request_id": "turn_ab12_step_1"
 },
 {
   "mcp_action": "call",
@@ -75,7 +76,7 @@ Incorrect example:
   "arguments": {
     "command": "git status --short"
   },
-  "request_id": "step_2"
+  "request_id": "turn_ab12_step_2"
 }]
 ```
 3. **No Questions Alongside Tool Calls**: If your current reply includes any tool call, do not ask the user a question in the same reply. The next message will usually be a tool result, so the user cannot answer you first.
