@@ -143,8 +143,7 @@
           "type": "array",
           "default": [
             ".agents/skills",
-            ".codex/skills",
-            "skills"
+            ".codex/skills"
           ],
           "items": {
             "type": "string"

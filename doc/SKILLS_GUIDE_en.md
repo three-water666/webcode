@@ -10,7 +10,6 @@ webcode scans these directories under the primary workspace by default:
 
 - `.agents/skills`
 - `.codex/skills`
-- `skills`
 
 Any directory containing `SKILL.md` is treated as a Skill.
 

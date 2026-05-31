@@ -4,8 +4,7 @@ import * as vscode from 'vscode';
 
 const DEFAULT_SKILL_DIRECTORIES = [
   '.agents/skills',
-  '.codex/skills',
-  'skills'
+  '.codex/skills'
 ];
 
 const MAX_SCAN_DEPTH = 8;

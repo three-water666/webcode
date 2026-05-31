@@ -6,7 +6,7 @@ export interface SkillWatcherController {
     refresh(): void;
 }
 
-const DEFAULT_SKILL_DIRECTORIES = ['.agents/skills', '.codex/skills', 'skills'];
+const DEFAULT_SKILL_DIRECTORIES = ['.agents/skills', '.codex/skills'];
 
 export function createSkillWatcherController(
     context: vscode.ExtensionContext,
