@@ -7,6 +7,7 @@
 
 ## 1. 请求格式 (你发送给插件)
 顶层字段只能包含 `mcp_action`、`name`、`purpose`、`arguments`、`request_id`。`name` 和 `purpose` 必填；如果所选工具有入参，`arguments` 必须严格匹配该工具的 `inputSchema`。
+每一次工具调用都必须使用一个此前在本会话中从未出现过的新 `request_id`。不要在后续回复中复用 `step_1`、`step_2` 或任何旧值。
 工具 `name` 必须和工具列表中展示的一致。本地/内置工具使用裸名，例如 `read_file`；第三方 MCP 工具使用 `server:tool` 名称，例如 `github:search_repositories`。
 
 ```json
@@ -17,7 +18,7 @@
   "arguments": {
     "key": "value"
   },
-  "request_id": "step_x"
+  "request_id": "turn_ab12_step_x"
 }
 ```
 
@@ -26,7 +27,7 @@
 ```json
 {
   "mcp_action": "result",
-  "request_id": "step_x",
+  "request_id": "turn_ab12_step_x",
   "output": "这里是文件内容或命令执行结果..."
 }
 ```
@@ -43,7 +44,7 @@
   "arguments": {
     "command": "git tag --list --sort=-v:refname"
   },
-  "request_id": "step_1"
+  "request_id": "turn_ab12_step_1"
 }
 ```
 ```json
@@ -54,7 +55,7 @@
   "arguments": {
     "command": "git status --short"
   },
-  "request_id": "step_2"
+  "request_id": "turn_ab12_step_2"
 }
 ```
 反例：
@@ -66,7 +67,7 @@
   "arguments": {
     "command": "git tag --list --sort=-v:refname"
   },
-  "request_id": "step_1"
+  "request_id": "turn_ab12_step_1"
 },
 {
   "mcp_action": "call",
@@ -75,7 +76,7 @@
   "arguments": {
     "command": "git status --short"
   },
-  "request_id": "step_2"
+  "request_id": "turn_ab12_step_2"
 }]
 ```
 3. **不要夹带问句**：如果你本次回复中包含任何工具调用，就不要同时向用户提问。因为下一次返回通常会是工具执行结果，用户无法先回答你的问题。

@@ -186,7 +186,7 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 
 // === 主循环逻辑 ===
 
-// 统一管理 request_id 的生命周期：已发现、执行中、结果缓存、已回填，以及当前轮次去重。
+// 统一管理工具调用内部 requestKey 的生命周期：已发现、执行中、结果缓存、已回填，以及当前轮次去重。
 const requestRegistry = new ToolRequestRegistry();
 let lastProgressLogTime = 0;
 let lastProgressStatus = "";
@@ -233,12 +233,12 @@ function scheduleMainLoop(delayMs: number): void {
  * 扫描当前页面最新一轮 AI 回复中的工具调用，并在本轮工具都结束后把结果回填给输入框。
  *
  * 这个循环可能由页面 DOM 变化、工具执行完成、协议错误稳定性检查等多个入口触发。它只处理
- * 最新的一条 AI 消息，避免历史消息反复触发工具；每个工具调用再用 request_id 做去重、执行
+ * 最新的一条 AI 消息，避免历史消息反复触发工具；每个工具调用再用内部 requestKey 做去重、执行
  * 状态跟踪和结果回填标记。
  *
  * 整体流程：
  * 1. 找到最新 AI 消息里的候选代码块。
- * 2. 解析工具调用协议，给缺失 request_id 的调用生成稳定 ID。
+ * 2. 解析工具调用协议，给调用生成稳定的模型 request_id 和内部 requestKey。
  * 3. 新调用进入执行路径，已知调用只刷新视觉状态。
  * 4. 当前轮次所有工具都有结果后，按页面顺序合并结果并写回输入框。
  * 5. 如果 AI 还在输出、工具还没完成、或 JSON 还没稳定，则安排下一次检查。
@@ -255,10 +255,10 @@ function runMainLoop() {
 
   const { messageIndex, codeElements } = latestCodeBlocks;
 
-  // 当前轮次对象只记录本次扫描看到的 request_id；去重、排序和已回填过滤由 registry 统一处理。
+  // 当前轮次对象只记录本次扫描看到的 requestKey；去重、排序和已回填过滤由 registry 统一处理。
   const currentTurn = requestRegistry.createTurn();
 
-  codeElements.forEach((codeEl) => {
+  codeElements.forEach((codeEl, codeBlockIndex) => {
     const textContent = (codeEl.textContent ?? "").trim();
     if (!looksLikeToolCall(textContent)) { return; }
 
@@ -271,17 +271,22 @@ function runMainLoop() {
         UI.clearVisualState(codeEl as HTMLElement);
       }
 
-      // request_id 是跨扫描周期识别同一个工具调用的关键。缺失时会基于调用内容生成稳定 ID。
-      const requestId = toolCallTracker.ensurePayloadRequestId(payload, codeEl as HTMLElement, messageIndex);
-      toolCallTracker.clearProtocolErrorFeedbackState(requestId);
-      currentTurn.add(requestId);
+      // requestKey 是跨扫描周期识别同一个工具调用的内部键。模型 request_id 只保留给 result 协议。
+      const requestIdentity = toolCallTracker.ensurePayloadRequestIdentity(
+        payload,
+        codeEl as HTMLElement,
+        messageIndex,
+        codeBlockIndex
+      );
+      toolCallTracker.clearProtocolErrorFeedbackState(requestIdentity.requestKey);
+      currentTurn.add(requestIdentity.requestKey);
 
-      const isProcessing = requestRegistry.isRunning(requestId);
-      const isKnown = requestRegistry.hasSeen(requestId);
+      const isProcessing = requestRegistry.isRunning(requestIdentity.requestKey);
+      const isKnown = requestRegistry.hasSeen(requestIdentity.requestKey);
 
       if (!isKnown) {
         // 新发现的工具调用只进入执行路径一次，后续扫描只会根据 registry 中的执行状态刷新视觉状态。
-        requestRegistry.markRunning(requestId);
+        requestRegistry.markRunning(requestIdentity.requestKey);
 
         // 页面上出现新工具调用时，先取消已有自动发送，避免还没写回工具结果就把输入框发出去。
         UI.cancelAutoSend();
@@ -291,7 +296,7 @@ function runMainLoop() {
 
         Logger.log(`${t("captured")}: ${payload.name}`, "info");
         logToolSummary(payload);
-        toolExecutor.execute(payload);
+        toolExecutor.execute(payload, requestIdentity);
       } else {
         // 已知调用不重复执行，只根据 registry 判断它还在处理中还是已经完成。
         if (isProcessing) {
@@ -302,12 +307,18 @@ function runMainLoop() {
       }
     } catch (error) {
       // 流式输出中 JSON 可能暂时不完整。tracker 会先等待文本稳定，确认失败后才回填协议错误。
-      const requestId = toolCallTracker.handleProtocolErrorBlock(codeEl as HTMLElement, textContent, messageIndex, error);
-      currentTurn.add(requestId);
+      const requestIdentity = toolCallTracker.handleProtocolErrorBlock(
+        codeEl as HTMLElement,
+        textContent,
+        messageIndex,
+        codeBlockIndex,
+        error
+      );
+      currentTurn.add(requestIdentity?.requestKey ?? null);
     }
   });
 
-  // 只处理当前轮次里还没有写回过的请求。已 flush 的 request_id 不会再次写入输入框。
+  // 只处理当前轮次里还没有写回过的请求。已 flush 的 requestKey 不会再次写入输入框。
   const unflushedBatch = currentTurn.getUnflushedBatch();
 
   if (unflushedBatch.hasRequests) {
