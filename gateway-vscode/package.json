@@ -141,15 +141,11 @@
         },
         "webcodeGateway.skillDirectories": {
           "type": "array",
-          "default": [
-            ".agents/skills",
-            ".codex/skills",
-            "skills"
-          ],
+          "default": [],
           "items": {
             "type": "string"
           },
-          "description": "Workspace-relative directories to scan for skill folders that contain SKILL.md."
+          "description": "Additional workspace-relative directories to scan for skill folders that contain SKILL.md. These are merged with the built-in default skill directories."
         },
         "webcodeGateway.servers": {
           "type": "object",

@@ -10,7 +10,6 @@ webcode scans these directories under the primary workspace by default:
 
 - `.agents/skills`
 - `.codex/skills`
-- `skills`
 
 Any directory containing `SKILL.md` is treated as a Skill.
 
@@ -29,17 +28,18 @@ Example:
 
 ## Custom Scan Paths
 
-Override the default scan paths with the VS Code setting `webcodeGateway.skillDirectories`.
+Add extra scan paths with the VS Code setting `webcodeGateway.skillDirectories`.
+This setting does not replace the defaults; configured paths are merged with the default directories and deduplicated.
 
 Example:
 
 ```json
 {
   "webcodeGateway.skillDirectories": [
-    ".codex/skills",
     "docs/ai-skills"
   ]
 }
 ```
 
 Paths are resolved relative to the primary workspace root.
+If you still need to scan the workspace-level `skills` directory, add `"skills"` explicitly to this list.
