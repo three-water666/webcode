@@ -1,12 +1,12 @@
 import { spawn } from 'child_process';
 import * as fs from 'fs';
-import * as path from 'path';
 import * as vscode from 'vscode';
 import type { LocalTool } from './types';
 import { textResult } from './result';
 import { getNumberArg, getStringArrayArg, resolveWorkspaceDirectory } from './filesystemUtils';
 import { createSearchCodeFallbackNotice, searchCodeInProcess } from './searchCodeFallback';
 import { appendRipgrepMatch } from './searchCodeRipgrepOutput';
+import { getRipgrepBinaryName, getVSCodeRipgrepCandidates } from './searchCodeRipgrepPaths';
 import {
     createRipgrepExcludeGlobs,
     DEFAULT_MATCH_LINE_MAX_CHARS,
@@ -73,7 +73,7 @@ export const searchCodeTool: LocalTool = {
             useRegex: args.use_regex === true,
             matchLineMaxChars: getBoundedSearchLineMaxChars(args.max_line_chars)
         };
-        const matches = await runRipgrepWithFallback(options);
+        const matches = await runRipgrepWithFallback(options, context.outputChannel);
 
         return textResult(matches.length > 0 ? matches.join('\n') : 'No matches found.');
     }
@@ -92,11 +92,15 @@ class RipgrepUnavailableError extends Error {
     }
 }
 
-async function runRipgrepWithFallback(options: SearchCodeOptions): Promise<string[]> {
+async function runRipgrepWithFallback(
+    options: SearchCodeOptions,
+    outputChannel: vscode.OutputChannel
+): Promise<string[]> {
     try {
         return await runRipgrep(options);
     } catch (error) {
         if (error instanceof RipgrepUnavailableError) {
+            logRipgrepFallback(outputChannel, error);
             const matches = await searchCodeInProcess(options);
             return [
                 createSearchCodeFallbackNotice(),
@@ -105,6 +109,13 @@ async function runRipgrepWithFallback(options: SearchCodeOptions): Promise<strin
         }
 
         throw error;
+    }
+}
+
+function logRipgrepFallback(outputChannel: vscode.OutputChannel, error: RipgrepUnavailableError): void {
+    outputChannel.appendLine('[search_code] ripgrep unavailable; using in-process fallback.');
+    for (const line of error.message.split('\n')) {
+        outputChannel.appendLine(`[search_code] ${line}`);
     }
 }
 
@@ -187,7 +198,11 @@ function resolveRipgrepCommand(): RipgrepCommand {
         checkedLocations.push('webcodeGateway.ripgrep.path: not set');
     }
 
-    const vscodeRipgrepCandidates = getVSCodeRipgrepCandidates();
+    const vscodeRipgrepCandidates = getVSCodeRipgrepCandidates(
+        vscode.env.appRoot,
+        process.env.PATH,
+        process.platform
+    );
 
     for (const candidate of vscodeRipgrepCandidates) {
         checkedLocations.push(`VS Code bundled ripgrep: ${candidate}`);
@@ -213,30 +228,12 @@ function resolveRipgrepCommand(): RipgrepCommand {
     };
 }
 
-function getVSCodeRipgrepCandidates(): string[] {
-    const binaryName = getRipgrepBinaryName(process.platform);
-    if (!vscode.env.appRoot) {
-        return [];
-    }
-
-    return [
-        path.join(vscode.env.appRoot, 'node_modules.asar.unpacked', '@vscode', 'ripgrep', 'bin', binaryName),
-        path.join(vscode.env.appRoot, 'node_modules', '@vscode', 'ripgrep', 'bin', binaryName),
-        path.join(vscode.env.appRoot, 'node_modules.asar.unpacked', 'vscode-ripgrep', 'bin', binaryName),
-        path.join(vscode.env.appRoot, 'node_modules', 'vscode-ripgrep', 'bin', binaryName)
-    ];
-}
-
 function getConfiguredRipgrepPath(): string | undefined {
     const configuredPath = vscode.workspace
         .getConfiguration('webcodeGateway')
         .get<string>('ripgrep.path', '')
         .trim();
     return configuredPath || undefined;
-}
-
-function getRipgrepBinaryName(platform: string): string {
-    return platform === 'win32' ? 'rg.exe' : 'rg';
 }
 
 function createRipgrepStartError(error: Error, rgCommand: RipgrepCommand): Error {

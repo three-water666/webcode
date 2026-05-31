@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import * as path from 'path';
 import { matchesPattern } from '../tools/filesystemUtils';
 import { createSearchCodeFallbackNotice } from '../tools/searchCodeFallback';
+import { getVSCodeAppRootCandidatesFromPath } from '../tools/searchCodeRipgrepPaths';
 import { createSearchCandidate } from '../tools/searchCodeGitFiles';
 import { appendRipgrepMatch } from '../tools/searchCodeRipgrepOutput';
 import type { SearchCodeOptions } from '../tools/searchCodeTypes';
@@ -33,6 +34,15 @@ suite('Search Code Tool', () => {
         assert.ok(notice.includes('in-process fallback'));
         assert.ok(notice.includes('simple comma brace alternation'));
         assert.ok(notice.includes('JavaScript RegExp'));
+    });
+
+    test('infers VS Code app roots from PATH bin directories', () => {
+        const candidates = getVSCodeAppRootCandidatesFromPath(
+            path.join('D:', 'Microsoft VS Code', 'bin'),
+            'win32'
+        );
+
+        assert.ok(candidates.includes(path.join('D:', 'Microsoft VS Code', 'resources', 'app')));
     });
 
     test('excludes common generated and test artifact directories by default', () => {
