@@ -64,6 +64,8 @@ suite('Command Risk', () => {
   test('checks POSIX path command writes and option values', () => {
     assert.strictEqual(assessShellCommandRisk('pnpm --dir=../outside build', riskContext).level, 'blocked');
     assert.strictEqual(assessShellCommandRisk('git -C ../outside status', riskContext).level, 'blocked');
+    assert.strictEqual(assessShellCommandRisk('git -C../outside status', riskContext).level, 'blocked');
+    assert.strictEqual(assessShellCommandRisk('git -c core.quotePath=false status', riskContext).level, 'allowed');
     assert.strictEqual(assessShellCommandRisk('tee ../outside.log', riskContext).level, 'blocked');
   });
 

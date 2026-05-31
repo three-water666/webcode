@@ -51,7 +51,9 @@ const POWERSHELL_PATH_COMMANDS = new Set([
 
 const REMOVE_COMMANDS = new Set(['rm', 'remove-item', 'rmdir', 'rd', 'del', 'erase']);
 const COMMON_PATH_OPTIONS = new Set(['--cwd', '--dir', '--directory', '--file', '--out-dir', '--output', '--path', '--prefix']);
+const EMPTY_PATH_OPTIONS = new Set<string>();
 const POSIX_COMMAND_PATH_OPTIONS = new Map<string, ReadonlySet<string>>([
+    // POSIX short options are case-sensitive; these commands use uppercase -C for directory paths.
     ['git', new Set(['-C'])],
     ['make', new Set(['-C'])],
     ['tar', new Set(['-C'])]
@@ -104,7 +106,7 @@ function assessPathCommandArguments(
         return [];
     }
 
-    const args = collectCommandPathArgs(segment.args);
+    const args = collectCommandPathArgs(parsed, segment);
     const issues = args.flatMap(arg => assessPathToken(arg, context, 'argument'));
     return isRecursiveRemove(segment) ? issues.concat(assessRecursiveRemoveTargets(args)) : issues;
 }
@@ -131,16 +133,23 @@ function assessRedirections(segment: ParsedShellSegment, context: CommandRiskCon
     return collectRedirectionTargets(segment.words).flatMap(target => assessPathToken(target, context, 'argument'));
 }
 
-function collectCommandPathArgs(args: string[]): string[] {
+function collectCommandPathArgs(parsed: ParsedShellCommand, segment: ParsedShellSegment): string[] {
     const pathArgs: string[] = [];
     let afterOptions = false;
+    const args = segment.args;
     for (let index = 0; index < args.length; index++) {
         const arg = args[index];
         if (arg === '--') {
+            // Option parsing stops here; following values are positional path arguments for path commands.
             afterOptions = true;
             continue;
         }
-        if (isCommandPathArg(args, index, afterOptions)) {
+        const optionName = getPathOptionName(arg, parsed, segment.commandName);
+        if (optionName) {
+            index += optionName.inline ? 0 : 1;
+            continue;
+        }
+        if (isCommandPathArg(arg, afterOptions)) {
             pathArgs.push(arg);
         }
     }
@@ -148,8 +157,7 @@ function collectCommandPathArgs(args: string[]): string[] {
     return pathArgs;
 }
 
-function isCommandPathArg(args: string[], index: number, afterOptions: boolean): boolean {
-    const arg = args[index];
+function isCommandPathArg(arg: string, afterOptions: boolean): boolean {
     if (!arg) {
         return false;
     }
@@ -165,6 +173,7 @@ function collectPathOptionValues(parsed: ParsedShellCommand, segment: ParsedShel
     for (let index = 0; index < segment.args.length; index++) {
         const arg = segment.args[index];
         if (arg === '--') {
+            // collectCommandPathArgs handles positional values after the end-of-options marker.
             break;
         }
 
@@ -189,9 +198,7 @@ function appendPathOptionValue(
 
     if (!optionName.inline && next) {
         values.push(next);
-        return;
-    }
-    if (optionName.inline) {
+    } else if (optionName.inline) {
         values.push(optionName.value);
     }
 }
@@ -404,7 +411,7 @@ function isPathOptionName(value: string, parsed: ParsedShellCommand, commandName
 }
 
 function getPosixCommandPathOptions(commandName: string): ReadonlySet<string> {
-    return POSIX_COMMAND_PATH_OPTIONS.get(commandName) ?? new Set<string>();
+    return POSIX_COMMAND_PATH_OPTIONS.get(commandName) ?? EMPTY_PATH_OPTIONS;
 }
 
 function isInsideDirectory(filePath: string, directory: string): boolean {
