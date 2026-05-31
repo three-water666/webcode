@@ -142,7 +142,7 @@ export class TerminalSessionManager {
 
   private async startCommand(session: TerminalSession, commandLine: string): Promise<void> {
     const shellIntegration = await this.waitForShellIntegration(session.terminal, this.shellIntegrationTimeoutMs);
-    if (session.endedAt) {
+    if (session.endedAt || session.stopRequested) {
       return;
     }
 
@@ -159,6 +159,10 @@ export class TerminalSessionManager {
     shellIntegration: vscode.TerminalShellIntegration,
     commandLine: string
   ): void {
+    if (session.stopRequested) {
+      return;
+    }
+
     const waiter = this.createExecutionEndWaiter(session.terminal);
     let execution: vscode.TerminalShellExecution;
 

@@ -227,6 +227,8 @@ terminal.sendText('\x03', false);
 
 `stop` 返回后，session 通常会先进入 `interrupting`。只有 shell integration 报告命令结束，或者用户关闭终端时，状态才会变成 `stopped`。如果命令忽略 `Ctrl+C`，它可能继续运行；如果 `capture` 是 `unavailable`，工具无法确认中断是否真正完成。
 
+如果 `stop` 发生在 session 仍处于 `starting`，且命令还没有发送到 shell 的短窗口内，工具会取消后续命令发送。此时终端窗口仍会保留，session 会保持 `interrupting`，直到用户关闭终端或后续扩展出更明确的取消完成状态。
+
 如果需要关闭终端标签页，应使用 `close`：
 
 ```json
