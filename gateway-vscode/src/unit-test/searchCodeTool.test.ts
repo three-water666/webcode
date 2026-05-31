@@ -39,20 +39,29 @@ suite('Search Code Tool', () => {
         assert.ok(notice.includes('JavaScript RegExp'));
     });
 
-    test('infers VS Code app roots from PATH bin directories', () => {
+    test('infers VS Code app roots from Windows PATH bin directories', () => {
         const candidates = getVSCodeAppRootCandidatesFromPath(
-            path.join('D:', 'Microsoft VS Code', 'bin'),
+            path.win32.join('D:\\', 'Microsoft VS Code', 'bin'),
             'win32'
         );
 
-        assert.ok(candidates.includes(path.join('D:', 'Microsoft VS Code', 'resources', 'app')));
+        assert.ok(candidates.includes(path.win32.join('D:\\', 'Microsoft VS Code', 'resources', 'app')));
+    });
+
+    test('infers VS Code app roots from MSYS-style Windows PATH entries', () => {
+        const candidates = getVSCodeAppRootCandidatesFromPath(
+            '/d/Microsoft VS Code/bin:/c/Users/example/bin',
+            'win32'
+        );
+
+        assert.ok(candidates.includes(path.win32.join('D:\\', 'Microsoft VS Code', 'resources', 'app')));
     });
 
     test('includes VS Code ripgrep-universal platform arch candidates', () => {
-        const appRoot = path.join('D:', 'Microsoft VS Code', 'resources', 'app');
+        const appRoot = path.win32.join('D:\\', 'Microsoft VS Code', 'resources', 'app');
         const candidates = getVSCodeRipgrepCandidates(appRoot, '', 'win32', 'x64');
 
-        assert.ok(candidates.includes(path.join(
+        assert.ok(candidates.includes(path.win32.join(
             appRoot,
             'node_modules',
             '@vscode',

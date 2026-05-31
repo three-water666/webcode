@@ -10,12 +10,12 @@ export function getVSCodeRipgrepCandidates(
     const binaryName = getRipgrepBinaryName(platform);
     const platformArchDirectory = getRipgrepPlatformArchDirectory(platform, arch);
     return uniqueStrings(getVSCodeAppRootCandidates(appRoot, pathValue ?? '', platform).flatMap(candidateAppRoot => [
-        path.join(candidateAppRoot, 'node_modules.asar.unpacked', '@vscode', 'ripgrep', 'bin', binaryName),
-        path.join(candidateAppRoot, 'node_modules', '@vscode', 'ripgrep', 'bin', binaryName),
-        path.join(candidateAppRoot, 'node_modules.asar.unpacked', 'vscode-ripgrep', 'bin', binaryName),
-        path.join(candidateAppRoot, 'node_modules', 'vscode-ripgrep', 'bin', binaryName),
-        path.join(candidateAppRoot, 'node_modules.asar.unpacked', '@vscode', 'ripgrep-universal', 'bin', platformArchDirectory, binaryName),
-        path.join(candidateAppRoot, 'node_modules', '@vscode', 'ripgrep-universal', 'bin', platformArchDirectory, binaryName)
+        joinPlatformPath(platform, candidateAppRoot, 'node_modules.asar.unpacked', '@vscode', 'ripgrep', 'bin', binaryName),
+        joinPlatformPath(platform, candidateAppRoot, 'node_modules', '@vscode', 'ripgrep', 'bin', binaryName),
+        joinPlatformPath(platform, candidateAppRoot, 'node_modules.asar.unpacked', 'vscode-ripgrep', 'bin', binaryName),
+        joinPlatformPath(platform, candidateAppRoot, 'node_modules', 'vscode-ripgrep', 'bin', binaryName),
+        joinPlatformPath(platform, candidateAppRoot, 'node_modules.asar.unpacked', '@vscode', 'ripgrep-universal', 'bin', platformArchDirectory, binaryName),
+        joinPlatformPath(platform, candidateAppRoot, 'node_modules', '@vscode', 'ripgrep-universal', 'bin', platformArchDirectory, binaryName)
     ]));
 }
 
@@ -28,7 +28,7 @@ function getVSCodeAppRootCandidates(
         ...(appRoot ? [appRoot] : []),
         ...getVSCodeAppRootCandidatesFromPath(pathValue, platform),
         ...getDefaultVSCodeAppRootCandidates(platform)
-    ]).map(candidate => path.resolve(candidate));
+    ]).map(candidate => resolvePlatformPath(platform, candidate));
 }
 
 export function getVSCodeAppRootCandidatesFromPath(pathValue: string, platform: NodeJS.Platform): string[] {
@@ -38,17 +38,17 @@ export function getVSCodeAppRootCandidatesFromPath(pathValue: string, platform: 
     for (const pathEntry of splitPathValue(pathValue, platform)) {
         const normalizedPathEntry = normalizePathEntry(pathEntry, platform);
         if (looksLikeVSCodeBinDirectory(normalizedPathEntry)) {
-            candidates.push(...inferVSCodeAppRootsFromBinDirectory(normalizedPathEntry));
+            candidates.push(...inferVSCodeAppRootsFromBinDirectory(normalizedPathEntry, platform));
         }
 
         for (const commandName of commandNames) {
-            const commandPath = path.join(normalizedPathEntry, commandName);
+            const commandPath = joinPlatformPath(platform, normalizedPathEntry, commandName);
             if (!fs.existsSync(commandPath)) {
                 continue;
             }
 
             const realCommandPath = getRealPathIfAvailable(commandPath);
-            candidates.push(...inferVSCodeAppRootsFromBinDirectory(path.dirname(realCommandPath)));
+            candidates.push(...inferVSCodeAppRootsFromBinDirectory(getPlatformPath(platform).dirname(realCommandPath), platform));
         }
     }
 
@@ -64,9 +64,22 @@ function getRipgrepPlatformArchDirectory(platform: NodeJS.Platform, arch: string
 }
 
 function splitPathValue(pathValue: string, platform: NodeJS.Platform): string[] {
-    const delimiter = platform === 'win32' ? ';' : path.delimiter;
-    const entries = pathValue.split(delimiter).filter(Boolean);
-    return entries.length > 1 ? entries : pathValue.split(path.delimiter).filter(Boolean);
+    if (platform === 'win32') {
+        return pathValue
+            .split(';')
+            .filter(Boolean)
+            .flatMap(splitWindowsPathEntry);
+    }
+
+    return pathValue.split(path.delimiter).filter(Boolean);
+}
+
+function splitWindowsPathEntry(pathEntry: string): string[] {
+    if (!pathEntry.startsWith('/')) {
+        return [pathEntry];
+    }
+
+    return pathEntry.split(/:(?=\/[a-zA-Z]\/)/).filter(Boolean);
 }
 
 function normalizePathEntry(pathEntry: string, platform: NodeJS.Platform): string {
@@ -86,11 +99,11 @@ function looksLikeVSCodeBinDirectory(binDirectory: string): boolean {
         /(?:visual studio code|microsoft vs code|vs code|vscode|vscodium|cursor)/.test(normalized);
 }
 
-function inferVSCodeAppRootsFromBinDirectory(binDirectory: string): string[] {
-    const parentDirectory = path.resolve(binDirectory, '..');
+function inferVSCodeAppRootsFromBinDirectory(binDirectory: string, platform: NodeJS.Platform): string[] {
+    const parentDirectory = resolvePlatformPath(platform, binDirectory, '..');
     return [
         parentDirectory,
-        path.join(parentDirectory, 'resources', 'app')
+        joinPlatformPath(platform, parentDirectory, 'resources', 'app')
     ];
 }
 
@@ -130,13 +143,25 @@ function getWindowsDefaultVSCodeAppRootCandidates(): string[] {
         .filter((item): item is string => typeof item === 'string' && item.length > 0);
 
     return roots.flatMap(root => [
-        path.join(root, 'Programs', 'Microsoft VS Code', 'resources', 'app'),
-        path.join(root, 'Programs', 'Microsoft VS Code Insiders', 'resources', 'app'),
-        path.join(root, 'Microsoft VS Code', 'resources', 'app'),
-        path.join(root, 'Microsoft VS Code Insiders', 'resources', 'app'),
-        path.join(root, 'VSCodium', 'resources', 'app'),
-        path.join(root, 'Cursor', 'resources', 'app')
+        path.win32.join(root, 'Programs', 'Microsoft VS Code', 'resources', 'app'),
+        path.win32.join(root, 'Programs', 'Microsoft VS Code Insiders', 'resources', 'app'),
+        path.win32.join(root, 'Microsoft VS Code', 'resources', 'app'),
+        path.win32.join(root, 'Microsoft VS Code Insiders', 'resources', 'app'),
+        path.win32.join(root, 'VSCodium', 'resources', 'app'),
+        path.win32.join(root, 'Cursor', 'resources', 'app')
     ]);
+}
+
+function joinPlatformPath(platform: NodeJS.Platform, ...paths: string[]): string {
+    return getPlatformPath(platform).join(...paths);
+}
+
+function resolvePlatformPath(platform: NodeJS.Platform, ...paths: string[]): string {
+    return getPlatformPath(platform).resolve(...paths);
+}
+
+function getPlatformPath(platform: NodeJS.Platform): path.PlatformPath {
+    return platform === 'win32' ? path.win32 : path.posix;
 }
 
 function getRealPathIfAvailable(filePath: string): string {
