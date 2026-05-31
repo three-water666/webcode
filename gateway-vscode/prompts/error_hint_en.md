@@ -14,15 +14,4 @@ Your model response content does not meet the requirements. Top-level fields may
 }
 ```
 
-For initialization:
-
-```json
-{
-  "mcp_action": "call",
-  "name": "{{INIT_TOOL_NAME}}",
-  "purpose": "Initialize {{PRODUCT_NAME}} for this conversation",
-  "request_id": "step_1"
-}
-```
-
 Please regenerate the instruction according to the correct format above.
