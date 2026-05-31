@@ -29,6 +29,11 @@ type PopupContext = {
   t: (key: string) => string;
 };
 
+type ManualInitStatusState = {
+  resetTimer: ReturnType<typeof setTimeout> | null;
+  token: number;
+};
+
 type GatewaySession = {
   port: number;
   token: string;
@@ -293,25 +298,41 @@ function bindPopupControls(currentTabId: number, context: PopupContext): void {
 }
 
 function bindManualInitButton(currentTabId: number, context: PopupContext): void {
+  const statusState: ManualInitStatusState = {
+    resetTimer: null,
+    token: 0,
+  };
+
   context.elements.manualInitBtn.addEventListener("click", () => {
-    context.elements.manualInitBtn.disabled = true;
-    context.elements.manualInitBtn.innerText = context.t("manual_init_running");
+    const token = startManualInitStatus(context, statusState);
 
     chrome.tabs.sendMessage(currentTabId, { type: "MANUAL_INIT" }, (response: unknown) => {
       if (chrome.runtime.lastError) {
-        showManualInitStatus(context, "manual_init_unavailable", false);
+        showManualInitStatus(context, statusState, token, "manual_init_unavailable", false);
         return;
       }
 
       if (isSuccessResponse(response) && response.success) {
         const labelKey = isAttachedResponse(response) ? "manual_init_attached" : "manual_init_done";
-        showManualInitStatus(context, labelKey, true);
+        showManualInitStatus(context, statusState, token, labelKey, true);
         return;
       }
 
-      showManualInitStatus(context, "manual_init_failed", false);
+      showManualInitStatus(context, statusState, token, "manual_init_failed", false);
     });
   });
+}
+
+function startManualInitStatus(context: PopupContext, state: ManualInitStatusState): number {
+  state.token += 1;
+  clearManualInitStatusTimer(state);
+
+  const button = context.elements.manualInitBtn;
+  button.disabled = true;
+  button.innerText = context.t("manual_init_running");
+  button.style.backgroundColor = "";
+
+  return state.token;
 }
 
 function isAttachedResponse(response: unknown): boolean {
@@ -321,16 +342,33 @@ function isAttachedResponse(response: unknown): boolean {
     (response as { attached?: unknown }).attached === true;
 }
 
-function showManualInitStatus(context: PopupContext, labelKey: string, success: boolean): void {
+function showManualInitStatus(
+  context: PopupContext,
+  state: ManualInitStatusState,
+  token: number,
+  labelKey: string,
+  success: boolean
+): void {
+  if (token !== state.token) {return;}
+  clearManualInitStatusTimer(state);
+
   const button = context.elements.manualInitBtn;
   button.disabled = false;
   button.innerText = context.t(labelKey);
   button.style.backgroundColor = success ? "#0d8a6a" : "#8a3d3d";
 
-  setTimeout(() => {
+  state.resetTimer = setTimeout(() => {
+    if (token !== state.token) {return;}
     button.innerText = context.t("manual_init");
     button.style.backgroundColor = "";
+    state.resetTimer = null;
   }, 3000);
+}
+
+function clearManualInitStatusTimer(state: ManualInitStatusState): void {
+  if (!state.resetTimer) {return;}
+  clearTimeout(state.resetTimer);
+  state.resetTimer = null;
 }
 
 function bindAutoSendToggle(autoSendInput: HTMLInputElement): void {
