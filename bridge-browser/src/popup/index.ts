@@ -9,6 +9,7 @@ type PopupElements = {
   manualInitBtn: HTMLButtonElement;
   autoSendInput: HTMLInputElement;
   showLogInput: HTMLInputElement;
+  soundInput: HTMLInputElement;
   availableView: HTMLElement;
   gatewayList: HTMLElement;
   title: HTMLElement;
@@ -16,6 +17,7 @@ type PopupElements = {
   portLabel: HTMLElement;
   autoSendLabel: HTMLElement;
   showLogLabel: HTMLElement;
+  soundLabel: HTMLElement;
   availableGateways: HTMLElement;
   disconnectedTitle: HTMLElement;
   installedTitle: HTMLElement;
@@ -53,6 +55,7 @@ const UI: Record<string, Record<string, string>> = {
     manual_init_unavailable: "Cannot initialize here",
     auto_send: "Auto Send Message",
     show_log: "Show Floating Log",
+    notification_sound: "Notification Sound",
     available_gateways: "⚡ Available Gateways",
     disconnected: "🔴 Disconnected",
     installed_title: "👉 Already Installed?",
@@ -74,6 +77,7 @@ const UI: Record<string, Record<string, string>> = {
     manual_init_unavailable: "当前页面无法初始化",
     auto_send: "自动发送消息",
     show_log: "显示悬浮日志",
+    notification_sound: "提示音",
     available_gateways: "⚡ 可用网关",
     disconnected: "🔴 未连接",
     installed_title: "👉 已安装？",
@@ -123,6 +127,7 @@ function getPopupElements(): PopupElements {
     manualInitBtn: document.getElementById("manualInitBtn") as HTMLButtonElement,
     autoSendInput: document.getElementById("autoSend") as HTMLInputElement,
     showLogInput: document.getElementById("showLog") as HTMLInputElement,
+    soundInput: document.getElementById("logSound") as HTMLInputElement,
     availableView: document.getElementById("availableView") as HTMLElement,
     gatewayList: document.getElementById("gatewayList") as HTMLElement,
     title: document.getElementById("title") as HTMLElement,
@@ -130,6 +135,7 @@ function getPopupElements(): PopupElements {
     portLabel: document.getElementById("portLabel") as HTMLElement,
     autoSendLabel: document.getElementById("autoSendLabel") as HTMLElement,
     showLogLabel: document.getElementById("showLogLabel") as HTMLElement,
+    soundLabel: document.getElementById("soundLabel") as HTMLElement,
     availableGateways: document.getElementById("availableGateways") as HTMLElement,
     disconnectedTitle: document.getElementById("disconnectedTitle") as HTMLElement,
     installedTitle: document.getElementById("installedTitle") as HTMLElement,
@@ -148,6 +154,7 @@ function initializeLabels(context: PopupContext): void {
   elements.manualInitBtn.title = t("manual_init_title");
   elements.autoSendLabel.textContent = t("auto_send");
   elements.showLogLabel.textContent = t("show_log");
+  elements.soundLabel.textContent = t("notification_sound");
   elements.availableGateways.innerHTML = `<span>⚡</span> ${t("available_gateways").replace(/^⚡\s*/, "")}`;
   elements.disconnectedTitle.textContent = t("disconnected");
   elements.installedTitle.textContent = t("installed_title");
@@ -184,12 +191,16 @@ function requestCurrentStatus(currentTab: chrome.tabs.Tab, currentTabId: number,
   );
 }
 
-function showConnectedStatus(response: { port?: number; showLog?: boolean }, elements: PopupElements): void {
+function showConnectedStatus(
+  response: { port?: number; showLog?: boolean; soundEnabled?: boolean },
+  elements: PopupElements
+): void {
   elements.connectedView.classList.remove("hidden");
   elements.disconnectedView.classList.add("hidden");
   elements.statusDot.classList.add("online");
   elements.portDisplay.innerText = String(response.port ?? "");
   elements.showLogInput.checked = response.showLog === true;
+  elements.soundInput.checked = response.soundEnabled === true;
 }
 
 function showDisconnectedStatus(currentUrl: string, currentTabId: number, context: PopupContext): void {
@@ -295,6 +306,7 @@ function bindPopupControls(currentTabId: number, context: PopupContext): void {
   bindManualInitButton(currentTabId, context);
   bindAutoSendToggle(context.elements.autoSendInput);
   bindLogToggle(currentTabId, context.elements.showLogInput);
+  bindSoundToggle(currentTabId, context.elements.soundInput);
 }
 
 function bindManualInitButton(currentTabId: number, context: PopupContext): void {
@@ -386,6 +398,25 @@ function bindLogToggle(currentTabId: number, showLogInput: HTMLInputElement): vo
       type: "SET_LOG_VISIBLE",
       tabId: currentTabId,
       show: showLogInput.checked,
+    });
+  });
+}
+
+function bindSoundToggle(currentTabId: number, soundInput: HTMLInputElement): void {
+  chrome.storage.sync.get(["logSoundEnabled"], (items: Record<string, unknown>) => {
+    if (typeof items.logSoundEnabled === "boolean") {
+      soundInput.checked = items.logSoundEnabled;
+    }
+  });
+
+  soundInput.addEventListener("change", () => {
+    const soundEnabled = soundInput.checked;
+    void chrome.storage.sync.set({ logSoundEnabled: soundEnabled });
+    void chrome.tabs.sendMessage(currentTabId, {
+      type: "SET_LOG_SOUND_ENABLED",
+      soundEnabled,
+    }).catch(() => {
+      void chrome.runtime.lastError;
     });
   });
 }

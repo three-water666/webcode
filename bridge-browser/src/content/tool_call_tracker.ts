@@ -5,7 +5,7 @@ import * as UI from "../modules/ui";
 import { ToolCallProtocolError, type ParsedToolCallPayload } from "../modules/toolCallProtocol";
 import { showUserAttentionNotification } from "../modules/user_attention";
 import type { ToolExecutionPayload } from "../types";
-import { type ToolRequestRegistry } from "./tool_request_registry";
+import { type ToolRequestIdentity, type ToolRequestRegistry } from "./tool_request_registry";
 
 interface BlockState {
   text: string;
@@ -26,46 +26,60 @@ export class ToolCallTracker {
 
   public constructor(private readonly options: ToolCallTrackerOptions) {}
 
-  public ensurePayloadRequestId(
+  public ensurePayloadRequestIdentity(
     payload: ParsedToolCallPayload,
     codeEl: HTMLElement,
-    messageIndex: number
-  ): string {
+    messageIndex: number,
+    codeBlockIndex: number
+  ): ToolRequestIdentity {
     const explicitRequestId = normalizeRequestId(payload.request_id);
     if (explicitRequestId) {
       codeEl.dataset.mcpRequestId = explicitRequestId;
       delete codeEl.dataset.mcpCallSignature;
+      delete codeEl.dataset.mcpCallScope;
       payload.request_id = explicitRequestId;
-      return explicitRequestId;
+      return {
+        requestId: explicitRequestId,
+        requestKey: ensureElementRequestKey(codeEl, explicitRequestId, messageIndex, codeBlockIndex),
+      };
     }
 
     const signature = buildToolCallSignature(payload);
+    const scope = getRequestScope(messageIndex, codeBlockIndex);
     const cachedRequestId = codeEl.dataset.mcpRequestId;
     const cachedSignature = codeEl.dataset.mcpCallSignature;
-    const syntheticRequestId = cachedRequestId && cachedSignature === signature
+    const cachedScope = codeEl.dataset.mcpCallScope;
+    const syntheticRequestId = cachedRequestId?.startsWith("req_auto_") &&
+      cachedSignature === signature &&
+      cachedScope === scope
       ? cachedRequestId
-      : `req_auto_${messageIndex}_${hashStableString(signature)}`;
+      : `req_auto_${messageIndex}_${codeBlockIndex}_${hashStableString(signature)}`;
 
     codeEl.dataset.mcpRequestId = syntheticRequestId;
     codeEl.dataset.mcpCallSignature = signature;
+    codeEl.dataset.mcpCallScope = scope;
     payload.request_id = syntheticRequestId;
-    return syntheticRequestId;
+    return {
+      requestId: syntheticRequestId,
+      requestKey: ensureElementRequestKey(codeEl, syntheticRequestId, messageIndex, codeBlockIndex),
+    };
   }
 
-  public clearProtocolErrorFeedbackState(requestId: string): void {
-    if (!this.protocolErrorFeedbackRequests.delete(requestId)) {return;}
-    this.options.requestRegistry.clearProtocolFeedbackResult(requestId);
+  public clearProtocolErrorFeedbackState(requestKey: string): void {
+    if (!this.protocolErrorFeedbackRequests.delete(requestKey)) {return;}
+    this.options.requestRegistry.clearProtocolFeedbackResult(requestKey);
   }
 
   public handleProtocolErrorBlock(
     codeEl: HTMLElement,
     textContent: string,
     messageIndex: number,
+    codeBlockIndex: number,
     error: unknown
-  ): string | null {
+  ): ToolRequestIdentity | null {
     const now = Date.now();
     const state = this.blockStates.get(codeEl);
-    const requestId = getProtocolErrorRequestId(textContent, codeEl, messageIndex);
+    const identity = getProtocolErrorIdentity(textContent, codeEl, messageIndex, codeBlockIndex);
 
     if (state?.text !== textContent) {
       this.blockStates.set(codeEl, {
@@ -86,15 +100,15 @@ export class ToolCallTracker {
     }
 
     if (!state.errorNotified) {
-      this.notifyProtocolError(codeEl, requestId, error);
+      this.notifyProtocolError(codeEl, identity, error);
       state.errorNotified = true;
       this.blockStates.set(codeEl, state);
     }
 
-    return requestId;
+    return identity;
   }
 
-  private notifyProtocolError(codeEl: HTMLElement, requestId: string, error: unknown): void {
+  private notifyProtocolError(codeEl: HTMLElement, identity: ToolRequestIdentity, error: unknown): void {
     const message = buildProtocolErrorMessage(error);
     Logger.log(`Tool call protocol error: ${message}`, "error");
     UI.markVisualError(codeEl);
@@ -103,9 +117,12 @@ export class ToolCallTracker {
       message: "Invalid tool call format. Returned guidance to the model.",
     });
 
-    if (!this.options.requestRegistry.hasSeen(requestId) && !this.protocolErrorFeedbackRequests.has(requestId)) {
-      this.protocolErrorFeedbackRequests.add(requestId);
-      this.options.requestRegistry.saveToolResult(requestId, message, true);
+    if (
+      !this.options.requestRegistry.hasSeen(identity.requestKey) &&
+      !this.protocolErrorFeedbackRequests.has(identity.requestKey)
+    ) {
+      this.protocolErrorFeedbackRequests.add(identity.requestKey);
+      this.options.requestRegistry.saveToolResult(identity.requestKey, identity.requestId, message, true);
     }
   }
 
@@ -182,30 +199,75 @@ function hashStableString(value: string): string {
   return (hash >>> 0).toString(36);
 }
 
-function getProtocolErrorRequestId(
+function ensureElementRequestKey(
+  codeEl: HTMLElement,
+  requestId: string,
+  messageIndex: number,
+  codeBlockIndex: number
+): string {
+  const seed = stableStringify({
+    codeBlockIndex,
+    messageIndex,
+    request_id: requestId,
+  });
+  const cachedRequestKey = codeEl.dataset.mcpRequestKey;
+  const cachedRequestKeySeed = codeEl.dataset.mcpRequestKeySeed;
+  if (cachedRequestKey && cachedRequestKeySeed === seed) {
+    return cachedRequestKey;
+  }
+
+  const requestKey = `req_key_${messageIndex}_${codeBlockIndex}_${hashStableString(seed)}`;
+  codeEl.dataset.mcpRequestKey = requestKey;
+  codeEl.dataset.mcpRequestKeySeed = seed;
+  return requestKey;
+}
+
+function getProtocolErrorIdentity(
   textContent: string,
   codeEl: HTMLElement,
-  messageIndex: number
-): string {
+  messageIndex: number,
+  codeBlockIndex: number
+): ToolRequestIdentity {
   const explicitRequestId = extractRequestIdCandidate(textContent);
   if (explicitRequestId) {
     codeEl.dataset.mcpRequestId = explicitRequestId;
-    return explicitRequestId;
+    return {
+      requestId: explicitRequestId,
+      requestKey: ensureElementRequestKey(codeEl, explicitRequestId, messageIndex, codeBlockIndex),
+    };
   }
 
   const cachedRequestId = codeEl.dataset.mcpRequestId;
-  if (cachedRequestId?.startsWith("req_invalid_")) {
-    return cachedRequestId;
+  const textSignature = hashStableString(textContent);
+  const scope = getRequestScope(messageIndex, codeBlockIndex);
+  if (
+    cachedRequestId?.startsWith("req_invalid_") &&
+    codeEl.dataset.mcpInvalidSignature === textSignature &&
+    codeEl.dataset.mcpInvalidScope === scope
+  ) {
+    return {
+      requestId: cachedRequestId,
+      requestKey: ensureElementRequestKey(codeEl, cachedRequestId, messageIndex, codeBlockIndex),
+    };
   }
 
-  const syntheticRequestId = `req_invalid_${messageIndex}_${hashStableString(textContent)}`;
+  const syntheticRequestId = `req_invalid_${messageIndex}_${codeBlockIndex}_${textSignature}`;
   codeEl.dataset.mcpRequestId = syntheticRequestId;
-  return syntheticRequestId;
+  codeEl.dataset.mcpInvalidSignature = textSignature;
+  codeEl.dataset.mcpInvalidScope = scope;
+  return {
+    requestId: syntheticRequestId,
+    requestKey: ensureElementRequestKey(codeEl, syntheticRequestId, messageIndex, codeBlockIndex),
+  };
 }
 
 function extractRequestIdCandidate(textContent: string): string | null {
   const match = /["']request_id["']\s*:\s*["']([^"']+)["']/.exec(textContent);
   return normalizeRequestId(match?.[1]);
+}
+
+function getRequestScope(messageIndex: number, codeBlockIndex: number): string {
+  return `${messageIndex}:${codeBlockIndex}`;
 }
 
 function buildProtocolErrorMessage(error: unknown): string {
@@ -216,8 +278,8 @@ function buildProtocolErrorMessage(error: unknown): string {
     ? "工具调用已被 webcode 拒绝，未请求 VS Code，也未执行任何工具。"
     : "The tool call was rejected by webcode before contacting VS Code. No tool was executed.";
   const nextStep = i18n.lang === "zh"
-    ? "请重新输出一个新的 JSON 工具调用代码块。顶层只能包含 mcp_action、name、purpose、arguments、request_id；name 和 purpose 必填。当前工具有入参时，arguments 必须严格匹配该工具的 inputSchema。"
-    : "Regenerate a new JSON tool-call code block. Top-level fields may only be mcp_action, name, purpose, arguments, and request_id; name and purpose are required. When the selected tool has inputs, arguments must exactly match that tool's inputSchema.";
+    ? "请重新输出一个新的 JSON 工具调用代码块。顶层只能包含 mcp_action、name、purpose、arguments、request_id；name 和 purpose 必填。request_id 必须是本会话中每次工具调用的新值。当前工具有入参时，arguments 必须严格匹配该工具的 inputSchema。"
+    : "Regenerate a new JSON tool-call code block. Top-level fields may only be mcp_action, name, purpose, arguments, and request_id; name and purpose are required. request_id must be new for every tool call in this conversation. When the selected tool has inputs, arguments must exactly match that tool's inputSchema.";
   const issueList = issues.map((issue) => `- ${issue}`).join("\n");
   const formatHint = getDefaultProtocolErrorHint();
   return `${intro}\n\nProblems:\n${issueList}\n\n${nextStep}\n\n${formatHint}`;
@@ -233,7 +295,7 @@ function getDefaultProtocolErrorHint(): string {
   "arguments": {
     "key": "value"
   },
-  "request_id": "step_1"
+  "request_id": "turn_unique_step_1"
 }
 \`\`\`
 
@@ -243,7 +305,7 @@ Initialization tool format:
   "mcp_action": "call",
   "name": "${PROTOCOL.initToolName}",
   "purpose": "Initialize webcode for this conversation",
-  "request_id": "step_1"
+  "request_id": "init_unique_1"
 }
 \`\`\``;
 }

@@ -187,21 +187,73 @@ function renderBridgeScript(): string {
                         document.getElementById('install-github-button').textContent = bridgeI18n.githubButton;
                         document.getElementById('install-warn').textContent = bridgeI18n.installWarn;
 
-                        // 检测逻辑：等待 1.5 秒
-                        setTimeout(() => {
-                            // 1. 检查插件是否打上了标记
+                        const installDetectionTimeoutMs = 10000;
+                        const installDetectionPollMs = 100;
+                        const bridgeSignalEventName = 'webcode-bridge-extension-installed';
+                        let installDetectionSettled = false;
+                        let installDetectionTimer = null;
+                        let installDetectionPollTimer = null;
+                        let installDetectionObserver = null;
+
+                        function hasBridgeExtensionSignal() {
                             const isInstalled = document.documentElement.getAttribute('data-extension-installed') === 'true';
-
-                            // 2. 双重保险：检查页面内容是否已经被插件修改（例如出现了冲突提示）
                             const bridgeState = document.body.dataset.bridgeState;
-                            const isBusyOrConflict = bridgeState === 'conflict' || bridgeState === 'switching' || bridgeState === 'connected';
+                            const handledByExtension = bridgeState === 'conflict'
+                                || bridgeState === 'switching'
+                                || bridgeState === 'connected'
+                                || bridgeState === 'error';
 
-                            // 只有在既没安装，也没发生冲突的情况下，才显示安装引导
-                            if (!isInstalled && !isBusyOrConflict) {
-                                document.getElementById('main-card').style.display = 'none';
-                                document.getElementById('install-guide').style.display = 'block';
+                            return isInstalled || handledByExtension;
+                        }
+
+                        function stopInstallDetection() {
+                            if (installDetectionSettled) {
+                                return;
                             }
-                        }, 1500);
+
+                            installDetectionSettled = true;
+                            if (installDetectionTimer !== null) {
+                                window.clearTimeout(installDetectionTimer);
+                            }
+                            if (installDetectionPollTimer !== null) {
+                                window.clearInterval(installDetectionPollTimer);
+                            }
+                            if (installDetectionObserver) {
+                                installDetectionObserver.disconnect();
+                            }
+                            window.removeEventListener(bridgeSignalEventName, checkBridgeExtensionSignal);
+                        }
+
+                        function checkBridgeExtensionSignal() {
+                            if (!installDetectionSettled && hasBridgeExtensionSignal()) {
+                                stopInstallDetection();
+                            }
+                        }
+
+                        function showInstallGuideIfNoExtensionSignal() {
+                            if (hasBridgeExtensionSignal()) {
+                                stopInstallDetection();
+                                return;
+                            }
+
+                            stopInstallDetection();
+                            document.getElementById('main-card').style.display = 'none';
+                            document.getElementById('install-guide').style.display = 'block';
+                        }
+
+                        window.addEventListener(bridgeSignalEventName, checkBridgeExtensionSignal);
+                        installDetectionObserver = new MutationObserver(checkBridgeExtensionSignal);
+                        installDetectionObserver.observe(document.documentElement, {
+                            attributes: true,
+                            attributeFilter: ['data-extension-installed']
+                        });
+                        installDetectionObserver.observe(document.body, {
+                            attributes: true,
+                            attributeFilter: ['data-bridge-state']
+                        });
+                        installDetectionPollTimer = window.setInterval(checkBridgeExtensionSignal, installDetectionPollMs);
+                        installDetectionTimer = window.setTimeout(showInstallGuideIfNoExtensionSignal, installDetectionTimeoutMs);
+                        checkBridgeExtensionSignal();
                     </script>`;
 }
 

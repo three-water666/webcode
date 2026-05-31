@@ -1,5 +1,5 @@
 import { isMessageRequest, type MessageRequest } from '../types';
-import { playAttentionSound } from './attention_sound';
+import { playAttentionSound, type LogSoundType } from './attention_sound';
 import { bindSession, handleHandshake } from './connection';
 import { getErrorMessage } from './errors';
 import { executeTool } from './gateway';
@@ -37,6 +37,12 @@ function dispatchRuntimeMessage(
     case "SET_LOG_VISIBLE":
       handleSetLogVisible(request, currentTabId, sendResponse);
       return true;
+    case "SET_LOG_SOUND_ENABLED":
+      handleSetLogSoundEnabled(request, currentTabId, sendResponse);
+      return true;
+    case "PLAY_LOG_SOUND":
+      respondAsync(playLogSound(request), sendResponse);
+      return true;
     case "REQUEST_USER_ATTENTION":
       respondAsync(requestUserAttention(request, sender), sendResponse);
       return true;
@@ -72,10 +78,14 @@ function handleGetStatus(
   }
 
   respondAsync(
-    getSession(targetTabId).then((session) => ({
+    Promise.all([
+      getSession(targetTabId),
+      chrome.storage.sync.get(["logSoundEnabled"]) as Promise<Record<string, unknown>>,
+    ]).then(([session, syncItems]) => ({
       connected: Boolean(session),
       port: session?.port,
       showLog: session?.showLog ?? false,
+      soundEnabled: syncItems.logSoundEnabled === true,
       workspaceId: session?.workspaceId ?? 'global',
     })),
     sendResponse
@@ -104,6 +114,44 @@ function handleSetLogVisible(
     }),
     sendResponse
   );
+}
+
+function handleSetLogSoundEnabled(
+  request: MessageRequest,
+  currentTabId: number | null | undefined,
+  sendResponse: SendResponse
+): void {
+  const targetTabId = request.tabId ?? currentTabId;
+  const soundEnabled = request.soundEnabled === true;
+
+  respondAsync(
+    chrome.storage.sync.set({ logSoundEnabled: soundEnabled }).then(() => {
+      if (targetTabId) {
+        void chrome.tabs.sendMessage(targetTabId, {
+          type: "SET_LOG_SOUND_ENABLED",
+          soundEnabled,
+        }).catch(ignoreRuntimeError);
+      }
+      return { success: true };
+    }),
+    sendResponse
+  );
+}
+
+async function playLogSound(request: MessageRequest): Promise<{ success: boolean; error?: string }> {
+  if (!isLogSoundType(request.logType)) {
+    return { success: false, error: "Unsupported log sound type." };
+  }
+
+  return playAttentionSound(request.logType);
+}
+
+function isLogSoundType(value: unknown): value is LogSoundType {
+  return value === "info" ||
+    value === "success" ||
+    value === "warn" ||
+    value === "error" ||
+    value === "action";
 }
 
 function handleConnectExisting(

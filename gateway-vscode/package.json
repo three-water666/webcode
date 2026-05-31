@@ -9,7 +9,7 @@
   },
   "license": "MIT",
   "icon": "images/icon.png",
-  "version": "0.8.4",
+  "version": "0.9.1",
   "engines": {
     "vscode": "^1.106.1"
   },
@@ -137,7 +137,7 @@
         "webcodeGateway.ripgrep.path": {
           "type": "string",
           "default": "",
-          "description": "Optional absolute path to ripgrep for search_code. Leave empty to use VS Code's bundled ripgrep or rg from PATH."
+          "description": "Optional absolute path to ripgrep for search_files and search_code. Leave empty to use VS Code's bundled ripgrep or rg from PATH."
         },
         "webcodeGateway.skillDirectories": {
           "type": "array",
