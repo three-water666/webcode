@@ -36,6 +36,7 @@ export class ToolCallTracker {
     if (explicitRequestId) {
       codeEl.dataset.mcpRequestId = explicitRequestId;
       delete codeEl.dataset.mcpCallSignature;
+      delete codeEl.dataset.mcpCallScope;
       payload.request_id = explicitRequestId;
       return {
         requestId: explicitRequestId,
@@ -44,14 +45,19 @@ export class ToolCallTracker {
     }
 
     const signature = buildToolCallSignature(payload);
+    const scope = getRequestScope(messageIndex, codeBlockIndex);
     const cachedRequestId = codeEl.dataset.mcpRequestId;
     const cachedSignature = codeEl.dataset.mcpCallSignature;
-    const syntheticRequestId = cachedRequestId && cachedSignature === signature
+    const cachedScope = codeEl.dataset.mcpCallScope;
+    const syntheticRequestId = cachedRequestId?.startsWith("req_auto_") &&
+      cachedSignature === signature &&
+      cachedScope === scope
       ? cachedRequestId
       : `req_auto_${messageIndex}_${codeBlockIndex}_${hashStableString(signature)}`;
 
     codeEl.dataset.mcpRequestId = syntheticRequestId;
     codeEl.dataset.mcpCallSignature = signature;
+    codeEl.dataset.mcpCallScope = scope;
     payload.request_id = syntheticRequestId;
     return {
       requestId: syntheticRequestId,
@@ -199,18 +205,20 @@ function ensureElementRequestKey(
   messageIndex: number,
   codeBlockIndex: number
 ): string {
-  const cachedRequestKey = codeEl.dataset.mcpRequestKey;
-  if (cachedRequestKey) {
-    return cachedRequestKey;
-  }
-
   const seed = stableStringify({
     codeBlockIndex,
     messageIndex,
     request_id: requestId,
   });
+  const cachedRequestKey = codeEl.dataset.mcpRequestKey;
+  const cachedRequestKeySeed = codeEl.dataset.mcpRequestKeySeed;
+  if (cachedRequestKey && cachedRequestKeySeed === seed) {
+    return cachedRequestKey;
+  }
+
   const requestKey = `req_key_${messageIndex}_${codeBlockIndex}_${hashStableString(seed)}`;
   codeEl.dataset.mcpRequestKey = requestKey;
+  codeEl.dataset.mcpRequestKeySeed = seed;
   return requestKey;
 }
 
@@ -230,15 +238,23 @@ function getProtocolErrorIdentity(
   }
 
   const cachedRequestId = codeEl.dataset.mcpRequestId;
-  if (cachedRequestId?.startsWith("req_invalid_")) {
+  const textSignature = hashStableString(textContent);
+  const scope = getRequestScope(messageIndex, codeBlockIndex);
+  if (
+    cachedRequestId?.startsWith("req_invalid_") &&
+    codeEl.dataset.mcpInvalidSignature === textSignature &&
+    codeEl.dataset.mcpInvalidScope === scope
+  ) {
     return {
       requestId: cachedRequestId,
       requestKey: ensureElementRequestKey(codeEl, cachedRequestId, messageIndex, codeBlockIndex),
     };
   }
 
-  const syntheticRequestId = `req_invalid_${messageIndex}_${codeBlockIndex}_${hashStableString(textContent)}`;
+  const syntheticRequestId = `req_invalid_${messageIndex}_${codeBlockIndex}_${textSignature}`;
   codeEl.dataset.mcpRequestId = syntheticRequestId;
+  codeEl.dataset.mcpInvalidSignature = textSignature;
+  codeEl.dataset.mcpInvalidScope = scope;
   return {
     requestId: syntheticRequestId,
     requestKey: ensureElementRequestKey(codeEl, syntheticRequestId, messageIndex, codeBlockIndex),
@@ -248,6 +264,10 @@ function getProtocolErrorIdentity(
 function extractRequestIdCandidate(textContent: string): string | null {
   const match = /["']request_id["']\s*:\s*["']([^"']+)["']/.exec(textContent);
   return normalizeRequestId(match?.[1]);
+}
+
+function getRequestScope(messageIndex: number, codeBlockIndex: number): string {
+  return `${messageIndex}:${codeBlockIndex}`;
 }
 
 function buildProtocolErrorMessage(error: unknown): string {
