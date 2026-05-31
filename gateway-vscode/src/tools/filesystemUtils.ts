@@ -269,7 +269,7 @@ export function toPosixPath(value: string): string {
     return value.replace(/\\/g, '/');
 }
 
-export function createUnifiedDiff(originalContent: string, newContent: string, filepath: string): string {
+export function createUnifiedDiff(originalContent: string, newContent: string, filepath: string, maxChars = 20000): string {
     const originalLines = normalizeLineEndings(originalContent).split('\n');
     const newLines = normalizeLineEndings(newContent).split('\n');
 
@@ -281,7 +281,18 @@ export function createUnifiedDiff(originalContent: string, newContent: string, f
     const hunkLines = createDiffHeader(filepath, bounds);
     appendDiffBody(hunkLines, originalLines, newLines, bounds);
 
-    return `\`\`\`diff\n${hunkLines.join('\n')}\n\`\`\``;
+    return limitUnifiedDiffOutput('```diff\n' + hunkLines.join('\n') + '\n```', maxChars);
+}
+
+function limitUnifiedDiffOutput(diff: string, maxChars: number): string {
+    const safeMaxChars = Math.max(200, Math.floor(maxChars));
+    if (diff.length <= safeMaxChars) {
+        return diff;
+    }
+
+    const truncationNotice = '\n[diff output truncated to ' + safeMaxChars + ' characters; use read_file with line ranges or make a smaller edit to inspect the full change.]\n```';
+    const prefixLength = Math.max(0, safeMaxChars - truncationNotice.length);
+    return diff.slice(0, prefixLength) + truncationNotice;
 }
 
 function getDiffBounds(originalLines: string[], newLines: string[]): DiffBounds {
