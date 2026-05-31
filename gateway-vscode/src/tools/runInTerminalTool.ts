@@ -41,9 +41,13 @@ export const runInTerminalTool: LocalTool = {
                 env: process.env,
                 configuredCommandShellPath: context.commandShellPath
             });
-            assertTerminalCommandRiskAllowed(commandLine, profile.shellKind);
             const cwdArg = typeof args.cwd === 'string' && args.cwd.trim() === '' ? '.' : args.cwd ?? '.';
             const cwd = await resolveWorkspaceDirectory(context.workspaceRoot, cwdArg);
+            assertTerminalCommandRiskAllowed(commandLine, profile.shellKind, {
+                workspaceRoot: context.workspaceRoot,
+                cwd,
+                platform: process.platform
+            });
             const session = context.terminalSessionManager.createSession({
                 commandLine,
                 cwd,

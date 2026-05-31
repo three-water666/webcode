@@ -1,7 +1,11 @@
 import * as assert from 'assert';
+import * as path from 'path';
 import { assessShellCommandRisk } from '../servers/commandRisk';
 
 suite('Command Risk', () => {
+  const workspaceRoot = path.resolve(process.cwd(), 'workspace');
+  const riskContext = { workspaceRoot, cwd: workspaceRoot };
+
   test('allows ordinary shell workflows', () => {
     const assessment = assessShellCommandRisk('git status && pnpm test | tee test.log');
     assert.strictEqual(assessment.level, 'allowed');
@@ -40,5 +44,20 @@ suite('Command Risk', () => {
   test('marks interpreter inline eval as rejected', () => {
     const assessment = assessShellCommandRisk('node -e "console.log(1)"');
     assert.strictEqual(assessment.level, 'dangerous');
+  });
+
+  test('blocks workspace path escapes in combined POSIX commands', () => {
+    const assessment = assessShellCommandRisk('pnpm build && rm -rf ../outside', riskContext);
+    assert.strictEqual(assessment.level, 'blocked');
+  });
+
+  test('allows workspace-scoped path arguments', () => {
+    const assessment = assessShellCommandRisk('rm -rf ./node_modules', riskContext);
+    assert.strictEqual(assessment.level, 'allowed');
+  });
+
+  test('blocks workspace path escapes in command paths and redirections', () => {
+    assert.strictEqual(assessShellCommandRisk('../scripts/build.sh', riskContext).level, 'blocked');
+    assert.strictEqual(assessShellCommandRisk('echo hi > ../out.txt', riskContext).level, 'blocked');
   });
 });
