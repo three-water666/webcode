@@ -201,7 +201,8 @@ function resolveRipgrepCommand(): RipgrepCommand {
     const vscodeRipgrepCandidates = getVSCodeRipgrepCandidates(
         vscode.env.appRoot,
         process.env.PATH,
-        process.platform
+        process.platform,
+        process.arch
     );
 
     for (const candidate of vscodeRipgrepCandidates) {

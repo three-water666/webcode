@@ -2,7 +2,10 @@ import * as assert from 'assert';
 import * as path from 'path';
 import { matchesPattern } from '../tools/filesystemUtils';
 import { createSearchCodeFallbackNotice } from '../tools/searchCodeFallback';
-import { getVSCodeAppRootCandidatesFromPath } from '../tools/searchCodeRipgrepPaths';
+import {
+    getVSCodeAppRootCandidatesFromPath,
+    getVSCodeRipgrepCandidates
+} from '../tools/searchCodeRipgrepPaths';
 import { createSearchCandidate } from '../tools/searchCodeGitFiles';
 import { appendRipgrepMatch } from '../tools/searchCodeRipgrepOutput';
 import type { SearchCodeOptions } from '../tools/searchCodeTypes';
@@ -43,6 +46,21 @@ suite('Search Code Tool', () => {
         );
 
         assert.ok(candidates.includes(path.join('D:', 'Microsoft VS Code', 'resources', 'app')));
+    });
+
+    test('includes VS Code ripgrep-universal platform arch candidates', () => {
+        const appRoot = path.join('D:', 'Microsoft VS Code', 'resources', 'app');
+        const candidates = getVSCodeRipgrepCandidates(appRoot, '', 'win32', 'x64');
+
+        assert.ok(candidates.includes(path.join(
+            appRoot,
+            'node_modules',
+            '@vscode',
+            'ripgrep-universal',
+            'bin',
+            'win32-x64',
+            'rg.exe'
+        )));
     });
 
     test('excludes common generated and test artifact directories by default', () => {

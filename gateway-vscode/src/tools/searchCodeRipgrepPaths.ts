@@ -4,14 +4,18 @@ import * as path from 'path';
 export function getVSCodeRipgrepCandidates(
     appRoot: string | undefined,
     pathValue: string | undefined,
-    platform: NodeJS.Platform
+    platform: NodeJS.Platform,
+    arch: string
 ): string[] {
     const binaryName = getRipgrepBinaryName(platform);
+    const platformArchDirectory = getRipgrepPlatformArchDirectory(platform, arch);
     return uniqueStrings(getVSCodeAppRootCandidates(appRoot, pathValue ?? '', platform).flatMap(candidateAppRoot => [
         path.join(candidateAppRoot, 'node_modules.asar.unpacked', '@vscode', 'ripgrep', 'bin', binaryName),
         path.join(candidateAppRoot, 'node_modules', '@vscode', 'ripgrep', 'bin', binaryName),
         path.join(candidateAppRoot, 'node_modules.asar.unpacked', 'vscode-ripgrep', 'bin', binaryName),
-        path.join(candidateAppRoot, 'node_modules', 'vscode-ripgrep', 'bin', binaryName)
+        path.join(candidateAppRoot, 'node_modules', 'vscode-ripgrep', 'bin', binaryName),
+        path.join(candidateAppRoot, 'node_modules.asar.unpacked', '@vscode', 'ripgrep-universal', 'bin', platformArchDirectory, binaryName),
+        path.join(candidateAppRoot, 'node_modules', '@vscode', 'ripgrep-universal', 'bin', platformArchDirectory, binaryName)
     ]));
 }
 
@@ -53,6 +57,10 @@ export function getVSCodeAppRootCandidatesFromPath(pathValue: string, platform: 
 
 export function getRipgrepBinaryName(platform: string): string {
     return platform === 'win32' ? 'rg.exe' : 'rg';
+}
+
+function getRipgrepPlatformArchDirectory(platform: NodeJS.Platform, arch: string): string {
+    return `${platform}-${arch}`;
 }
 
 function splitPathValue(pathValue: string, platform: NodeJS.Platform): string[] {
