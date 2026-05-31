@@ -40,14 +40,18 @@ export const executeCommandTool: LocalTool = {
             return errorResult(`Command Error: ${getErrorMessage(error)}\nPolicy: ${describeShellCommandPolicy(process.platform)}`);
         }
 
-        const risk = assessShellCommandRisk(commandLine);
-        if (risk.level !== 'allowed') {
-            return errorResult(`Security Error: ${formatCommandRiskAssessment(risk)}`);
-        }
-
         try {
             const cwdArg = typeof args.cwd === 'string' && args.cwd.trim() === '' ? '.' : args.cwd ?? '.';
             const cwd = await resolveWorkspaceDirectory(context.workspaceRoot, cwdArg);
+            const risk = assessShellCommandRisk(commandLine, {
+                workspaceRoot: context.workspaceRoot,
+                cwd,
+                platform: process.platform
+            });
+            if (risk.level !== 'allowed') {
+                return errorResult(`Security Error: ${formatCommandRiskAssessment(risk)}`);
+            }
+
             const timeout = typeof args.timeout === 'number' ? args.timeout : 60000;
             const execution = resolveShellExecutionPlan(commandLine, {
                 platform: process.platform,
