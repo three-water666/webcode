@@ -1,28 +1,30 @@
 import { spawn } from 'child_process';
 import * as fs from 'fs';
-import * as fsPromises from 'fs/promises';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import type { LocalTool } from './types';
 import { textResult } from './result';
+import { getNumberArg, getStringArrayArg, resolveWorkspaceDirectory } from './filesystemUtils';
+import { searchCodeInProcess } from './searchCodeFallback';
+import { appendRipgrepMatch } from './searchCodeRipgrepOutput';
 import {
-    DEFAULT_EXCLUDED_DIRECTORIES,
-    getNumberArg,
-    getStringArrayArg,
-    matchesPattern,
-    normalizeLineEndings,
-    resolveWorkspaceDirectory,
-    toPosixPath,
-    walkWorkspaceFiles
-} from './filesystemUtils';
-
-const MAX_FALLBACK_FILE_SIZE_BYTES = 1024 * 1024 * 2;
+    createRipgrepExcludeGlobs,
+    DEFAULT_MATCH_LINE_MAX_CHARS,
+    getBoundedSearchLineMaxChars,
+    MAX_MATCH_LINE_MAX_CHARS,
+    MIN_MATCH_LINE_MAX_CHARS,
+    normalizeIncludeGlob,
+} from './searchCodeUtils';
+import type { SearchCodeOptions } from './searchCodeTypes';
 
 export const searchCodeTool: LocalTool = {
     serverId: 'internal',
     definition: {
         name: 'search_code',
-        description: 'Search text content inside workspace files using ripgrep. Returns relative file paths with line numbers and matching lines.',
+        description: [
+            'Search text content inside workspace files using ripgrep.',
+            'Returns relative file paths with line numbers and matching lines.'
+        ].join(' '),
         inputSchema: {
             type: 'object',
             properties: {
@@ -31,7 +33,23 @@ export const searchCodeTool: LocalTool = {
                 include: { type: 'string', description: 'Optional glob for files to include, for example "**/*.ts".' },
                 case_sensitive: { type: 'boolean', description: 'Whether matching is case-sensitive. Default: false.', default: false },
                 use_regex: { type: 'boolean', description: 'Treat query as a ripgrep regular expression. Default: false.', default: false },
-                max_results: { type: 'integer', minimum: 1, maximum: 500, description: 'Maximum matching lines to return. Default: 100.', default: 100 },
+                max_results: {
+                    type: 'integer',
+                    minimum: 1,
+                    maximum: 500,
+                    description: 'Maximum matching lines to return. Default: 100.',
+                    default: 100
+                },
+                max_line_chars: {
+                    type: 'integer',
+                    minimum: MIN_MATCH_LINE_MAX_CHARS,
+                    maximum: MAX_MATCH_LINE_MAX_CHARS,
+                    description: [
+                        'Maximum characters to return from each matching line.',
+                        'Long lines are cropped around the match. Default: 500.'
+                    ].join(' '),
+                    default: DEFAULT_MATCH_LINE_MAX_CHARS
+                },
                 exclude_patterns: { type: 'array', items: { type: 'string' }, description: 'Glob patterns to exclude.' }
             },
             required: ['query']
@@ -52,32 +70,13 @@ export const searchCodeTool: LocalTool = {
             includePattern: typeof args.include === 'string' ? args.include : undefined,
             excludePatterns,
             caseSensitive: args.case_sensitive === true,
-            useRegex: args.use_regex === true
+            useRegex: args.use_regex === true,
+            matchLineMaxChars: getBoundedSearchLineMaxChars(args.max_line_chars)
         };
         const matches = await runRipgrepWithFallback(options);
 
         return textResult(matches.length > 0 ? matches.join('\n') : 'No matches found.');
     }
-};
-
-type RipgrepOptions = {
-    searchRoot: string;
-    workspaceRoot: string;
-    query: string;
-    maxResults: number;
-    includePattern?: string;
-    excludePatterns: string[];
-    caseSensitive: boolean;
-    useRegex: boolean;
-};
-
-type RipgrepMatchMessage = {
-    type: string;
-    data?: {
-        path?: { text?: string };
-        lines?: { text?: string };
-        line_number?: number;
-    };
 };
 
 type RipgrepCommand = {
@@ -93,7 +92,7 @@ class RipgrepUnavailableError extends Error {
     }
 }
 
-async function runRipgrepWithFallback(options: RipgrepOptions): Promise<string[]> {
+async function runRipgrepWithFallback(options: SearchCodeOptions): Promise<string[]> {
     try {
         return await runRipgrep(options);
     } catch (error) {
@@ -105,7 +104,7 @@ async function runRipgrepWithFallback(options: RipgrepOptions): Promise<string[]
     }
 }
 
-async function runRipgrep(options: RipgrepOptions): Promise<string[]> {
+async function runRipgrep(options: SearchCodeOptions): Promise<string[]> {
     const rgCommand = resolveRipgrepCommand();
     const args = createRipgrepArgs(options);
     const matches: string[] = [];
@@ -250,66 +249,7 @@ function createRipgrepStartError(error: Error, rgCommand: RipgrepCommand): Error
     );
 }
 
-async function searchCodeInProcess(options: RipgrepOptions): Promise<string[]> {
-    const matcher = createFallbackMatcher(options.query, {
-        caseSensitive: options.caseSensitive,
-        useRegex: options.useRegex
-    });
-    const matches: string[] = [];
-
-    await walkWorkspaceFiles(options.searchRoot, async (filePath, relativeToSearchRoot) => {
-        if (
-            options.includePattern &&
-            !matchesPattern(relativeToSearchRoot, options.includePattern) &&
-            !matchesPattern(path.basename(filePath), options.includePattern)
-        ) {
-            return false;
-        }
-
-        const stats = await fsPromises.stat(filePath);
-        if (stats.size > MAX_FALLBACK_FILE_SIZE_BYTES) {
-            return false;
-        }
-
-        const rawContent = await fsPromises.readFile(filePath, 'utf8').catch(() => null);
-        if (rawContent == null || rawContent.includes('\0')) {
-            return false;
-        }
-
-        const lines = normalizeLineEndings(rawContent).split('\n');
-        for (let index = 0; index < lines.length; index++) {
-            if (!matcher(lines[index])) {
-                continue;
-            }
-
-            const relativePath = toPosixPath(path.relative(options.workspaceRoot, filePath));
-            matches.push(`${relativePath}:${index + 1}: ${lines[index].trimEnd()}`);
-            if (matches.length >= options.maxResults) {
-                return true;
-            }
-        }
-
-        return false;
-    }, {
-        excludePatterns: options.excludePatterns,
-        includePattern: options.includePattern
-    });
-
-    return matches;
-}
-
-function createFallbackMatcher(query: string, options: { caseSensitive: boolean; useRegex: boolean }): (line: string) => boolean {
-    if (options.useRegex) {
-        const flags = options.caseSensitive ? '' : 'i';
-        const regex = new RegExp(query, flags);
-        return line => regex.test(line);
-    }
-
-    const needle = options.caseSensitive ? query : query.toLowerCase();
-    return line => (options.caseSensitive ? line : line.toLowerCase()).includes(needle);
-}
-
-function createRipgrepArgs(options: RipgrepOptions): string[] {
+function createRipgrepArgs(options: SearchCodeOptions): string[] {
     const args = [
         '--json',
         '--line-number',
@@ -337,65 +277,4 @@ function createRipgrepArgs(options: RipgrepOptions): string[] {
 
     args.push('--regexp', options.query, '.');
     return args;
-}
-
-function appendRipgrepMatch(line: string, options: RipgrepOptions, matches: string[]): void {
-    const trimmed = line.trim();
-    if (!trimmed) {
-        return;
-    }
-
-    let message: RipgrepMatchMessage;
-    try {
-        message = JSON.parse(trimmed) as RipgrepMatchMessage;
-    } catch {
-        return;
-    }
-
-    if (message.type !== 'match' || !message.data?.path?.text || typeof message.data.line_number !== 'number') {
-        return;
-    }
-
-    const rawPath = message.data.path.text;
-    const absolutePath = path.isAbsolute(rawPath)
-        ? rawPath
-        : path.resolve(options.searchRoot, rawPath);
-    const relativePath = toPosixPath(path.relative(options.workspaceRoot, absolutePath));
-    const lineText = (message.data.lines?.text ?? '').replace(/\r?\n$/, '').trimEnd();
-    matches.push(`${relativePath}:${message.data.line_number}: ${lineText}`);
-}
-
-function normalizeIncludeGlob(pattern: string | undefined): string | undefined {
-    const normalized = typeof pattern === 'string' ? toPosixPath(pattern.trim()) : '';
-    if (!normalized) {
-        return undefined;
-    }
-
-    return normalized.includes('/') ? normalized : `**/${normalized}`;
-}
-
-function createRipgrepExcludeGlobs(excludePatterns: string[]): string[] {
-    return [
-        ...DEFAULT_EXCLUDED_DIRECTORIES.flatMap(directory => [
-            `${directory}/**`,
-            `**/${directory}/**`
-        ]),
-        ...excludePatterns.flatMap(expandUserExcludePattern)
-    ];
-}
-
-function expandUserExcludePattern(pattern: string): string[] {
-    const normalized = toPosixPath(pattern.trim());
-    if (!normalized) {
-        return [];
-    }
-    if (normalized.includes('/') || hasGlobSyntax(normalized)) {
-        return [normalized];
-    }
-
-    return [normalized, `**/${normalized}`, `**/${normalized}/**`];
-}
-
-function hasGlobSyntax(value: string): boolean {
-    return /[*?[\]{}]/.test(value);
 }
