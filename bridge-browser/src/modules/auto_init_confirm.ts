@@ -34,8 +34,8 @@ export function showAutoInitConfirm(): Promise<boolean> {
     overlay.className = "overlay";
     overlay.innerHTML = `
       <div class="card" role="dialog" aria-modal="true">
-        <h2>${isZh ? "添加 webcode 初始化上下文？" : "Add webcode initialization context?"}</h2>
-        <p>${isZh ? "点击添加或按 Enter，将完整初始化上下文添加到当前输入框。不会自动发送。" : "Click Add or press Enter to add the full initialization context to the current input. This will not send automatically."}</p>
+        <h2>${isZh ? "添加 webcode 初始化命令？" : "Add webcode initialization command?"}</h2>
+        <p>${isZh ? "点击添加或按 Enter，将初始化命令提示添加到当前输入框。完整上下文会在初始化完成后返回。" : "Click Add or press Enter to add the initialization command prompt to the current input. The full context will be returned after initialization."}</p>
         <div class="buttons">
           <button class="cancel" type="button">${isZh ? "取消" : "Cancel"}</button>
           <button class="primary" type="button">${isZh ? "添加" : "Add"}</button>

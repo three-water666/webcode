@@ -2,7 +2,7 @@
 
 语言：中文 | [English](README_en.md)
 
-webcode 用来把 ChatGPT、Gemini、DeepSeek 等这类网页 AI 接到本地 VS Code 中，支持读、写、编辑本地文件，运行命令，还支持 MCP 和 Skills。
+webcode 用来把 ChatGPT、Gemini、DeepSeek、千问等这类网页 AI 接到本地 VS Code 中，支持读、写、编辑本地文件，运行命令，还支持 MCP 和 Skills。
 
 ## 快速开始
 
@@ -23,7 +23,7 @@ webcode 用来把 ChatGPT、Gemini、DeepSeek 等这类网页 AI 接到本地 VS
 
 ### 3. 打开目标网页 AI
 
-1. 在启动菜单里选择目标站点，例如 `Open Gemini`、`Open ChatGPT` 或其他支持的入口。
+1. 在启动菜单里选择目标站点，例如 `Open Gemini`、`Open ChatGPT`、`Open Qwen` 或其他支持的入口。
 2. webcode 默认会用 [`Edge 独立保活模式`](doc/BROWSER_MODE_GUIDE.md) 打开 Microsoft Edge。
 3. 独立 Edge profile 会自动加载内置的 webcode bridge。
 4. 桥接页会自动与本地 Gateway 完成握手。

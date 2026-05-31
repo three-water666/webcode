@@ -2,7 +2,7 @@
 
 Language: English | [中文](README.md)
 
-webcode connects ChatGPT, Gemini, DeepSeek, and other web AI products to local VS Code so they can read, write, and edit local files, run commands, and use MCP and Skills.
+webcode connects ChatGPT, Gemini, DeepSeek, Qwen, and other web AI products to local VS Code so they can read, write, and edit local files, run commands, and use MCP and Skills.
 
 ## Quick Start
 
@@ -23,7 +23,7 @@ When the status bar shows a port number, the local gateway is running. The AI la
 
 ### 3. Open a Supported AI Product
 
-1. Choose the target site in the launch menu, such as `Open Gemini`, `Open ChatGPT`, or another supported entry.
+1. Choose the target site in the launch menu, such as `Open Gemini`, `Open ChatGPT`, `Open Qwen`, or another supported entry.
 2. webcode opens Microsoft Edge in [`Edge Isolated Keepalive`](doc/BROWSER_MODE_GUIDE_en.md) mode by default.
 3. The isolated Edge profile auto-loads the bundled webcode bridge extension.
 4. The bridge page completes the handshake with the local gateway automatically.
