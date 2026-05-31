@@ -60,4 +60,20 @@ suite('Command Risk', () => {
     assert.strictEqual(assessShellCommandRisk('../scripts/build.sh', riskContext).level, 'blocked');
     assert.strictEqual(assessShellCommandRisk('echo hi > ../out.txt', riskContext).level, 'blocked');
   });
+
+  test('checks POSIX path command writes and option values', () => {
+    assert.strictEqual(assessShellCommandRisk('pnpm --dir=../outside build', riskContext).level, 'blocked');
+    assert.strictEqual(assessShellCommandRisk('git -C ../outside status', riskContext).level, 'blocked');
+    assert.strictEqual(assessShellCommandRisk('tee ../outside.log', riskContext).level, 'blocked');
+  });
+
+  test('handles POSIX end-of-options path arguments', () => {
+    assert.strictEqual(assessShellCommandRisk('rm -rf -- ../outside', riskContext).level, 'blocked');
+    assert.strictEqual(assessShellCommandRisk('rm -rf -- -weird-filename', riskContext).level, 'allowed');
+  });
+
+  test('allows workspace glob paths and file descriptor redirection', () => {
+    assert.strictEqual(assessShellCommandRisk('rm -rf ./src/**/*.js', riskContext).level, 'allowed');
+    assert.strictEqual(assessShellCommandRisk('echo hi 2>&1', riskContext).level, 'allowed');
+  });
 });

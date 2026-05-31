@@ -175,6 +175,8 @@ function pushRawSegment(
 ): ShellCommandOperator | undefined {
     const trimmed = segment.trim();
     if (!trimmed) {
+        // Empty segments inherit the latest delimiter so the next command still
+        // knows how it was chained, for example "cmd1 ; ; cmd2".
         return operatorAfter ?? operatorBefore;
     }
 

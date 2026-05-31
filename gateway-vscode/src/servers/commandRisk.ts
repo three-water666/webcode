@@ -17,6 +17,7 @@ export class CommandRiskError extends Error {
 }
 
 export function assessShellCommandRisk(command: string, context: CommandRiskContext = {}): CommandRiskAssessment {
+    // execute_command always targets POSIX/Git Bash syntax regardless of host platform.
     return assessParsedShellCommandRisk(parseShellCommand(command, 'posix'), context);
 }
 

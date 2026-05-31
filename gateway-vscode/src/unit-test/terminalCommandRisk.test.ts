@@ -52,5 +52,14 @@ suite('Terminal Command Risk', () => {
   test('blocks unverified PowerShell path arguments', () => {
     assert.strictEqual(assessTerminalCommandRisk('Get-Content ../secret.txt', 'powershell', riskContext).level, 'blocked');
     assert.strictEqual(assessTerminalCommandRisk('Remove-Item -Recurse $target', 'powershell', riskContext).level, 'blocked');
+    assert.strictEqual(
+      assessTerminalCommandRisk('Get-Content $env:USERPROFILE\\secret.txt', 'powershell', riskContext).level,
+      'blocked'
+    );
+  });
+
+  test('checks PowerShell tee output paths', () => {
+    assert.strictEqual(assessTerminalCommandRisk('Tee-Object -FilePath ../outside.log', 'powershell', riskContext).level, 'blocked');
+    assert.strictEqual(assessTerminalCommandRisk('tee ./logs/build.log', 'powershell', riskContext).level, 'allowed');
   });
 });
