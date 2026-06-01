@@ -25,6 +25,8 @@
 
 `run_in_terminal` 和 `terminal_session` 的 profile 发现、shell integration 输出采集、`stop`/`close` 语义和安全策略见 [run_in_terminal 与 terminal_session 设计说明](RUN_IN_TERMINAL_GUIDE.md)。
 
+`read_file` 的参数语义、读取模型、输出保护和 metadata 行为见 [read_file 设计说明](READ_FILE_GUIDE.md)。
+
 `search_files` 和 `search_code` 的 query、match、大小写、排除规则和 ripgrep/fallback 行为见 [search_files 与 search_code 设计说明](SEARCH_TOOLS_GUIDE.md)。
 
 ## 2. Bootstrap-only tools
