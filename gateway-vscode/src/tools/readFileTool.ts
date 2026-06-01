@@ -38,7 +38,7 @@ export const readFileTool: LocalTool = {
         const result = await readFileContent(filePath, fileStats.size, args);
         return {
             content: [{ type: 'text', text: result.text }],
-            structuredContent: result.metadata
+            ...(result.metadata === undefined ? {} : { structuredContent: result.metadata })
         };
     }
 };
@@ -49,19 +49,49 @@ export function selectReadFileContent(content: string, args: Record<string, unkn
 
 type ReadFileResult = {
     text: string;
-    metadata: {
-        mode: 'full' | 'range' | 'truncated';
-        truncated: boolean;
-        truncationReason?: ReadFileTruncationReason;
-        lineCountKnown: boolean;
-        lineCount?: number;
-        returnedLines: {
-            start: number;
-            end: number;
-        };
-        returnedBytes?: number;
-        fileBytes?: number;
+    metadata?: ReadFileMetadata;
+};
+
+type ReadFileMetadata = {
+    truncated: true;
+    reason: ReadFileTruncationReason;
+    returnedLines: {
+        start: number;
+        end: number;
     };
+    lineCountKnown: boolean;
+    lineCount?: number;
+    returnedBytes?: number;
+    fileBytes?: number;
+};
+
+type ReadFileResultDetails = {
+    fileBytes?: number;
+    lineCountKnown: boolean;
+    lineCount?: number;
+    returnedLines: {
+        start: number;
+        end: number;
+    };
+};
+
+type ReadFileTruncationDetails = {
+    reason: ReadFileTruncationReason;
+    returnedLines: {
+        start: number;
+        end: number;
+    };
+    lineCountKnown: boolean;
+    lineCount?: number;
+    returnedBytes?: number;
+    fileBytes?: number;
+};
+
+type ReadFileResultOptions = {
+    fileBytes?: number;
+    prefixLimitApplied?: boolean;
+    byteLimitApplied?: boolean;
+    totalLineCountKnown?: boolean;
 };
 
 export async function readFileContent(
@@ -91,12 +121,7 @@ export async function readFileContent(
 export function selectReadFileResult(
     content: string,
     args: Record<string, unknown>,
-    options: {
-        fileBytes?: number;
-        prefixLimitApplied?: boolean;
-        byteLimitApplied?: boolean;
-        totalLineCountKnown?: boolean;
-    } = {}
+    options: ReadFileResultOptions = {}
 ): ReadFileResult {
     const lines = splitLines(content);
     const selection = resolveLineSelection(lines.length, args);
@@ -110,20 +135,12 @@ export function selectReadFileResult(
             selection.startIndex + 1,
             showLineNumbers
         );
-        const text = formatReadFileResultText(limited, options.fileBytes, totalLineCountKnown ? lines.length : undefined);
-        return {
-            text,
-            metadata: {
-                mode: 'range',
-                truncated: limited.truncationReason !== undefined,
-                truncationReason: limited.truncationReason,
-                lineCountKnown: totalLineCountKnown,
-                lineCount: totalLineCountKnown ? lines.length : undefined,
-                returnedLines: getReturnedLineRange(selection.startIndex + 1, limited.returnedLineCount),
-                returnedBytes: limited.truncationReason === undefined ? undefined : Buffer.byteLength(text, 'utf8'),
-                fileBytes: options.fileBytes
-            }
-        };
+        return buildReadFileResult(limited, {
+            fileBytes: options.fileBytes,
+            lineCountKnown: totalLineCountKnown,
+            lineCount: totalLineCountKnown ? lines.length : undefined,
+            returnedLines: getReturnedLineRange(selection.startIndex + 1, limited.returnedLineCount)
+        });
     }
 
     const limited = formatLimitedReadFileOutput(lines, 1, showLineNumbers, {
@@ -131,36 +148,45 @@ export function selectReadFileResult(
     });
 
     if (!prefixLimitApplied && limited.truncationReason === undefined) {
-        return {
-            text: limited.text,
-            metadata: {
-                mode: 'full',
-                truncated: false,
-                lineCountKnown: true,
-                lineCount: lines.length,
-                returnedLines: {
-                    start: lines.length > 0 ? 1 : 0,
-                    end: lines.length
-                },
-                fileBytes: options.fileBytes
-            }
-        };
+        return { text: limited.text };
     }
 
-    const text = formatReadFileResultText(limited, options.fileBytes, totalLineCountKnown ? lines.length : undefined);
+    return buildReadFileResult(limited, {
+        fileBytes: options.fileBytes,
+        lineCountKnown: totalLineCountKnown,
+        lineCount: totalLineCountKnown ? lines.length : undefined,
+        returnedLines: getReturnedLineRange(1, limited.returnedLineCount)
+    });
+}
 
+function buildReadFileResult(limited: LimitedReadFileOutput, details: ReadFileResultDetails): ReadFileResult {
+    if (limited.truncationReason === undefined) {
+        return { text: limited.text };
+    }
+
+    const text = formatReadFileResultText(limited, details.fileBytes, details.lineCount);
     return {
         text,
-        metadata: {
-            mode: 'truncated',
-            truncated: true,
-            truncationReason: limited.truncationReason,
-            lineCountKnown: totalLineCountKnown,
-            lineCount: totalLineCountKnown ? lines.length : undefined,
-            returnedLines: getReturnedLineRange(1, limited.returnedLineCount),
+        metadata: createReadFileMetadata({
+            reason: limited.truncationReason,
+            lineCountKnown: details.lineCountKnown,
+            lineCount: details.lineCount,
+            returnedLines: details.returnedLines,
             returnedBytes: Buffer.byteLength(text, 'utf8'),
-            fileBytes: options.fileBytes
-        }
+            fileBytes: details.fileBytes
+        })
+    };
+}
+
+function createReadFileMetadata(details: ReadFileTruncationDetails): ReadFileMetadata {
+    return {
+        truncated: true,
+        reason: details.reason,
+        returnedLines: details.returnedLines,
+        lineCountKnown: details.lineCountKnown,
+        lineCount: details.lineCount,
+        returnedBytes: details.returnedBytes,
+        fileBytes: details.fileBytes
     };
 }
 
@@ -227,21 +253,12 @@ async function readSelectedFileContent(
     const limited = formatLimitedReadFileOutput(selected.lines, selected.startLine, showLineNumbers, {
         lineLimitAlreadyApplied: didLineSelectionHitOutputLimit(options, selected)
     });
-    const text = formatReadFileResultText(limited, fileBytes, selected.lineCount);
-
-    return {
-        text,
-        metadata: {
-            mode: 'range',
-            truncated: limited.truncationReason !== undefined,
-            truncationReason: limited.truncationReason,
-            lineCountKnown: selected.lineCount !== undefined,
-            lineCount: selected.lineCount,
-            returnedLines: getReturnedLineRange(selected.startLine, limited.returnedLineCount),
-            returnedBytes: limited.truncationReason === undefined ? undefined : Buffer.byteLength(text, 'utf8'),
-            fileBytes
-        }
-    };
+    return buildReadFileResult(limited, {
+        fileBytes,
+        lineCountKnown: selected.lineCount !== undefined,
+        lineCount: selected.lineCount,
+        returnedLines: getReturnedLineRange(selected.startLine, limited.returnedLineCount)
+    });
 }
 
 function getLineSelectionOptions(args: Record<string, unknown>): LineSelectionOptions {

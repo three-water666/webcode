@@ -30,24 +30,18 @@ suite('Read File Tool', () => {
         );
     });
 
-    test('clamps head metadata to the available line count', () => {
+    test('clamps head output to the available line count', () => {
         const result = selectReadFileResult(content, { head: 20 });
 
         assert.strictEqual(result.text, content);
-        assert.deepStrictEqual(result.metadata.returnedLines, {
-            start: 1,
-            end: 4
-        });
+        assert.strictEqual(result.metadata, undefined);
     });
 
     test('returns an empty range when start_line is past EOF', () => {
         const result = selectReadFileResult(content, { start_line: 20, end_line: 25 });
 
         assert.strictEqual(result.text, '');
-        assert.deepStrictEqual(result.metadata.returnedLines, {
-            start: 0,
-            end: 0
-        });
+        assert.strictEqual(result.metadata, undefined);
     });
 
     test('rejects mixed head and range selectors', () => {
@@ -68,28 +62,19 @@ suite('Read File Tool', () => {
         const result = selectReadFileResult(content, {}, { fileBytes: Buffer.byteLength(content, 'utf8') });
 
         assert.strictEqual(result.text, content);
-        assert.deepStrictEqual(result.metadata, {
-            mode: 'full',
-            truncated: false,
-            lineCountKnown: true,
-            lineCount: 4,
-            returnedLines: {
-                start: 1,
-                end: 4
-            },
-            fileBytes: Buffer.byteLength(content, 'utf8')
-        });
+        assert.strictEqual(result.metadata, undefined);
     });
 
     test('truncates large line counts when no selector is provided', () => {
         const largeContent = Array.from({ length: READ_FILE_OUTPUT_MAX_LINES + 1 }, (_, index) => `line ${index + 1}`).join('\n');
         const result = selectReadFileResult(largeContent, {}, { fileBytes: Buffer.byteLength(largeContent, 'utf8') });
+        const metadata = requireReadFileMetadata(result);
 
-        assert.ok(result.metadata.truncated);
-        assert.strictEqual(result.metadata.truncationReason, 'line_limit');
-        assert.strictEqual(result.metadata.lineCountKnown, true);
-        assert.strictEqual(result.metadata.lineCount, READ_FILE_OUTPUT_MAX_LINES + 1);
-        assert.strictEqual(result.metadata.returnedLines.end, READ_FILE_OUTPUT_MAX_LINES);
+        assert.strictEqual(metadata.truncated, true);
+        assert.strictEqual(metadata.reason, 'line_limit');
+        assert.strictEqual(metadata.lineCountKnown, true);
+        assert.strictEqual(metadata.lineCount, READ_FILE_OUTPUT_MAX_LINES + 1);
+        assert.strictEqual(metadata.returnedLines.end, READ_FILE_OUTPUT_MAX_LINES);
         assert.ok(result.text.includes(`line ${READ_FILE_OUTPUT_MAX_LINES}`));
         assert.ok(!result.text.includes(`line ${READ_FILE_OUTPUT_MAX_LINES + 1}`));
         assert.ok(result.text.includes('Use a narrower line range with start_line/end_line, head, or tail to read more.'));
@@ -99,12 +84,12 @@ suite('Read File Tool', () => {
         await withTempFile('x'.repeat(READ_FILE_OUTPUT_MAX_BYTES + 1024), async filePath => {
             const fileStats = await fs.stat(filePath);
             const result = await readFileContent(filePath, fileStats.size, {});
+            const metadata = requireReadFileMetadata(result);
 
-            assert.strictEqual(result.metadata.mode, 'truncated');
-            assert.strictEqual(result.metadata.truncated, true);
-            assert.strictEqual(result.metadata.truncationReason, 'byte_limit');
-            assert.strictEqual(result.metadata.lineCountKnown, false);
-            assert.strictEqual(result.metadata.lineCount, undefined);
+            assert.strictEqual(metadata.truncated, true);
+            assert.strictEqual(metadata.reason, 'byte_limit');
+            assert.strictEqual(metadata.lineCountKnown, false);
+            assert.strictEqual(metadata.lineCount, undefined);
         });
     });
 
@@ -116,12 +101,12 @@ suite('Read File Tool', () => {
         await withTempFile(largeContent, async filePath => {
             const fileStats = await fs.stat(filePath);
             const result = await readFileContent(filePath, fileStats.size, {});
+            const metadata = requireReadFileMetadata(result);
 
-            assert.strictEqual(result.metadata.mode, 'truncated');
-            assert.strictEqual(result.metadata.truncated, true);
-            assert.strictEqual(result.metadata.truncationReason, 'line_and_byte_limit');
-            assert.strictEqual(result.metadata.lineCountKnown, false);
-            assert.strictEqual(result.metadata.returnedLines.end, READ_FILE_OUTPUT_MAX_LINES);
+            assert.strictEqual(metadata.truncated, true);
+            assert.strictEqual(metadata.reason, 'line_and_byte_limit');
+            assert.strictEqual(metadata.lineCountKnown, false);
+            assert.strictEqual(metadata.returnedLines.end, READ_FILE_OUTPUT_MAX_LINES);
         });
     });
 
@@ -131,11 +116,11 @@ suite('Read File Tool', () => {
             start_line: 1,
             end_line: READ_FILE_OUTPUT_MAX_LINES + 1
         });
+        const metadata = requireReadFileMetadata(result);
 
-        assert.strictEqual(result.metadata.mode, 'range');
-        assert.strictEqual(result.metadata.truncated, true);
-        assert.strictEqual(result.metadata.truncationReason, 'line_limit');
-        assert.deepStrictEqual(result.metadata.returnedLines, {
+        assert.strictEqual(metadata.truncated, true);
+        assert.strictEqual(metadata.reason, 'line_limit');
+        assert.deepStrictEqual(metadata.returnedLines, {
             start: 1,
             end: READ_FILE_OUTPUT_MAX_LINES
         });
@@ -147,11 +132,11 @@ suite('Read File Tool', () => {
             start_line: 1,
             end_line: 2
         });
+        const metadata = requireReadFileMetadata(result);
 
-        assert.strictEqual(result.metadata.mode, 'range');
-        assert.strictEqual(result.metadata.truncated, true);
-        assert.strictEqual(result.metadata.truncationReason, 'byte_limit');
-        assert.deepStrictEqual(result.metadata.returnedLines, {
+        assert.strictEqual(metadata.truncated, true);
+        assert.strictEqual(metadata.reason, 'byte_limit');
+        assert.deepStrictEqual(metadata.returnedLines, {
             start: 1,
             end: 1
         });
@@ -180,12 +165,7 @@ suite('Read File Tool', () => {
                     `1202: line 1202 ${'x'.repeat(80)}`
                 ].join('\n')
             );
-            assert.deepStrictEqual(result.metadata.returnedLines, {
-                start: 1200,
-                end: 1202
-            });
-            assert.strictEqual(result.metadata.lineCount, undefined);
-            assert.strictEqual(result.metadata.lineCountKnown, false);
+            assert.strictEqual(result.metadata, undefined);
         });
     });
 
@@ -255,4 +235,20 @@ async function withTempFileBytes<T>(content: Buffer, callback: (filePath: string
     } finally {
         await fs.rm(tempDir, { recursive: true, force: true });
     }
+}
+
+type TestReadFileMetadata = {
+    truncated: true;
+    reason: string;
+    lineCountKnown: boolean;
+    lineCount?: number;
+    returnedLines: {
+        start: number;
+        end: number;
+    };
+};
+
+function requireReadFileMetadata(result: { metadata?: TestReadFileMetadata }): TestReadFileMetadata {
+    assert.ok(result.metadata);
+    return result.metadata;
 }

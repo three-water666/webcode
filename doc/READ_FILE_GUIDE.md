@@ -4,7 +4,7 @@
 
 ## 背景
 
-`read_file` 是 webcode 提供给 AI 的专用文件读取工具。它替代了用 `execute_command` 调 `cat`、`sed`、`nl` 等 shell 命令查看文件的做法，目标是让文件读取具备稳定的参数语义、结构化 metadata 和上下文保护。
+`read_file` 是 webcode 提供给 AI 的专用文件读取工具。它替代了用 `execute_command` 调 `cat`、`sed`、`nl` 等 shell 命令查看文件的做法，目标是让文件读取具备稳定的参数语义、必要时的结构化 metadata 和上下文保护。
 
 早期版本的保护策略主要针对“未指定范围”的大文件读取：默认只返回前 400 行，超过 64KB 的文件只读取前 64KB 前缀。这个策略能避免上下文爆炸，但显式传入 `head`、`tail` 或 `start_line/end_line` 时不经过同一套输出限制，容易在误传大范围时返回过多内容。
 
@@ -123,7 +123,7 @@
 
 截断原因写入 metadata：
 
-| `truncationReason` | 含义 |
+| `reason` | 含义 |
 | --- | --- |
 | `line_limit` | 超过最大返回行数。 |
 | `byte_limit` | 超过最大返回字节数。 |
@@ -133,15 +133,14 @@
 
 ## 返回 metadata
 
-`read_file` 返回文本内容，同时通过 `structuredContent` 返回 metadata。
+`read_file` 默认只返回文本内容。只有发生截断时，才通过 `structuredContent` 返回简短 metadata。
 
 主要字段：
 
 | 字段 | 说明 |
 | --- | --- |
-| `mode` | `full`、`range` 或 `truncated`。 |
-| `truncated` | 是否发生输出截断。 |
-| `truncationReason` | 截断原因，仅截断时返回。 |
+| `truncated` | 固定为 `true`，表示发生输出截断。 |
+| `reason` | 截断原因。 |
 | `lineCountKnown` | `lineCount` 是否可信。 |
 | `lineCount` | 文件总行数，只有已知时返回。 |
 | `returnedLines` | 实际返回的行号范围。 |
@@ -149,6 +148,8 @@
 | `fileBytes` | 文件大小。 |
 
 `lineCountKnown` 很重要：当工具只读取大文件前缀或提前停止流式扫描时，可能无法知道文件总行数。
+
+未截断时不返回 `structuredContent`，避免 `read_file` 作为高频工具在上下文中反复制造重复 metadata。
 
 ## 行号行为
 
