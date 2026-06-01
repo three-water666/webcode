@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { resolveWorkspacePath } from '../tools/filesystemUtils';
 import { readFileContent, readFilePrefix, selectReadFileContent, selectReadFileResult } from '../tools/readFileTool';
+import { READ_FILE_OUTPUT_MAX_BYTES, READ_FILE_OUTPUT_MAX_LINES } from '../tools/readFileOutputLimit';
 
 suite('Read File Tool', () => {
     const content = ['alpha', 'bravo', 'charlie', 'delta'].join('\n');
@@ -40,7 +41,7 @@ suite('Read File Tool', () => {
     });
 
     test('returns an empty range when start_line is past EOF', () => {
-        const result = selectReadFileResult(content, { start_line: 20 });
+        const result = selectReadFileResult(content, { start_line: 20, end_line: 25 });
 
         assert.strictEqual(result.text, '');
         assert.deepStrictEqual(result.metadata.returnedLines, {
@@ -51,8 +52,15 @@ suite('Read File Tool', () => {
 
     test('rejects mixed head and range selectors', () => {
         assert.throws(
-            () => selectReadFileContent(content, { head: 2, start_line: 2 }),
+            () => selectReadFileContent(content, { head: 2, start_line: 2, end_line: 3 }),
             /Cannot specify head or tail with start_line or end_line/
+        );
+    });
+
+    test('rejects partial line ranges', () => {
+        assert.throws(
+            () => selectReadFileContent(content, { start_line: 2 }),
+            /start_line and end_line must be specified together/
         );
     });
 
@@ -63,6 +71,7 @@ suite('Read File Tool', () => {
         assert.deepStrictEqual(result.metadata, {
             mode: 'full',
             truncated: false,
+            lineCountKnown: true,
             lineCount: 4,
             returnedLines: {
                 start: 1,
@@ -73,23 +82,80 @@ suite('Read File Tool', () => {
     });
 
     test('truncates large line counts when no selector is provided', () => {
-        const largeContent = Array.from({ length: 401 }, (_, index) => `line ${index + 1}`).join('\n');
+        const largeContent = Array.from({ length: READ_FILE_OUTPUT_MAX_LINES + 1 }, (_, index) => `line ${index + 1}`).join('\n');
         const result = selectReadFileResult(largeContent, {}, { fileBytes: Buffer.byteLength(largeContent, 'utf8') });
 
         assert.ok(result.metadata.truncated);
-        assert.strictEqual(result.metadata.returnedLines.end, 400);
-        assert.ok(result.text.includes('line 400'));
-        assert.ok(!result.text.includes('line 401'));
-        assert.ok(result.text.includes('Use start_line/end_line, head, tail, or force: true to read more.'));
+        assert.strictEqual(result.metadata.truncationReason, 'line_limit');
+        assert.strictEqual(result.metadata.lineCountKnown, true);
+        assert.strictEqual(result.metadata.lineCount, READ_FILE_OUTPUT_MAX_LINES + 1);
+        assert.strictEqual(result.metadata.returnedLines.end, READ_FILE_OUTPUT_MAX_LINES);
+        assert.ok(result.text.includes(`line ${READ_FILE_OUTPUT_MAX_LINES}`));
+        assert.ok(!result.text.includes(`line ${READ_FILE_OUTPUT_MAX_LINES + 1}`));
+        assert.ok(result.text.includes('Use a narrower line range with start_line/end_line, head, or tail to read more.'));
     });
 
-    test('force bypasses automatic truncation', () => {
-        const largeContent = Array.from({ length: 401 }, (_, index) => `line ${index + 1}`).join('\n');
-        const result = selectReadFileResult(largeContent, { force: true }, { fileBytes: Buffer.byteLength(largeContent, 'utf8') });
+    test('reports byte-limit truncation when only the prefix is read', async () => {
+        await withTempFile('x'.repeat(READ_FILE_OUTPUT_MAX_BYTES + 1024), async filePath => {
+            const fileStats = await fs.stat(filePath);
+            const result = await readFileContent(filePath, fileStats.size, {});
 
-        assert.strictEqual(result.metadata.mode, 'full');
-        assert.strictEqual(result.metadata.truncated, false);
-        assert.strictEqual(result.text, largeContent);
+            assert.strictEqual(result.metadata.mode, 'truncated');
+            assert.strictEqual(result.metadata.truncated, true);
+            assert.strictEqual(result.metadata.truncationReason, 'byte_limit');
+            assert.strictEqual(result.metadata.lineCountKnown, false);
+            assert.strictEqual(result.metadata.lineCount, undefined);
+        });
+    });
+
+    test('reports byte and line truncation when both output limits apply', async () => {
+        const largeContent = Array.from({ length: READ_FILE_OUTPUT_MAX_LINES + 500 }, (_, index) => {
+            return `line ${index + 1} ${'x'.repeat(90)}`;
+        }).join('\n');
+
+        await withTempFile(largeContent, async filePath => {
+            const fileStats = await fs.stat(filePath);
+            const result = await readFileContent(filePath, fileStats.size, {});
+
+            assert.strictEqual(result.metadata.mode, 'truncated');
+            assert.strictEqual(result.metadata.truncated, true);
+            assert.strictEqual(result.metadata.truncationReason, 'line_and_byte_limit');
+            assert.strictEqual(result.metadata.lineCountKnown, false);
+            assert.strictEqual(result.metadata.returnedLines.end, READ_FILE_OUTPUT_MAX_LINES);
+        });
+    });
+
+    test('applies the line output limit to explicit ranges', () => {
+        const largeContent = Array.from({ length: READ_FILE_OUTPUT_MAX_LINES + 1 }, (_, index) => `line ${index + 1}`).join('\n');
+        const result = selectReadFileResult(largeContent, {
+            start_line: 1,
+            end_line: READ_FILE_OUTPUT_MAX_LINES + 1
+        });
+
+        assert.strictEqual(result.metadata.mode, 'range');
+        assert.strictEqual(result.metadata.truncated, true);
+        assert.strictEqual(result.metadata.truncationReason, 'line_limit');
+        assert.deepStrictEqual(result.metadata.returnedLines, {
+            start: 1,
+            end: READ_FILE_OUTPUT_MAX_LINES
+        });
+    });
+
+    test('applies the byte output limit to explicit ranges', () => {
+        const largeContent = `${'x'.repeat(READ_FILE_OUTPUT_MAX_BYTES + 1024)}\nsecond`;
+        const result = selectReadFileResult(largeContent, {
+            start_line: 1,
+            end_line: 2
+        });
+
+        assert.strictEqual(result.metadata.mode, 'range');
+        assert.strictEqual(result.metadata.truncated, true);
+        assert.strictEqual(result.metadata.truncationReason, 'byte_limit');
+        assert.deepStrictEqual(result.metadata.returnedLines, {
+            start: 1,
+            end: 1
+        });
+        assert.ok(!result.text.includes('second'));
     });
 
     test('streams line ranges from large files instead of loading full content', async () => {
@@ -119,6 +185,7 @@ suite('Read File Tool', () => {
                 end: 1202
             });
             assert.strictEqual(result.metadata.lineCount, undefined);
+            assert.strictEqual(result.metadata.lineCountKnown, false);
         });
     });
 
