@@ -1,13 +1,14 @@
 import * as assert from 'assert';
 import * as path from 'path';
 import { matchesPattern } from '../tools/filesystemUtils';
-import { createSearchCodeFallbackNotice, sortSearchCandidatesByRelativePath } from '../tools/searchCodeFallback';
+import { createSearchCodeFallbackNotice } from '../tools/searchCodeFallback';
+import { formatSearchCodeOutput } from '../tools/searchCodeOutput';
 import { createSearchCodeRipgrepArgs } from '../tools/searchCodeRipgrepArgs';
 import {
     getVSCodeAppRootCandidatesFromPath,
     getVSCodeRipgrepCandidates
 } from '../tools/searchCodeRipgrepPaths';
-import { createSearchCandidate } from '../tools/searchCodeGitFiles';
+import { createSearchCandidate, sortSearchCandidatesByRelativePath } from '../tools/searchCodeGitFiles';
 import { appendRipgrepMatch } from '../tools/searchCodeRipgrepOutput';
 import type { SearchCodeOptions } from '../tools/searchCodeTypes';
 import {
@@ -63,6 +64,23 @@ suite('Search Code Tool', () => {
         assert.ok(notice.includes('in-process fallback'));
         assert.ok(notice.includes('simple comma brace alternation'));
         assert.ok(notice.includes('JavaScript RegExp'));
+    });
+
+    test('keeps fallback notices before no-match regex hints', () => {
+        const output = formatSearchCodeOutput({
+            matches: [],
+            limited: false,
+            notices: ['Notice: fallback active.']
+        }, createOptions({
+            query: 'preventDefault|stopPropagation',
+            useRegex: false
+        }));
+
+        assert.deepStrictEqual(output.split('\n'), [
+            'Notice: fallback active.',
+            'No matches found.',
+            'Hint: query looks like a regular expression. Did you mean to set match: "regex"?'
+        ]);
     });
 
     test('infers VS Code app roots from Windows PATH bin directories', () => {
@@ -186,9 +204,11 @@ suite('Search Code Tool', () => {
         assert.ok(looksLikeRegexQuery('addEventListener.*(touch|mouse|pointer|drag)'));
         assert.ok(looksLikeRegexQuery('\\brequest_id\\b'));
         assert.ok(looksLikeRegexQuery('[A-Z]+'));
+        assert.ok(looksLikeRegexQuery('[a-z]'));
         assert.ok(!looksLikeRegexQuery('foo.ts'));
         assert.ok(!looksLikeRegexQuery('preventDefault'));
         assert.ok(!looksLikeRegexQuery('[TODO]'));
+        assert.ok(!looksLikeRegexQuery('[abc]'));
         assert.ok(!looksLikeRegexQuery('literal\\|pipe'));
     });
 });

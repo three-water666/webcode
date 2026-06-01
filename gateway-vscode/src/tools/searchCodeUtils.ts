@@ -44,14 +44,37 @@ export function looksLikeRegexQuery(query: string): boolean {
         return false;
     }
 
-    return hasUnescapedRegexOr(trimmed) ||
-        /(^|[^\\])\.(\*|\+)/.test(trimmed) ||
-        /\\(?:[bBdDsSwW]|[pP]\{)/.test(trimmed) ||
-        /\(\?(?::|=|!|<=|<!)/.test(trimmed) ||
-        /(^|[^\\])\([^)]*\|[^)]*\)/.test(trimmed) ||
-        /(^|[^\\])\([^)]*\)([*+?]|\{\d+(,\d*)?\})/.test(trimmed) ||
-        /(^|[^\\])\[[^\]]+\]([*+?]|\{\d+(,\d*)?\})/.test(trimmed) ||
-        /(^|[^\\])\[(\^|[^\]]*[-\\][^\]]*)\]/.test(trimmed);
+    // foo|bar
+    if (hasUnescapedRegexOr(trimmed)) {
+        return true;
+    }
+    // foo.* or foo.+
+    if (/(^|[^\\])\.(\*|\+)/.test(trimmed)) {
+        return true;
+    }
+    // \b, \d, \s, \w, or Unicode property escapes.
+    if (/\\(?:[bBdDsSwW]|[pP]\{)/.test(trimmed)) {
+        return true;
+    }
+    // Non-capturing groups, lookaheads, or lookbehinds.
+    if (/\(\?(?::|=|!|<=|<!)/.test(trimmed)) {
+        return true;
+    }
+    // Group alternation, e.g. (foo|bar).
+    if (/(^|[^\\])\([^)]*\|[^)]*\)/.test(trimmed)) {
+        return true;
+    }
+    // Quantified groups, e.g. (foo)+ or (foo){2}.
+    if (/(^|[^\\])\([^)]*\)([*+?]|\{\d+(,\d*)?\})/.test(trimmed)) {
+        return true;
+    }
+    // Quantified character classes, e.g. [A-Z]+.
+    if (/(^|[^\\])\[[^\]]+\]([*+?]|\{\d+(,\d*)?\})/.test(trimmed)) {
+        return true;
+    }
+    // Character classes with ranges, negation, or escapes. Plain [abc] is
+    // treated as literal-looking text to avoid noisy hints for tags/labels.
+    return /(^|[^\\])\[(\^|[^\]]*[-\\][^\]]*)\]/.test(trimmed);
 }
 
 export function normalizeIncludeGlob(pattern: string | undefined): string | undefined {

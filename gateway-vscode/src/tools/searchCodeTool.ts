@@ -4,15 +4,14 @@ import type { LocalTool } from './types';
 import { textResult } from './result';
 import { DEFAULT_EXCLUDED_DIRECTORIES, getNumberArg, getStringArrayArg, resolveWorkspaceDirectory } from './filesystemUtils';
 import { createSearchCodeFallbackNotice, searchCodeInProcess } from './searchCodeFallback';
+import { formatSearchCodeOutput, type SearchCodeResult } from './searchCodeOutput';
 import { appendRipgrepMatch } from './searchCodeRipgrepOutput';
 import { createRipgrepStartError, resolveRipgrepCommand, RipgrepUnavailableError } from './ripgrep';
-import { formatSearchResultsLimitedNotice } from './searchResultLimits';
 import { createSearchCodeRipgrepArgs } from './searchCodeRipgrepArgs';
 import {
     DEFAULT_MATCH_LINE_MAX_CHARS,
     getBoundedSearchLineMaxChars,
     getSearchCodeMatchMode,
-    looksLikeRegexQuery,
     MAX_MATCH_LINE_MAX_CHARS,
     MIN_MATCH_LINE_MAX_CHARS,
 } from './searchCodeUtils';
@@ -109,41 +108,6 @@ export const searchCodeTool: LocalTool = {
         return textResult(formatSearchCodeOutput(result, options));
     }
 };
-
-type SearchCodeResult = {
-    matches: string[];
-    limited: boolean;
-    notices?: string[];
-};
-
-function formatSearchCodeOutput(result: SearchCodeResult, options: SearchCodeOptions): string {
-    const lines = [...(result.notices ?? [])];
-    if (result.matches.length === 0) {
-        lines.push(...createNoMatchesOutput(options).split('\n'));
-        return lines.join('\n');
-    }
-
-    lines.push(...result.matches);
-    if (result.limited) {
-        lines.push(formatSearchResultsLimitedNotice(
-            'search_code',
-            options.maxResults,
-            'match(es)',
-            'Narrow query/path/include/exclude_patterns or raise max_results.'
-        ));
-    }
-
-    return lines.join('\n');
-}
-
-function createNoMatchesOutput(options: SearchCodeOptions): string {
-    const lines = ['No matches found.'];
-    if (!options.useRegex && looksLikeRegexQuery(options.query)) {
-        lines.push('Hint: query looks like a regular expression. Did you mean to set match: "regex"?');
-    }
-
-    return lines.join('\n');
-}
 
 async function runRipgrepWithFallback(
     options: SearchCodeOptions,

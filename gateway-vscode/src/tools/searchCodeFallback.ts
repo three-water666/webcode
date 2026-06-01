@@ -7,7 +7,7 @@ import {
     toPosixPath,
     walkWorkspaceFiles
 } from './filesystemUtils';
-import { listGitSearchFiles, type SearchCandidateFile } from './searchCodeGitFiles';
+import { listGitSearchFiles, sortSearchCandidatesByRelativePath, type SearchCandidateFile } from './searchCodeGitFiles';
 import {
     createRipgrepExcludeGlobs,
     formatSearchCodeMatch,
@@ -89,12 +89,6 @@ export async function searchCodeInProcess(options: SearchCodeOptions): Promise<S
     }
 
     return { matches, limited };
-}
-
-export function sortSearchCandidatesByRelativePath(candidates: SearchCandidateFile[]): SearchCandidateFile[] {
-    return [...candidates].sort((left, right) => (
-        left.relativeToSearchRoot.localeCompare(right.relativeToSearchRoot)
-    ));
 }
 
 async function appendInProcessFileMatches(

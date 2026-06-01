@@ -386,6 +386,8 @@ fixtures
 
 `exclude_patterns` 是 webcode 工具参数；`.gitignore`、`.ignore`、`.rgignore` 是 ripgrep/git 的 ignore 机制。两个搜索工具默认都尊重 ignore 文件：
 
+> **行为变更**：`search_files` 现在默认尊重 ignore 文件。以前能直接搜到的 `dist/`、`.env` 等被 ignore 文件，可能需要已知路径后用 `read_file` 读取，或把 `path` 指向更具体的默认排除目录内部。
+
 | 工具 | ripgrep ignore 行为 | 原因 |
 | --- | --- | --- |
 | `search_files` | 使用 ripgrep 默认 ignore 行为，会尊重 `.gitignore`、`.ignore`、`.rgignore` 等。 | 文件发现结果更贴近日常源码阅读，避免优先返回缓存、生成物或依赖产物。 |

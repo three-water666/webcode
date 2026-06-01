@@ -7,6 +7,12 @@ export type SearchCandidateFile = {
     relativeToSearchRoot: string;
 };
 
+export function sortSearchCandidatesByRelativePath(candidates: SearchCandidateFile[]): SearchCandidateFile[] {
+    return [...candidates].sort((left, right) => (
+        left.relativeToSearchRoot.localeCompare(right.relativeToSearchRoot)
+    ));
+}
+
 export async function listGitSearchFiles(searchRoot: string): Promise<SearchCandidateFile[] | null> {
     const output = await runGitListFiles(searchRoot);
     if (output === null) {
