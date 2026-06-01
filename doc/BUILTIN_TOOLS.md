@@ -25,6 +25,8 @@
 
 `run_in_terminal` 和 `terminal_session` 的 profile 发现、shell integration 输出采集、`stop`/`close` 语义和安全策略见 [run_in_terminal 与 terminal_session 设计说明](RUN_IN_TERMINAL_GUIDE.md)。
 
+`search_files` 和 `search_code` 的 query、match、大小写、排除规则和 ripgrep/fallback 行为见 [search_files 与 search_code 设计说明](SEARCH_TOOLS_GUIDE.md)。
+
 ## 2. Bootstrap-only tools
 
 这些工具只供 VS Code 网关和浏览器插件初始化会话时使用，不会出现在 Available Tools 中，模型直接调用时会被浏览器插件拒绝。
