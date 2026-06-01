@@ -14,8 +14,8 @@ import {
     toPosixPath,
     walkWorkspaceFiles
 } from './filesystemUtils';
-import { createRipgrepExcludeGlobs } from './searchCodeUtils';
 import { createRipgrepStartError, resolveRipgrepCommand, RipgrepUnavailableError } from './ripgrep';
+import { createRipgrepFilesArgs } from './searchFilesRipgrepArgs';
 
 export const searchFilesTool: LocalTool = {
     serverId: 'internal',
@@ -159,22 +159,6 @@ async function searchFilesInProcess(options: SearchFilesOptions): Promise<string
     });
 
     return matches.sort((left, right) => left.localeCompare(right)).slice(0, options.maxResults);
-}
-
-function createRipgrepFilesArgs(excludePatterns: string[]): string[] {
-    const args = [
-        '--files',
-        '--hidden',
-        '--no-messages',
-        '--sort',
-        'path'
-    ];
-
-    for (const pattern of createRipgrepExcludeGlobs(excludePatterns)) {
-        args.push('--glob', `!${pattern}`);
-    }
-
-    return args;
 }
 
 function appendFileSearchMatch(line: string, options: SearchFilesOptions, matches: string[]): void {

@@ -1,5 +1,6 @@
 import * as assert from 'assert';
 import { matchesFileQuery, resolveFileQueryMatchMode } from '../tools/filesystemUtils';
+import { createRipgrepFilesArgs } from '../tools/searchFilesRipgrepArgs';
 
 suite('Search Files Tool', () => {
     test('matches plain file queries against file paths and names', () => {
@@ -62,5 +63,11 @@ suite('Search Files Tool', () => {
             matchesFileQuery('src/*.{ts,tsx}.md', '*.{ts,tsx}.md', '*.{ts,tsx}', { matchMode: 'substring' }),
             true
         );
+    });
+
+    test('lists files ignored by gitignore with ripgrep', () => {
+        const args = createRipgrepFilesArgs([]);
+
+        assert.ok(args.includes('--no-ignore'));
     });
 });
