@@ -11,6 +11,7 @@ import { appendRipgrepMatch } from '../tools/searchCodeRipgrepOutput';
 import type { SearchCodeOptions } from '../tools/searchCodeTypes';
 import {
     createRipgrepExcludeGlobs,
+    getSearchCodeUseRegex,
     normalizeIncludeGlob,
     truncateSearchMatchLine
 } from '../tools/searchCodeUtils';
@@ -140,6 +141,33 @@ suite('Search Code Tool', () => {
             'trailing-space.ts '
         );
         assert.strictEqual(createSearchCandidate(root, ''), null);
+    });
+
+    test('uses substring search by default', () => {
+        assert.strictEqual(getSearchCodeUseRegex({}), false);
+        assert.strictEqual(getSearchCodeUseRegex({ match: 'substring' }), false);
+    });
+
+    test('uses regex search when match is regex', () => {
+        assert.strictEqual(getSearchCodeUseRegex({ match: 'regex' }), true);
+    });
+
+    test('keeps use_regex as a compatibility alias', () => {
+        assert.strictEqual(getSearchCodeUseRegex({ use_regex: true }), true);
+        assert.strictEqual(getSearchCodeUseRegex({ use_regex: false }), false);
+        assert.strictEqual(getSearchCodeUseRegex({ match: 'regex', use_regex: true }), true);
+        assert.strictEqual(getSearchCodeUseRegex({ match: 'substring', use_regex: false }), false);
+    });
+
+    test('rejects conflicting match and use_regex values', () => {
+        assert.throws(
+            () => getSearchCodeUseRegex({ match: 'regex', use_regex: false }),
+            /match and use_regex conflict/
+        );
+        assert.throws(
+            () => getSearchCodeUseRegex({ match: 'substring', use_regex: true }),
+            /match and use_regex conflict/
+        );
     });
 });
 

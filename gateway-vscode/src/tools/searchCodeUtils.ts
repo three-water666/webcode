@@ -25,6 +25,23 @@ export function getBoundedSearchLineMaxChars(value: unknown): number {
     return Math.min(MAX_MATCH_LINE_MAX_CHARS, Math.max(MIN_MATCH_LINE_MAX_CHARS, numberValue));
 }
 
+export function getSearchCodeUseRegex(args: Record<string, unknown>): boolean {
+    const match = args.match;
+    const useRegex = args.use_regex;
+
+    if (match === undefined) {
+        return useRegex === true;
+    }
+    if (match !== 'substring' && match !== 'regex') {
+        throw new Error('match must be "substring" or "regex".');
+    }
+    if (typeof useRegex === 'boolean' && useRegex !== (match === 'regex')) {
+        throw new Error('match and use_regex conflict. Use only match, or make both values agree.');
+    }
+
+    return match === 'regex';
+}
+
 export function normalizeIncludeGlob(pattern: string | undefined): string | undefined {
     const normalized = typeof pattern === 'string' ? toPosixPath(pattern.trim()) : '';
     if (!normalized) {

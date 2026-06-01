@@ -10,6 +10,7 @@ import {
     createRipgrepExcludeGlobs,
     DEFAULT_MATCH_LINE_MAX_CHARS,
     getBoundedSearchLineMaxChars,
+    getSearchCodeUseRegex,
     MAX_MATCH_LINE_MAX_CHARS,
     MIN_MATCH_LINE_MAX_CHARS,
     normalizeIncludeGlob,
@@ -27,11 +28,25 @@ export const searchCodeTool: LocalTool = {
         inputSchema: {
             type: 'object',
             properties: {
-                query: { type: 'string', minLength: 1, description: 'Text or ripgrep regular expression to search for.' },
+                query: {
+                    type: 'string',
+                    minLength: 1,
+                    description: [
+                        'Text to search for.',
+                        'match "substring" searches for a literal contained substring.',
+                        'match "regex" treats this as a ripgrep regular expression.'
+                    ].join(' ')
+                },
                 path: { type: 'string', description: 'Optional workspace directory to search. Defaults to ".".' },
                 include: { type: 'string', description: 'Optional glob for files to include, for example "**/*.ts".' },
                 case_sensitive: { type: 'boolean', description: 'Whether matching is case-sensitive. Default: false.', default: false },
-                use_regex: { type: 'boolean', description: 'Treat query as a ripgrep regular expression. Default: false.', default: false },
+                match: {
+                    type: 'string',
+                    enum: ['substring', 'regex'],
+                    description: 'How to interpret query. "substring" is a literal contained substring; "regex" is a ripgrep regular expression. Default: substring.',
+                    default: 'substring'
+                },
+                use_regex: { type: 'boolean', description: 'Compatibility alias for match "regex". Prefer match. Do not pass conflicting match and use_regex values.', default: false },
                 max_results: {
                     type: 'integer',
                     minimum: 1,
@@ -69,7 +84,7 @@ export const searchCodeTool: LocalTool = {
             includePattern: typeof args.include === 'string' ? args.include : undefined,
             excludePatterns,
             caseSensitive: args.case_sensitive === true,
-            useRegex: args.use_regex === true,
+            useRegex: getSearchCodeUseRegex(args),
             matchLineMaxChars: getBoundedSearchLineMaxChars(args.max_line_chars)
         };
         const matches = await runRipgrepWithFallback(options, context.outputChannel);
