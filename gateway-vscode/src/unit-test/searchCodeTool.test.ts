@@ -1,7 +1,8 @@
 import * as assert from 'assert';
 import * as path from 'path';
 import { matchesPattern } from '../tools/filesystemUtils';
-import { createSearchCodeFallbackNotice } from '../tools/searchCodeFallback';
+import { createSearchCodeFallbackNotice, sortSearchCandidatesByRelativePath } from '../tools/searchCodeFallback';
+import { createSearchCodeRipgrepArgs } from '../tools/searchCodeRipgrepArgs';
 import {
     getVSCodeAppRootCandidatesFromPath,
     getVSCodeRipgrepCandidates
@@ -30,6 +31,29 @@ suite('Search Code Tool', () => {
         assert.ok(matchesPattern('logger.ts', includePattern));
         assert.ok(matchesPattern('src/App.jsx', includePattern));
         assert.ok(!matchesPattern('src/styles/logger.css', includePattern));
+    });
+
+    test('sorts ripgrep search_code results by path', () => {
+        const args = createSearchCodeRipgrepArgs(createOptions());
+        const sortIndex = args.indexOf('--sort');
+
+        assert.ok(sortIndex >= 0);
+        assert.strictEqual(args[sortIndex + 1], 'path');
+    });
+
+    test('sorts fallback search candidates by relative path', () => {
+        const root = path.resolve('workspace-root');
+        const sorted = sortSearchCandidatesByRelativePath([
+            { filePath: path.join(root, 'src/b.ts'), relativeToSearchRoot: 'src/b.ts' },
+            { filePath: path.join(root, 'README.md'), relativeToSearchRoot: 'README.md' },
+            { filePath: path.join(root, 'src/a.ts'), relativeToSearchRoot: 'src/a.ts' }
+        ]);
+
+        assert.deepStrictEqual(sorted.map(candidate => candidate.relativeToSearchRoot), [
+            'README.md',
+            'src/a.ts',
+            'src/b.ts'
+        ]);
     });
 
     test('describes fallback search capabilities when ripgrep is unavailable', () => {

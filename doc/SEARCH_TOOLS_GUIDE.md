@@ -52,7 +52,7 @@ webcode 早期的文件查找和代码查找采用了两套不同实现：
 | `query` | 文件名或相对路径查询，默认 `*`，表示列出 `path` 下文件。 |
 | `match` | query 解释方式：`auto`、`substring`、`glob`，默认 `auto`。 |
 | `case_sensitive` | 是否区分大小写，默认 `false`。 |
-| `max_results` | 最多返回多少个匹配文件，默认 200。 |
+| `max_results` | 最多返回多少个匹配文件，默认 200。达到上限时输出会提示结果已被限制。 |
 | `exclude_patterns` | 额外排除的 glob 模式，会和内置默认排除目录合并，完整列表见“排除规则”。通常按本次 `path` 搜索根下的相对路径生效；裸名称会扩展为任意层级匹配。 |
 
 ### path
@@ -161,7 +161,7 @@ webcode 早期的文件查找和代码查找采用了两套不同实现：
 | `match` | query 解释方式：`substring` 或 `regex`，默认 `substring`。 |
 | `include` | 可选 include glob，例如 `**/*.ts`。 |
 | `case_sensitive` | 是否区分大小写，默认 `false`。 |
-| `max_results` | 最多返回多少条命中行，默认 100。 |
+| `max_results` | 最多返回多少条命中行，默认 100。达到上限时输出会提示结果已被限制。 |
 | `max_line_chars` | 每条命中行最多返回多少字符，默认 500。 |
 | `exclude_patterns` | 额外排除的 glob 模式，会和内置默认排除目录合并，完整列表见“排除规则”。通常按本次 `path` 搜索根下的相对路径生效；裸名称会扩展为任意层级匹配。 |
 
@@ -443,6 +443,8 @@ gateway-vscode/src/tools/searchFilesTool.ts
 gateway-vscode/src/unit-test/searchFilesTool.test.ts
 ```
 
+结果按 workspace 相对路径排序。
+
 无匹配时，会返回搜索参数摘要和常见误用提示。例如：
 
 ```text
@@ -454,6 +456,12 @@ Case sensitive: false
 Hint: query "." matches a literal dot. Use query "*" to list files.
 ```
 
+达到 `max_results` 上限时，结果末尾会提示可能还有更多结果。例如：
+
+```text
+[search_files] Results limited to 200 file(s). There may be more results. Narrow query/path/exclude_patterns or raise max_results.
+```
+
 ### search_code
 
 返回格式是：
@@ -462,7 +470,15 @@ Hint: query "." matches a literal dot. Use query "*" to list files.
 relative/path.ts:123: matching line text
 ```
 
+结果按 workspace 相对路径排序，同一文件内按行号升序返回。
+
 长行会围绕命中位置截断，并提示省略字符数量，避免大文件或打包文件撑爆上下文。
+
+达到 `max_results` 上限时，结果末尾会提示可能还有更多结果。例如：
+
+```text
+[search_code] Results limited to 100 match(es). There may be more results. Narrow query/path/include/exclude_patterns or raise max_results.
+```
 
 无匹配时，如果 query 看起来像正则但当前是默认 substring 模式，输出会附带提示：
 

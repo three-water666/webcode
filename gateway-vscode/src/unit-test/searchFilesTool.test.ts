@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import { matchesFileQuery, resolveFileQueryMatchMode } from '../tools/filesystemUtils';
 import { createRipgrepFilesArgs } from '../tools/searchFilesRipgrepArgs';
+import { formatSearchResultsLimitedNotice } from '../tools/searchResultLimits';
 
 suite('Search Files Tool', () => {
     test('matches plain file queries against file paths and names', () => {
@@ -69,5 +70,18 @@ suite('Search Files Tool', () => {
         const args = createRipgrepFilesArgs([]);
 
         assert.ok(!args.includes('--no-ignore'));
+    });
+
+    test('formats limited result notices', () => {
+        const notice = formatSearchResultsLimitedNotice(
+            'search_files',
+            200,
+            'file(s)',
+            'Narrow query/path/exclude_patterns or raise max_results.'
+        );
+
+        assert.ok(notice.includes('Results limited to 200 file(s)'));
+        assert.ok(notice.includes('There may be more results'));
+        assert.ok(notice.includes('Narrow query/path/exclude_patterns'));
     });
 });

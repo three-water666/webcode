@@ -18,27 +18,33 @@ import type { SearchCodeOptions } from './searchCodeTypes';
 const MAX_FALLBACK_FILE_SIZE_BYTES = 1024 * 1024 * 2;
 type FallbackMatcher = (line: string) => SearchMatchRange | null;
 
+export type SearchCodeInProcessResult = {
+    matches: string[];
+    limited: boolean;
+};
+
 export function createSearchCodeFallbackNotice(): string {
     return [
         'Notice: ripgrep is unavailable, so search_code is using the in-process fallback.',
         'Fallback scope: fixed-string search and JavaScript RegExp search are supported.',
         'File globs support *, ?, **, and simple comma brace alternation such as *.{js,ts}.',
-        'The fallback scans git-tracked files when available, otherwise readable workspace files.',
+        'The fallback scans files in stable path order.',
         'Files larger than ' + MAX_FALLBACK_FILE_SIZE_BYTES + ' bytes and binary-looking files are skipped.'
     ].join('\n');
 }
 
-export async function searchCodeInProcess(options: SearchCodeOptions): Promise<string[]> {
+export async function searchCodeInProcess(options: SearchCodeOptions): Promise<SearchCodeInProcessResult> {
     const matcher = createFallbackMatcher(options.query, {
         caseSensitive: options.caseSensitive,
         useRegex: options.useRegex
     });
     const matches: string[] = [];
+    let limited = false;
     const gitFiles = await listGitSearchFiles(options.searchRoot);
 
     if (gitFiles) {
         const excludePatterns = createRipgrepExcludeGlobs(options.excludePatterns);
-        for (const candidate of gitFiles) {
+        for (const candidate of sortSearchCandidatesByRelativePath(gitFiles)) {
             if (shouldSkipFallbackCandidate(candidate, options, excludePatterns)) {
                 continue;
             }
@@ -51,21 +57,44 @@ export async function searchCodeInProcess(options: SearchCodeOptions): Promise<s
                 matches
             );
             if (shouldStop) {
+                limited = true;
                 break;
             }
         }
 
-        return matches;
+        return { matches, limited };
     }
 
-    await walkWorkspaceFiles(options.searchRoot, async (filePath, relativeToSearchRoot) => {
-        return appendInProcessFileMatches(filePath, relativeToSearchRoot, options, matcher, matches);
+    const candidates: SearchCandidateFile[] = [];
+    await walkWorkspaceFiles(options.searchRoot, (filePath, relativeToSearchRoot) => {
+        candidates.push({ filePath, relativeToSearchRoot });
+        return Promise.resolve(false);
     }, {
         excludePatterns: options.excludePatterns,
         includePattern: options.includePattern
     });
 
-    return matches;
+    for (const candidate of sortSearchCandidatesByRelativePath(candidates)) {
+        const shouldStop = await appendInProcessFileMatches(
+            candidate.filePath,
+            candidate.relativeToSearchRoot,
+            options,
+            matcher,
+            matches
+        );
+        if (shouldStop) {
+            limited = true;
+            break;
+        }
+    }
+
+    return { matches, limited };
+}
+
+export function sortSearchCandidatesByRelativePath(candidates: SearchCandidateFile[]): SearchCandidateFile[] {
+    return [...candidates].sort((left, right) => (
+        left.relativeToSearchRoot.localeCompare(right.relativeToSearchRoot)
+    ));
 }
 
 async function appendInProcessFileMatches(
