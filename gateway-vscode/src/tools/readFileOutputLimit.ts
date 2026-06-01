@@ -5,6 +5,7 @@ export type ReadFileTruncationReason = 'line_limit' | 'byte_limit' | 'line_and_b
 
 export type LimitedReadFileOutput = {
     text: string;
+    firstLineNumber: number;
     returnedLineCount: number;
     lineLimitApplied: boolean;
     byteLimitApplied: boolean;
@@ -28,15 +29,28 @@ export function formatLimitedReadFileOutput(
     limits: {
         byteLimitAlreadyApplied?: boolean;
         lineLimitAlreadyApplied?: boolean;
+        preserveLastLines?: boolean;
     } = {}
 ): LimitedReadFileOutput {
-    const lineLimited = lines.slice(0, READ_FILE_OUTPUT_MAX_LINES);
+    const preserveLastLines = limits.preserveLastLines === true;
+    const lineLimited = preserveLastLines
+        ? lines.slice(Math.max(lines.length - READ_FILE_OUTPUT_MAX_LINES, 0))
+        : lines.slice(0, READ_FILE_OUTPUT_MAX_LINES);
+    const lineLimitedFirstLineNumber = preserveLastLines
+        ? firstLineNumber + lines.length - lineLimited.length
+        : firstLineNumber;
     const lineLimitApplied = limits.lineLimitAlreadyApplied === true || lines.length > lineLimited.length;
-    const byteLimited = limitTextToMaxBytes(lineLimited, firstLineNumber, showLineNumbers);
+    const byteLimited = limitTextToMaxBytes(
+        lineLimited,
+        lineLimitedFirstLineNumber,
+        showLineNumbers,
+        preserveLastLines
+    );
     const byteLimitApplied = limits.byteLimitAlreadyApplied === true || byteLimited.byteLimitApplied;
 
     return {
         text: byteLimited.text,
+        firstLineNumber: byteLimited.firstLineNumber,
         returnedLineCount: byteLimited.returnedLineCount,
         lineLimitApplied,
         byteLimitApplied,
@@ -47,24 +61,38 @@ export function formatLimitedReadFileOutput(
 function limitTextToMaxBytes(
     lines: string[],
     firstLineNumber: number,
-    showLineNumbers: boolean
-): Pick<LimitedReadFileOutput, 'text' | 'returnedLineCount' | 'byteLimitApplied'> {
+    showLineNumbers: boolean,
+    preserveLastLines: boolean
+): Pick<LimitedReadFileOutput, 'text' | 'firstLineNumber' | 'returnedLineCount' | 'byteLimitApplied'> {
     const text = formatReadFileLines(lines, firstLineNumber, showLineNumbers);
     if (Buffer.byteLength(text, 'utf8') <= READ_FILE_OUTPUT_MAX_BYTES) {
-        return { text, returnedLineCount: lines.length, byteLimitApplied: false };
+        return { text, firstLineNumber, returnedLineCount: lines.length, byteLimitApplied: false };
     }
 
-    const completeLineCount = getMaxCompleteLineCountWithinByteLimit(lines, firstLineNumber, showLineNumbers);
+    const completeLineCount = getMaxCompleteLineCountWithinByteLimit(
+        lines,
+        firstLineNumber,
+        showLineNumbers,
+        preserveLastLines
+    );
     if (completeLineCount > 0) {
+        const returnedLines = preserveLastLines ? lines.slice(lines.length - completeLineCount) : lines.slice(0, completeLineCount);
+        const returnedFirstLineNumber = preserveLastLines
+            ? firstLineNumber + lines.length - completeLineCount
+            : firstLineNumber;
         return {
-            text: formatReadFileLines(lines.slice(0, completeLineCount), firstLineNumber, showLineNumbers),
+            text: formatReadFileLines(returnedLines, returnedFirstLineNumber, showLineNumbers),
+            firstLineNumber: returnedFirstLineNumber,
             returnedLineCount: completeLineCount,
             byteLimitApplied: true
         };
     }
 
+    const truncatedLineIndex = preserveLastLines ? lines.length - 1 : 0;
+    const truncatedFirstLineNumber = firstLineNumber + truncatedLineIndex;
     return {
-        text: truncateUtf8Text(formatReadFileLines(lines.slice(0, 1), firstLineNumber, showLineNumbers)),
+        text: truncateUtf8Text(formatReadFileLines([lines[truncatedLineIndex]], truncatedFirstLineNumber, showLineNumbers)),
+        firstLineNumber: truncatedFirstLineNumber,
         returnedLineCount: lines.length > 0 ? 1 : 0,
         byteLimitApplied: true
     };
@@ -73,13 +101,18 @@ function limitTextToMaxBytes(
 function getMaxCompleteLineCountWithinByteLimit(
     lines: string[],
     firstLineNumber: number,
-    showLineNumbers: boolean
+    showLineNumbers: boolean,
+    preserveLastLines: boolean
 ): number {
     let low = 0;
     let high = lines.length;
     while (low < high) {
         const mid = Math.ceil((low + high) / 2);
-        const text = formatReadFileLines(lines.slice(0, mid), firstLineNumber, showLineNumbers);
+        const returnedLines = preserveLastLines ? lines.slice(lines.length - mid) : lines.slice(0, mid);
+        const returnedFirstLineNumber = preserveLastLines
+            ? firstLineNumber + lines.length - mid
+            : firstLineNumber;
+        const text = formatReadFileLines(returnedLines, returnedFirstLineNumber, showLineNumbers);
         if (Buffer.byteLength(text, 'utf8') <= READ_FILE_OUTPUT_MAX_BYTES) {
             low = mid;
         } else {

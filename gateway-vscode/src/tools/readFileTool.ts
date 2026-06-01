@@ -124,7 +124,8 @@ export function selectReadFileResult(
     options: ReadFileResultOptions = {}
 ): ReadFileResult {
     const lines = splitLines(content);
-    const selection = resolveLineSelection(lines.length, args);
+    const lineOptions = getLineSelectionOptions(args);
+    const selection = resolveLineSelection(lines.length, lineOptions);
     const showLineNumbers = args.show_line_numbers === true;
     const prefixLimitApplied = options.prefixLimitApplied === true;
     const totalLineCountKnown = options.totalLineCountKnown !== false;
@@ -133,13 +134,14 @@ export function selectReadFileResult(
         const limited = formatLimitedReadFileOutput(
             lines.slice(selection.startIndex, selection.endIndex),
             selection.startIndex + 1,
-            showLineNumbers
+            showLineNumbers,
+            { preserveLastLines: lineOptions.tail !== undefined }
         );
         return buildReadFileResult(limited, {
             fileBytes: options.fileBytes,
             lineCountKnown: totalLineCountKnown,
             lineCount: totalLineCountKnown ? lines.length : undefined,
-            returnedLines: getReturnedLineRange(selection.startIndex + 1, limited.returnedLineCount)
+            returnedLines: getReturnedLineRange(limited.firstLineNumber, limited.returnedLineCount)
         });
     }
 
@@ -155,7 +157,7 @@ export function selectReadFileResult(
         fileBytes: options.fileBytes,
         lineCountKnown: totalLineCountKnown,
         lineCount: totalLineCountKnown ? lines.length : undefined,
-        returnedLines: getReturnedLineRange(1, limited.returnedLineCount)
+        returnedLines: getReturnedLineRange(limited.firstLineNumber, limited.returnedLineCount)
     });
 }
 
@@ -195,9 +197,8 @@ type LineSelection = {
     endIndex: number;
 };
 
-function resolveLineSelection(lineCount: number, args: Record<string, unknown>): LineSelection | null {
-    const { head, tail, startLine, endLine } = getLineSelectionOptions(args);
-
+function resolveLineSelection(lineCount: number, options: LineSelectionOptions): LineSelection | null {
+    const { head, tail, startLine, endLine } = options;
     if (head !== undefined) {
         return { startIndex: 0, endIndex: Math.min(head, lineCount) };
     }
@@ -251,13 +252,14 @@ async function readSelectedFileContent(
     const selected = await readSelectedFileLines(filePath, capLineSelectionOptions(options));
     const showLineNumbers = args.show_line_numbers === true;
     const limited = formatLimitedReadFileOutput(selected.lines, selected.startLine, showLineNumbers, {
-        lineLimitAlreadyApplied: didLineSelectionHitOutputLimit(options, selected)
+        lineLimitAlreadyApplied: didLineSelectionHitOutputLimit(options, selected),
+        preserveLastLines: options.tail !== undefined
     });
     return buildReadFileResult(limited, {
         fileBytes,
         lineCountKnown: selected.lineCount !== undefined,
         lineCount: selected.lineCount,
-        returnedLines: getReturnedLineRange(selected.startLine, limited.returnedLineCount)
+        returnedLines: getReturnedLineRange(limited.firstLineNumber, limited.returnedLineCount)
     });
 }
 

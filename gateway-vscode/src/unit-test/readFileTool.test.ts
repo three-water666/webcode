@@ -143,6 +143,44 @@ suite('Read File Tool', () => {
         assert.ok(!result.text.includes('second'));
     });
 
+    test('preserves the file tail when tail output hits the byte limit', async () => {
+        const largeContent = Array.from({ length: 300 }, (_, index) => {
+            return `line ${index + 1} ${'x'.repeat(900)}`;
+        }).join('\n');
+
+        await withTempFile(largeContent, async filePath => {
+            const fileStats = await fs.stat(filePath);
+            const result = await readFileContent(filePath, fileStats.size, {
+                tail: 200,
+                show_line_numbers: true
+            });
+            const metadata = requireReadFileMetadata(result);
+
+            assert.strictEqual(metadata.truncated, true);
+            assert.strictEqual(metadata.reason, 'byte_limit');
+            assert.strictEqual(metadata.returnedLines.end, 300);
+            assert.ok(metadata.returnedLines.start > 101);
+            assert.ok(result.text.includes('300: line 300'));
+            assert.ok(!result.text.includes('101: line 101'));
+        });
+    });
+
+    test('does not truncate a capped head read that reaches exact EOF', async () => {
+        const exactLimitContent = Array.from({ length: READ_FILE_OUTPUT_MAX_LINES }, (_, index) => {
+            return `line ${index + 1}`;
+        }).join('\n');
+
+        await withTempFile(exactLimitContent, async filePath => {
+            const fileStats = await fs.stat(filePath);
+            const result = await readFileContent(filePath, fileStats.size, {
+                head: READ_FILE_OUTPUT_MAX_LINES + 1
+            });
+
+            assert.strictEqual(result.text, exactLimitContent);
+            assert.strictEqual(result.metadata, undefined);
+        });
+    });
+
     test('streams line ranges from large files instead of loading full content', async () => {
         const largeContent = Array.from({ length: 2000 }, (_, index) => {
             const lineNumber = index + 1;
