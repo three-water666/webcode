@@ -15,7 +15,7 @@ Bare tool names only belong to these local tools. Tools exposed by third-party M
 
 | Tool | Purpose |
 | --- | --- |
-| `read_file` | Reads UTF-8 text files inside the workspace. Supports `head`, `tail`, `start_line`, `end_line`, and `show_line_numbers` for ranged reads and line numbers. Large files are truncated by default when no range is specified; use `force` to return the full file. |
+| `read_file` | Reads UTF-8 text files inside the workspace. Supports `head`, `tail`, `start_line`, `end_line`, and `show_line_numbers` for ranged reads and line numbers. |
 | `write_file` | Creates or fully overwrites UTF-8 text files inside the workspace. |
 | `edit_file` | Applies exact text replacements or unified diff patches to text files inside the workspace. Use `dryRun` to return a diff preview. |
 | `search_files` | Searches files by filename or relative path using ripgrep file listing first, with substring and glob matching that is case-insensitive by default. |
