@@ -4,6 +4,7 @@ import type * as vscode from 'vscode';
 import type { LocalTool } from './types';
 import { textResult } from './result';
 import {
+    DEFAULT_EXCLUDED_DIRECTORIES,
     type FileQueryMatchMode,
     getNumberArg,
     getStringArrayArg,
@@ -16,6 +17,8 @@ import {
 } from './filesystemUtils';
 import { createRipgrepStartError, resolveRipgrepCommand, RipgrepUnavailableError } from './ripgrep';
 import { createRipgrepFilesArgs } from './searchFilesRipgrepArgs';
+
+const DEFAULT_EXCLUDED_DIRECTORY_NAMES = DEFAULT_EXCLUDED_DIRECTORIES.join(', ');
 
 export const searchFilesTool: LocalTool = {
     serverId: 'internal',
@@ -35,7 +38,16 @@ export const searchFilesTool: LocalTool = {
                 },
                 case_sensitive: { type: 'boolean', description: 'Whether matching is case-sensitive. Default: false.', default: false },
                 max_results: { type: 'integer', minimum: 1, maximum: 500, description: 'Maximum matches to return. Default: 200.', default: 200 },
-                exclude_patterns: { type: 'array', items: { type: 'string' }, description: 'Glob patterns to exclude.' }
+                exclude_patterns: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: [
+                        'Additional glob patterns to exclude, merged with the default excluded directory names.',
+                        `Default excluded directory names: ${DEFAULT_EXCLUDED_DIRECTORY_NAMES}.`,
+                        'Patterns are matched against paths under the search root; bare names match anywhere.',
+                        'search_files ignores .gitignore/.ignore via ripgrep --no-ignore.'
+                    ].join(' ')
+                }
             }
         },
         annotations: { readOnlyHint: true }

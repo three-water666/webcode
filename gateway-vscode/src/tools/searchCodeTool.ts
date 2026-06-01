@@ -2,7 +2,7 @@ import { spawn } from 'child_process';
 import type * as vscode from 'vscode';
 import type { LocalTool } from './types';
 import { textResult } from './result';
-import { getNumberArg, getStringArrayArg, resolveWorkspaceDirectory } from './filesystemUtils';
+import { DEFAULT_EXCLUDED_DIRECTORIES, getNumberArg, getStringArrayArg, resolveWorkspaceDirectory } from './filesystemUtils';
 import { createSearchCodeFallbackNotice, searchCodeInProcess } from './searchCodeFallback';
 import { appendRipgrepMatch } from './searchCodeRipgrepOutput';
 import { createRipgrepStartError, resolveRipgrepCommand, RipgrepUnavailableError } from './ripgrep';
@@ -16,6 +16,8 @@ import {
     normalizeIncludeGlob,
 } from './searchCodeUtils';
 import type { SearchCodeOptions } from './searchCodeTypes';
+
+const DEFAULT_EXCLUDED_DIRECTORY_NAMES = DEFAULT_EXCLUDED_DIRECTORIES.join(', ');
 
 export const searchCodeTool: LocalTool = {
     serverId: 'internal',
@@ -63,7 +65,16 @@ export const searchCodeTool: LocalTool = {
                     ].join(' '),
                     default: DEFAULT_MATCH_LINE_MAX_CHARS
                 },
-                exclude_patterns: { type: 'array', items: { type: 'string' }, description: 'Glob patterns to exclude.' }
+                exclude_patterns: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: [
+                        'Additional glob patterns to exclude, merged with the default excluded directory names.',
+                        `Default excluded directory names: ${DEFAULT_EXCLUDED_DIRECTORY_NAMES}.`,
+                        'Patterns are matched against paths under the search root; bare names match anywhere.',
+                        'search_code uses ripgrep default ignore behavior, so .gitignore/.ignore may also exclude files.'
+                    ].join(' ')
+                }
             },
             required: ['query']
         },

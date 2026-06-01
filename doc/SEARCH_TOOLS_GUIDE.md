@@ -53,7 +53,7 @@ webcode 早期的文件查找和代码查找采用了两套不同实现：
 | `match` | query 解释方式：`auto`、`substring`、`glob`，默认 `auto`。 |
 | `case_sensitive` | 是否区分大小写，默认 `false`。 |
 | `max_results` | 最多返回多少个匹配文件，默认 200。 |
-| `exclude_patterns` | 额外排除的 glob 模式，会和内置默认排除目录合并。 |
+| `exclude_patterns` | 额外排除的 glob 模式，会和内置默认排除目录合并，完整列表见“排除规则”。通常按本次 `path` 搜索根下的相对路径生效；裸名称会扩展为任意层级匹配。 |
 
 ### path
 
@@ -163,7 +163,7 @@ webcode 早期的文件查找和代码查找采用了两套不同实现：
 | `case_sensitive` | 是否区分大小写，默认 `false`。 |
 | `max_results` | 最多返回多少条命中行，默认 100。 |
 | `max_line_chars` | 每条命中行最多返回多少字符，默认 500。 |
-| `exclude_patterns` | 额外排除的 glob 模式，会和内置默认排除目录合并。 |
+| `exclude_patterns` | 额外排除的 glob 模式，会和内置默认排除目录合并，完整列表见“排除规则”。通常按本次 `path` 搜索根下的相对路径生效；裸名称会扩展为任意层级匹配。 |
 
 `search_code` 不再使用 `use_regex`。是否启用正则只由 `match` 控制。
 
@@ -255,6 +255,14 @@ event.preventDefault();
 - `.svelte-kit`
 - `.turbo`
 - `.cache`
+- `.parcel-cache`
+- `.pytest_cache`
+- `.mypy_cache`
+- `.ruff_cache`
+- `.tox`
+- `.venv`
+- `venv`
+- `.gradle`
 - `dist`
 - `out`
 - `build`
@@ -267,6 +275,101 @@ event.preventDefault();
 内置默认排除目录 + exclude_patterns
 ```
 
+### 默认排除目录的生效范围
+
+默认排除目录用于阻止搜索从当前搜索根继续递归进入这些目录。它不会阻止用户把 `path` 直接设置到这些目录内部。
+
+例如，从 workspace 根目录搜索：
+
+```json
+{
+  "path": ".",
+  "query": "react"
+}
+```
+
+默认不会进入 `node_modules`。
+
+但明确搜索某个库：
+
+```json
+{
+  "path": "node_modules/react",
+  "query": "*"
+}
+```
+
+可以列出 `node_modules/react` 下的文件。此时默认排除规则不会因为搜索根本身位于 `node_modules` 而拒绝整个搜索；但如果这个目录里面还有嵌套的 `node_modules`、`dist`、`build` 等默认排除目录，仍会被跳过。
+
+### exclude_patterns 的匹配基准
+
+`exclude_patterns` 推荐按本次 `path` 搜索根下的相对路径来写。
+
+例如：
+
+```json
+{
+  "path": "gateway-vscode/src",
+  "query": "*.ts",
+  "exclude_patterns": ["**/*.test.ts"]
+}
+```
+
+会排除 `gateway-vscode/src` 下任意层级的 `.test.ts`。
+
+如果 pattern 不含 `/` 且不含 glob 语法，会被扩展为“任意层级同名文件或目录”：
+
+```json
+{
+  "exclude_patterns": ["fixtures"]
+}
+```
+
+会按类似下面的规则处理：
+
+```text
+fixtures
+**/fixtures
+**/fixtures/**
+```
+
+因此裸名称适合排除某个目录名或文件名。
+
+如果 pattern 包含 `/`，它通常按搜索根相对路径匹配：
+
+```json
+{
+  "path": "node_modules/react",
+  "exclude_patterns": ["cjs/**"]
+}
+```
+
+会排除 `node_modules/react/cjs` 下的文件。
+
+需要注意：如果已经把 `path` 设到某个子目录里，再写 workspace 根目录风格的排除路径，可能不会按预期生效。
+
+例如：
+
+```json
+{
+  "path": "node_modules/react",
+  "exclude_patterns": ["node_modules/react/cjs/**"]
+}
+```
+
+对 `search_code` 来说，这类 pattern 通常不会匹配，因为 ripgrep 看到的是相对 `node_modules/react` 的路径，例如 `cjs/react.development.js`，而不是 `node_modules/react/cjs/react.development.js`。
+
+推荐写法是：
+
+```json
+{
+  "path": "node_modules/react",
+  "exclude_patterns": ["cjs/**"]
+}
+```
+
+`search_files` 在最终结果过滤时会同时检查搜索根相对路径和 workspace 相对路径，因此对某些 workspace 根目录风格 pattern 更宽容；但为了让 `search_files` 和 `search_code` 心智一致，仍推荐按当前 `path` 内的相对路径写。
+
 示例：
 
 ```json
@@ -277,6 +380,21 @@ event.preventDefault();
 ```
 
 这会在默认排除目录之外，再排除所有 `.test.ts` 文件。
+
+### rg ignore 文件行为
+
+`exclude_patterns` 是 webcode 工具参数；`.gitignore`、`.ignore`、`.rgignore` 是 ripgrep/git 的 ignore 机制。两个搜索工具在这里有意保持不同策略：
+
+| 工具 | ripgrep ignore 行为 | 原因 |
+| --- | --- | --- |
+| `search_files` | 使用 `rg --files --no-ignore`，不尊重 `.gitignore`、`.ignore`、`.rgignore` 或全局 ignore。 | 文件发现要尽量完整，并和 fallback walker 行为一致。 |
+| `search_code` | 使用 ripgrep 默认 ignore 行为，会尊重 `.gitignore`、`.ignore`、`.rgignore` 等。 | 内容搜索更容易扫到大量生成文件或依赖源码，默认遵守项目 ignore 更稳。 |
+
+因此：
+
+- 想“发现文件是否存在”，优先用 `search_files`。
+- 想“搜索被 ignore 文件的内容”，如果已知路径，优先用 `read_file` 直接读取。
+- 想看默认排除目录里的依赖源码，把 `path` 直接设置到具体库目录，例如 `node_modules/react`。
 
 ## ripgrep 与 fallback
 
