@@ -16,6 +16,8 @@ import {
     walkWorkspaceFiles
 } from './filesystemUtils';
 import { createRipgrepStartError, resolveRipgrepCommand, RipgrepUnavailableError } from './ripgrep';
+import { listGitSearchFiles } from './searchCodeGitFiles';
+import { createRipgrepExcludeGlobs } from './searchCodeUtils';
 import { createRipgrepFilesArgs } from './searchFilesRipgrepArgs';
 
 const DEFAULT_EXCLUDED_DIRECTORY_NAMES = DEFAULT_EXCLUDED_DIRECTORIES.join(', ');
@@ -45,7 +47,7 @@ export const searchFilesTool: LocalTool = {
                         'Additional glob patterns to exclude, merged with the default excluded directory names.',
                         `Default excluded directory names: ${DEFAULT_EXCLUDED_DIRECTORY_NAMES}.`,
                         'Patterns are matched against paths under the search root; bare names match anywhere.',
-                        'search_files ignores .gitignore/.ignore via ripgrep --no-ignore.'
+                        'search_files uses ripgrep default ignore behavior, so .gitignore/.ignore may also exclude files.'
                     ].join(' ')
                 }
             }
@@ -91,7 +93,7 @@ async function searchFilePathsWithFallback(
             throw error;
         }
 
-        outputChannel.appendLine('[search_files] ripgrep unavailable; using workspace file walker.');
+        outputChannel.appendLine('[search_files] ripgrep unavailable; using git/file walker fallback.');
         for (const line of error.message.split('\n')) {
             outputChannel.appendLine(`[search_files] ${line}`);
         }
@@ -162,6 +164,26 @@ async function runRipgrepFiles(options: SearchFilesOptions): Promise<string[]> {
 }
 
 async function searchFilesInProcess(options: SearchFilesOptions): Promise<string[]> {
+    const gitFiles = await listGitSearchFiles(options.searchRoot);
+    if (gitFiles) {
+        const excludePatterns = createRipgrepExcludeGlobs(options.excludePatterns);
+        const matches: string[] = [];
+        for (const candidate of gitFiles) {
+            if (matchesAnyPattern(candidate.relativeToSearchRoot, excludePatterns)) {
+                continue;
+            }
+
+            appendWorkspaceFileSearchMatch(
+                candidate.filePath,
+                candidate.relativeToSearchRoot,
+                options,
+                matches
+            );
+        }
+
+        return matches.sort((left, right) => left.localeCompare(right)).slice(0, options.maxResults);
+    }
+
     const matches: string[] = [];
     await walkWorkspaceFiles(options.searchRoot, (filePath, relativeToSearchRoot) => {
         appendWorkspaceFileSearchMatch(filePath, relativeToSearchRoot, options, matches);

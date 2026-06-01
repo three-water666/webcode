@@ -384,11 +384,11 @@ fixtures
 
 ### rg ignore 文件行为
 
-`exclude_patterns` 是 webcode 工具参数；`.gitignore`、`.ignore`、`.rgignore` 是 ripgrep/git 的 ignore 机制。两个搜索工具在这里有意保持不同策略：
+`exclude_patterns` 是 webcode 工具参数；`.gitignore`、`.ignore`、`.rgignore` 是 ripgrep/git 的 ignore 机制。两个搜索工具默认都尊重 ignore 文件：
 
 | 工具 | ripgrep ignore 行为 | 原因 |
 | --- | --- | --- |
-| `search_files` | 使用 `rg --files --no-ignore`，不尊重 `.gitignore`、`.ignore`、`.rgignore` 或全局 ignore。 | 文件发现要尽量完整，并和 fallback walker 行为一致。 |
+| `search_files` | 使用 ripgrep 默认 ignore 行为，会尊重 `.gitignore`、`.ignore`、`.rgignore` 等。 | 文件发现结果更贴近日常源码阅读，避免优先返回缓存、生成物或依赖产物。 |
 | `search_code` | 使用 ripgrep 默认 ignore 行为，会尊重 `.gitignore`、`.ignore`、`.rgignore` 等。 | 内容搜索更容易扫到大量生成文件或依赖源码，默认遵守项目 ignore 更稳。 |
 
 因此：
@@ -408,23 +408,29 @@ fixtures
 如果 ripgrep 启动失败：
 
 - `search_code` 使用进程内文本扫描 fallback。
-- `search_files` 使用 workspace 文件遍历 fallback。
+- `search_files` 优先用 `git ls-files --cached --others --exclude-standard` fallback；如果 git 不可用，再使用 workspace 文件遍历 fallback。
 
-fallback 的目标是保持工具可用，但速度和能力可能弱于 ripgrep。
+fallback 的目标是保持工具可用，但速度和能力可能弱于 ripgrep。`search_files` 的 git fallback 会尊重 git ignore 规则；最终的文件遍历 fallback 只应用内置默认排除目录和 `exclude_patterns`。
 
 ## search_files 与 .gitignore
 
-`search_files` 的 ripgrep 文件枚举会传 `--no-ignore`。这意味着它不依赖 `.gitignore`、`.ignore`、`.rgignore` 或全局 ignore 文件决定候选列表。
+`search_files` 的 ripgrep 文件枚举使用 ripgrep 默认 ignore 行为。这意味着它会依赖 `.gitignore`、`.ignore`、`.rgignore` 或全局 ignore 文件决定候选列表。
 
-原因是 fallback walker 本身不读取 `.gitignore`。如果 ripgrep 路径尊重 `.gitignore`，而 fallback 路径不尊重，就会出现“有 rg 时搜不到、没 rg 时搜得到”的不一致。
-
-因此 `search_files` 的文件可见性由 webcode 自己控制：
+如果 ripgrep 不可用，`search_files` 会优先使用 git 枚举文件：
 
 ```text
-workspace 范围 + 内置默认排除目录 + exclude_patterns
+git ls-files --cached --others --exclude-standard
 ```
 
-而不是由 git ignore 文件控制。
+这会返回 tracked 文件和未被 git ignore 的 untracked 文件，并排除 `.gitignore`、`.git/info/exclude` 和全局 git ignore 命中的文件。
+
+因此 `search_files` 的默认文件可见性是：
+
+```text
+workspace 范围 + ignore 文件 + 内置默认排除目录 + exclude_patterns
+```
+
+如果 ripgrep 和 git 都不可用，最终会退回 workspace 文件遍历。这个最后兜底路径不解析 ignore 文件，只应用内置默认排除目录和 `exclude_patterns`。
 
 ## 输出格式
 

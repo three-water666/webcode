@@ -65,9 +65,9 @@ suite('Search Files Tool', () => {
         );
     });
 
-    test('lists files ignored by gitignore with ripgrep', () => {
+    test('respects ignore files with ripgrep', () => {
         const args = createRipgrepFilesArgs([]);
 
-        assert.ok(args.includes('--no-ignore'));
+        assert.ok(!args.includes('--no-ignore'));
     });
 });
