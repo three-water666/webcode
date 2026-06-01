@@ -112,8 +112,8 @@ async function streamForwardSelectedLines(
             }
         }
 
-        if (completed && sawBytes && finishLine(false)) {
-            completed = false;
+        if (completed && sawBytes) {
+            finishLine(false);
         }
 
         return {

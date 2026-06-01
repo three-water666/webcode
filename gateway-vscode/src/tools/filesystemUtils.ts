@@ -21,6 +21,13 @@ type WalkContext = {
     options: WalkOptions;
 };
 
+export type FileQueryMatchMode = 'auto' | 'substring' | 'glob';
+
+export type FileQueryOptions = {
+    caseSensitive?: boolean;
+    matchMode?: FileQueryMatchMode;
+};
+
 type DiffBounds = {
     prefix: number;
     suffix: number;
@@ -224,33 +231,55 @@ function matchesIncludePattern(includePattern: string | undefined, normalizedRel
         matchesPattern(entryName, includePattern);
 }
 
-export function matchesFileQuery(relativePath: string, fileName: string, query: string): boolean {
+export function matchesFileQuery(
+    relativePath: string,
+    fileName: string,
+    query: string,
+    options: FileQueryOptions = {}
+): boolean {
     const normalizedQuery = query.trim();
     if (!normalizedQuery) {
         return false;
     }
 
-    if (hasGlobSyntax(normalizedQuery)) {
-        return matchesPattern(relativePath, normalizedQuery) || matchesPattern(fileName, normalizedQuery);
+    if (resolveFileQueryMatchMode(normalizedQuery, options.matchMode) === 'glob') {
+        return matchesPattern(relativePath, normalizedQuery, options.caseSensitive) ||
+            matchesPattern(fileName, normalizedQuery, options.caseSensitive);
     }
 
-    const lowerQuery = normalizedQuery.toLowerCase();
-    return relativePath.toLowerCase().includes(lowerQuery) || fileName.toLowerCase().includes(lowerQuery);
+    return includesFileQuery(relativePath, normalizedQuery, options.caseSensitive) ||
+        includesFileQuery(fileName, normalizedQuery, options.caseSensitive);
 }
 
-export function matchesPattern(value: string, pattern: string): boolean {
+export function resolveFileQueryMatchMode(query: string, matchMode: FileQueryMatchMode = 'auto'): 'substring' | 'glob' {
+    if (matchMode === 'substring' || matchMode === 'glob') {
+        return matchMode;
+    }
+
+    return hasGlobSyntax(query) ? 'glob' : 'substring';
+}
+
+function includesFileQuery(value: string, query: string, caseSensitive?: boolean): boolean {
+    if (caseSensitive) {
+        return value.includes(query);
+    }
+
+    return value.toLowerCase().includes(query.toLowerCase());
+}
+
+export function matchesPattern(value: string, pattern: string, caseSensitive = false): boolean {
     const normalizedValue = toPosixPath(value);
     return expandGlobBraceAlternation(pattern).some(expandedPattern => {
-        if (expandedPattern.startsWith('**/') && matchesCompiledPattern(normalizedValue, expandedPattern.slice(3))) {
+        if (expandedPattern.startsWith('**/') && matchesCompiledPattern(normalizedValue, expandedPattern.slice(3), caseSensitive)) {
             return true;
         }
 
-        return matchesCompiledPattern(normalizedValue, expandedPattern);
+        return matchesCompiledPattern(normalizedValue, expandedPattern, caseSensitive);
     });
 }
 
 
-function matchesCompiledPattern(normalizedValue: string, pattern: string): boolean {
+function matchesCompiledPattern(normalizedValue: string, pattern: string, caseSensitive: boolean): boolean {
     const escaped = pattern
         .replace(/[.+^${}()|[\]\\]/g, '\\$&')
         .replace(/\*\*/g, '\0')
@@ -258,7 +287,7 @@ function matchesCompiledPattern(normalizedValue: string, pattern: string): boole
         .replace(/\?/g, '[^/]')
         .replace(/\0/g, '.*');
 
-    return new RegExp(`^${escaped}$`, 'i').test(normalizedValue);
+    return new RegExp(`^${escaped}$`, caseSensitive ? '' : 'i').test(normalizedValue);
 }
 
 export function matchesAnyPattern(value: string, patterns: string[]): boolean {
@@ -373,7 +402,7 @@ export function getStringArrayArg(value: unknown): string[] {
 }
 
 function hasGlobSyntax(value: string): boolean {
-    return /[*?]/.test(value);
+    return /[*?{}]/.test(value);
 }
 
 function hasErrorCode(error: unknown, code: string): boolean {
