@@ -38,6 +38,22 @@ export function getSearchCodeMatchMode(value: unknown): SearchCodeMatchMode {
     throw new Error('match must be "substring" or "regex".');
 }
 
+export function looksLikeRegexQuery(query: string): boolean {
+    const trimmed = query.trim();
+    if (!trimmed) {
+        return false;
+    }
+
+    return hasUnescapedRegexOr(trimmed) ||
+        /(^|[^\\])\.(\*|\+)/.test(trimmed) ||
+        /\\(?:[bBdDsSwW]|[pP]\{)/.test(trimmed) ||
+        /\(\?(?::|=|!|<=|<!)/.test(trimmed) ||
+        /(^|[^\\])\([^)]*\|[^)]*\)/.test(trimmed) ||
+        /(^|[^\\])\([^)]*\)([*+?]|\{\d+(,\d*)?\})/.test(trimmed) ||
+        /(^|[^\\])\[[^\]]+\]([*+?]|\{\d+(,\d*)?\})/.test(trimmed) ||
+        /(^|[^\\])\[(\^|[^\]]*[-\\][^\]]*)\]/.test(trimmed);
+}
+
 export function normalizeIncludeGlob(pattern: string | undefined): string | undefined {
     const normalized = typeof pattern === 'string' ? toPosixPath(pattern.trim()) : '';
     if (!normalized) {
@@ -113,6 +129,25 @@ function expandUserExcludePattern(pattern: string): string[] {
 
 function hasGlobSyntax(value: string): boolean {
     return /[*?[\]{}]/.test(value);
+}
+
+function hasUnescapedRegexOr(value: string): boolean {
+    for (let index = 0; index < value.length; index++) {
+        if (value[index] === '|' && !isEscaped(value, index)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function isEscaped(value: string, index: number): boolean {
+    let backslashes = 0;
+    for (let cursor = index - 1; cursor >= 0 && value[cursor] === '\\'; cursor--) {
+        backslashes++;
+    }
+
+    return backslashes % 2 === 1;
 }
 
 function byteOffsetToStringIndex(text: string, byteOffset: number): number | undefined {

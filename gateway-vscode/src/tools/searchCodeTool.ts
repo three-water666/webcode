@@ -11,6 +11,7 @@ import {
     DEFAULT_MATCH_LINE_MAX_CHARS,
     getBoundedSearchLineMaxChars,
     getSearchCodeMatchMode,
+    looksLikeRegexQuery,
     MAX_MATCH_LINE_MAX_CHARS,
     MIN_MATCH_LINE_MAX_CHARS,
     normalizeIncludeGlob,
@@ -36,7 +37,8 @@ export const searchCodeTool: LocalTool = {
                     description: [
                         'Text to search for.',
                         'match "substring" searches for a literal contained substring.',
-                        'match "regex" treats this as a ripgrep regular expression.'
+                        'match "regex" treats this as a ripgrep regular expression.',
+                        'When using regex syntax such as |, .*, groups, character classes, or \\b, set match to "regex".'
                     ].join(' ')
                 },
                 path: { type: 'string', description: 'Optional workspace directory to search. Defaults to ".".' },
@@ -45,7 +47,12 @@ export const searchCodeTool: LocalTool = {
                 match: {
                     type: 'string',
                     enum: ['substring', 'regex'],
-                    description: 'How to interpret query. "substring" is a literal contained substring; "regex" is a ripgrep regular expression. Default: substring.',
+                    description: [
+                        'How to interpret query.',
+                        '"substring" is a literal contained substring and treats regex metacharacters as plain text.',
+                        '"regex" is a ripgrep regular expression; use it for |, .*, groups, character classes, or \\b.',
+                        'Default: substring.'
+                    ].join(' '),
                     default: 'substring'
                 },
                 max_results: {
@@ -99,9 +106,18 @@ export const searchCodeTool: LocalTool = {
         };
         const matches = await runRipgrepWithFallback(options, context.outputChannel);
 
-        return textResult(matches.length > 0 ? matches.join('\n') : 'No matches found.');
+        return textResult(matches.length > 0 ? matches.join('\n') : createNoMatchesOutput(options));
     }
 };
+
+function createNoMatchesOutput(options: SearchCodeOptions): string {
+    const lines = ['No matches found.'];
+    if (!options.useRegex && looksLikeRegexQuery(options.query)) {
+        lines.push('Hint: query looks like a regular expression. Did you mean to set match: "regex"?');
+    }
+
+    return lines.join('\n');
+}
 
 async function runRipgrepWithFallback(
     options: SearchCodeOptions,
@@ -115,7 +131,7 @@ async function runRipgrepWithFallback(
             const matches = await searchCodeInProcess(options);
             return [
                 createSearchCodeFallbackNotice(),
-                ...(matches.length > 0 ? matches : ['No matches found.'])
+                ...(matches.length > 0 ? matches : createNoMatchesOutput(options).split('\n'))
             ];
         }
 

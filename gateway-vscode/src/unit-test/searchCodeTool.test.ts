@@ -12,6 +12,7 @@ import type { SearchCodeOptions } from '../tools/searchCodeTypes';
 import {
     createRipgrepExcludeGlobs,
     getSearchCodeMatchMode,
+    looksLikeRegexQuery,
     normalizeIncludeGlob,
     truncateSearchMatchLine
 } from '../tools/searchCodeUtils';
@@ -154,6 +155,17 @@ suite('Search Code Tool', () => {
 
     test('rejects invalid search code match modes', () => {
         assert.throws(() => getSearchCodeMatchMode('glob'), /match must be "substring" or "regex"/);
+    });
+
+    test('detects obvious regex intent in substring queries', () => {
+        assert.ok(looksLikeRegexQuery('preventDefault|stopPropagation'));
+        assert.ok(looksLikeRegexQuery('addEventListener.*(touch|mouse|pointer|drag)'));
+        assert.ok(looksLikeRegexQuery('\\brequest_id\\b'));
+        assert.ok(looksLikeRegexQuery('[A-Z]+'));
+        assert.ok(!looksLikeRegexQuery('foo.ts'));
+        assert.ok(!looksLikeRegexQuery('preventDefault'));
+        assert.ok(!looksLikeRegexQuery('[TODO]'));
+        assert.ok(!looksLikeRegexQuery('literal\\|pipe'));
     });
 });
 

@@ -193,6 +193,7 @@ event.preventDefault();
 - `|` 是普通竖线。
 - `*` 是普通星号。
 - `(`、`)`、`[`、`]` 都是普通字符。
+- 如果 query 写了 `|`、`.*`、分组、字符类、`\b` 等正则语法，必须传 `match: "regex"`。
 
 ### regex
 
@@ -456,6 +457,13 @@ relative/path.ts:123: matching line text
 ```
 
 长行会围绕命中位置截断，并提示省略字符数量，避免大文件或打包文件撑爆上下文。
+
+无匹配时，如果 query 看起来像正则但当前是默认 substring 模式，输出会附带提示：
+
+```text
+No matches found.
+Hint: query looks like a regular expression. Did you mean to set match: "regex"?
+```
 
 ## 推荐使用方式
 
