@@ -8,6 +8,7 @@ import {
     type FileQueryMatchMode,
     getNumberArg,
     getStringArrayArg,
+    isExistingFile,
     matchesAnyPattern,
     matchesFileQuery,
     resolveFileQueryMatchMode,
@@ -203,6 +204,9 @@ async function searchFilesInProcess(options: SearchFilesOptions): Promise<Search
         const matches: string[] = [];
         for (const candidate of gitFiles) {
             if (matchesAnyPattern(candidate.relativeToSearchRoot, excludePatterns)) {
+                continue;
+            }
+            if (!await isExistingFile(candidate.filePath)) {
                 continue;
             }
 
