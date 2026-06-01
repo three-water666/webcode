@@ -11,7 +11,7 @@ import { appendRipgrepMatch } from '../tools/searchCodeRipgrepOutput';
 import type { SearchCodeOptions } from '../tools/searchCodeTypes';
 import {
     createRipgrepExcludeGlobs,
-    getSearchCodeUseRegex,
+    getSearchCodeMatchMode,
     normalizeIncludeGlob,
     truncateSearchMatchLine
 } from '../tools/searchCodeUtils';
@@ -144,30 +144,16 @@ suite('Search Code Tool', () => {
     });
 
     test('uses substring search by default', () => {
-        assert.strictEqual(getSearchCodeUseRegex({}), false);
-        assert.strictEqual(getSearchCodeUseRegex({ match: 'substring' }), false);
+        assert.strictEqual(getSearchCodeMatchMode(undefined), 'substring');
+        assert.strictEqual(getSearchCodeMatchMode('substring'), 'substring');
     });
 
     test('uses regex search when match is regex', () => {
-        assert.strictEqual(getSearchCodeUseRegex({ match: 'regex' }), true);
+        assert.strictEqual(getSearchCodeMatchMode('regex'), 'regex');
     });
 
-    test('keeps use_regex as a compatibility alias', () => {
-        assert.strictEqual(getSearchCodeUseRegex({ use_regex: true }), true);
-        assert.strictEqual(getSearchCodeUseRegex({ use_regex: false }), false);
-        assert.strictEqual(getSearchCodeUseRegex({ match: 'regex', use_regex: true }), true);
-        assert.strictEqual(getSearchCodeUseRegex({ match: 'substring', use_regex: false }), false);
-    });
-
-    test('rejects conflicting match and use_regex values', () => {
-        assert.throws(
-            () => getSearchCodeUseRegex({ match: 'regex', use_regex: false }),
-            /match and use_regex conflict/
-        );
-        assert.throws(
-            () => getSearchCodeUseRegex({ match: 'substring', use_regex: true }),
-            /match and use_regex conflict/
-        );
+    test('rejects invalid search code match modes', () => {
+        assert.throws(() => getSearchCodeMatchMode('glob'), /match must be "substring" or "regex"/);
     });
 });
 

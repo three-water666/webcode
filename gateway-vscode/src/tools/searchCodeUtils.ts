@@ -13,6 +13,8 @@ export type SearchMatchRange = {
     end: number;
 };
 
+export type SearchCodeMatchMode = 'substring' | 'regex';
+
 type SearchLineFormatOptions = {
     query: string;
     caseSensitive: boolean;
@@ -25,21 +27,15 @@ export function getBoundedSearchLineMaxChars(value: unknown): number {
     return Math.min(MAX_MATCH_LINE_MAX_CHARS, Math.max(MIN_MATCH_LINE_MAX_CHARS, numberValue));
 }
 
-export function getSearchCodeUseRegex(args: Record<string, unknown>): boolean {
-    const match = args.match;
-    const useRegex = args.use_regex;
-
-    if (match === undefined) {
-        return useRegex === true;
+export function getSearchCodeMatchMode(value: unknown): SearchCodeMatchMode {
+    if (value === undefined || value === 'substring') {
+        return 'substring';
     }
-    if (match !== 'substring' && match !== 'regex') {
-        throw new Error('match must be "substring" or "regex".');
-    }
-    if (typeof useRegex === 'boolean' && useRegex !== (match === 'regex')) {
-        throw new Error('match and use_regex conflict. Use only match, or make both values agree.');
+    if (value === 'regex') {
+        return 'regex';
     }
 
-    return match === 'regex';
+    throw new Error('match must be "substring" or "regex".');
 }
 
 export function normalizeIncludeGlob(pattern: string | undefined): string | undefined {

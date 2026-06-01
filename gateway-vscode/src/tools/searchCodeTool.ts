@@ -10,7 +10,7 @@ import {
     createRipgrepExcludeGlobs,
     DEFAULT_MATCH_LINE_MAX_CHARS,
     getBoundedSearchLineMaxChars,
-    getSearchCodeUseRegex,
+    getSearchCodeMatchMode,
     MAX_MATCH_LINE_MAX_CHARS,
     MIN_MATCH_LINE_MAX_CHARS,
     normalizeIncludeGlob,
@@ -46,7 +46,6 @@ export const searchCodeTool: LocalTool = {
                     description: 'How to interpret query. "substring" is a literal contained substring; "regex" is a ripgrep regular expression. Default: substring.',
                     default: 'substring'
                 },
-                use_regex: { type: 'boolean', description: 'Compatibility alias for match "regex". Prefer match. Do not pass conflicting match and use_regex values.', default: false },
                 max_results: {
                     type: 'integer',
                     minimum: 1,
@@ -84,7 +83,7 @@ export const searchCodeTool: LocalTool = {
             includePattern: typeof args.include === 'string' ? args.include : undefined,
             excludePatterns,
             caseSensitive: args.case_sensitive === true,
-            useRegex: getSearchCodeUseRegex(args),
+            useRegex: getSearchCodeMatchMode(args.match) === 'regex',
             matchLineMaxChars: getBoundedSearchLineMaxChars(args.max_line_chars)
         };
         const matches = await runRipgrepWithFallback(options, context.outputChannel);
