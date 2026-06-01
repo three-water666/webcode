@@ -13,6 +13,8 @@ export type SearchMatchRange = {
     end: number;
 };
 
+export type SearchCodeMatchMode = 'substring' | 'regex';
+
 type SearchLineFormatOptions = {
     query: string;
     caseSensitive: boolean;
@@ -23,6 +25,17 @@ type SearchLineFormatOptions = {
 export function getBoundedSearchLineMaxChars(value: unknown): number {
     const numberValue = Math.floor(getNumberArg(value, DEFAULT_MATCH_LINE_MAX_CHARS));
     return Math.min(MAX_MATCH_LINE_MAX_CHARS, Math.max(MIN_MATCH_LINE_MAX_CHARS, numberValue));
+}
+
+export function getSearchCodeMatchMode(value: unknown): SearchCodeMatchMode {
+    if (value === undefined || value === 'substring') {
+        return 'substring';
+    }
+    if (value === 'regex') {
+        return 'regex';
+    }
+
+    throw new Error('match must be "substring" or "regex".');
 }
 
 export function normalizeIncludeGlob(pattern: string | undefined): string | undefined {

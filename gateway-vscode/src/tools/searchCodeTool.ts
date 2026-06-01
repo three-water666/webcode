@@ -1,21 +1,23 @@
 import { spawn } from 'child_process';
-import * as fs from 'fs';
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 import type { LocalTool } from './types';
 import { textResult } from './result';
-import { getNumberArg, getStringArrayArg, resolveWorkspaceDirectory } from './filesystemUtils';
+import { DEFAULT_EXCLUDED_DIRECTORIES, getNumberArg, getStringArrayArg, resolveWorkspaceDirectory } from './filesystemUtils';
 import { createSearchCodeFallbackNotice, searchCodeInProcess } from './searchCodeFallback';
 import { appendRipgrepMatch } from './searchCodeRipgrepOutput';
-import { getRipgrepBinaryName, getVSCodeRipgrepCandidates } from './searchCodeRipgrepPaths';
+import { createRipgrepStartError, resolveRipgrepCommand, RipgrepUnavailableError } from './ripgrep';
 import {
     createRipgrepExcludeGlobs,
     DEFAULT_MATCH_LINE_MAX_CHARS,
     getBoundedSearchLineMaxChars,
+    getSearchCodeMatchMode,
     MAX_MATCH_LINE_MAX_CHARS,
     MIN_MATCH_LINE_MAX_CHARS,
     normalizeIncludeGlob,
 } from './searchCodeUtils';
 import type { SearchCodeOptions } from './searchCodeTypes';
+
+const DEFAULT_EXCLUDED_DIRECTORY_NAMES = DEFAULT_EXCLUDED_DIRECTORIES.join(', ');
 
 export const searchCodeTool: LocalTool = {
     serverId: 'internal',
@@ -28,11 +30,24 @@ export const searchCodeTool: LocalTool = {
         inputSchema: {
             type: 'object',
             properties: {
-                query: { type: 'string', minLength: 1, description: 'Text or ripgrep regular expression to search for.' },
+                query: {
+                    type: 'string',
+                    minLength: 1,
+                    description: [
+                        'Text to search for.',
+                        'match "substring" searches for a literal contained substring.',
+                        'match "regex" treats this as a ripgrep regular expression.'
+                    ].join(' ')
+                },
                 path: { type: 'string', description: 'Optional workspace directory to search. Defaults to ".".' },
                 include: { type: 'string', description: 'Optional glob for files to include, for example "**/*.ts".' },
                 case_sensitive: { type: 'boolean', description: 'Whether matching is case-sensitive. Default: false.', default: false },
-                use_regex: { type: 'boolean', description: 'Treat query as a ripgrep regular expression. Default: false.', default: false },
+                match: {
+                    type: 'string',
+                    enum: ['substring', 'regex'],
+                    description: 'How to interpret query. "substring" is a literal contained substring; "regex" is a ripgrep regular expression. Default: substring.',
+                    default: 'substring'
+                },
                 max_results: {
                     type: 'integer',
                     minimum: 1,
@@ -50,7 +65,16 @@ export const searchCodeTool: LocalTool = {
                     ].join(' '),
                     default: DEFAULT_MATCH_LINE_MAX_CHARS
                 },
-                exclude_patterns: { type: 'array', items: { type: 'string' }, description: 'Glob patterns to exclude.' }
+                exclude_patterns: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: [
+                        'Additional glob patterns to exclude, merged with the default excluded directory names.',
+                        `Default excluded directory names: ${DEFAULT_EXCLUDED_DIRECTORY_NAMES}.`,
+                        'Patterns are matched against paths under the search root; bare names match anywhere.',
+                        'search_code uses ripgrep default ignore behavior, so .gitignore/.ignore may also exclude files.'
+                    ].join(' ')
+                }
             },
             required: ['query']
         },
@@ -70,7 +94,7 @@ export const searchCodeTool: LocalTool = {
             includePattern: typeof args.include === 'string' ? args.include : undefined,
             excludePatterns,
             caseSensitive: args.case_sensitive === true,
-            useRegex: args.use_regex === true,
+            useRegex: getSearchCodeMatchMode(args.match) === 'regex',
             matchLineMaxChars: getBoundedSearchLineMaxChars(args.max_line_chars)
         };
         const matches = await runRipgrepWithFallback(options, context.outputChannel);
@@ -78,19 +102,6 @@ export const searchCodeTool: LocalTool = {
         return textResult(matches.length > 0 ? matches.join('\n') : 'No matches found.');
     }
 };
-
-type RipgrepCommand = {
-    command: string;
-    source: string;
-    checkedLocations: string[];
-};
-
-class RipgrepUnavailableError extends Error {
-    constructor(message: string) {
-        super(message);
-        this.name = 'RipgrepUnavailableError';
-    }
-}
 
 async function runRipgrepWithFallback(
     options: SearchCodeOptions,
@@ -179,76 +190,6 @@ async function runRipgrep(options: SearchCodeOptions): Promise<string[]> {
             reject(new Error(`search_code failed: ${stderr.trim() || `ripgrep exited with code ${code ?? 'unknown'}`}`));
         });
     });
-}
-
-function resolveRipgrepCommand(): RipgrepCommand {
-    const checkedLocations: string[] = [];
-
-    const configuredPath = getConfiguredRipgrepPath();
-    if (configuredPath) {
-        checkedLocations.push(`webcodeGateway.ripgrep.path: ${configuredPath}`);
-        if (fs.existsSync(configuredPath)) {
-            return {
-                command: configuredPath,
-                source: 'webcodeGateway.ripgrep.path',
-                checkedLocations
-            };
-        }
-    } else {
-        checkedLocations.push('webcodeGateway.ripgrep.path: not set');
-    }
-
-    const vscodeRipgrepCandidates = getVSCodeRipgrepCandidates(
-        vscode.env.appRoot,
-        process.env.PATH,
-        process.platform,
-        process.arch
-    );
-
-    for (const candidate of vscodeRipgrepCandidates) {
-        checkedLocations.push(`VS Code bundled ripgrep: ${candidate}`);
-        if (fs.existsSync(candidate)) {
-            return {
-                command: candidate,
-                source: 'VS Code bundled ripgrep',
-                checkedLocations
-            };
-        }
-    }
-
-    if (vscodeRipgrepCandidates.length === 0) {
-        checkedLocations.push('VS Code bundled ripgrep: vscode.env.appRoot is not available');
-    }
-
-    const pathCommand = getRipgrepBinaryName(process.platform);
-    checkedLocations.push(`PATH command: ${pathCommand}`);
-    return {
-        command: pathCommand,
-        source: 'PATH',
-        checkedLocations
-    };
-}
-
-function getConfiguredRipgrepPath(): string | undefined {
-    const configuredPath = vscode.workspace
-        .getConfiguration('webcodeGateway')
-        .get<string>('ripgrep.path', '')
-        .trim();
-    return configuredPath || undefined;
-}
-
-function createRipgrepStartError(error: Error, rgCommand: RipgrepCommand): Error {
-    const code = (error as NodeJS.ErrnoException).code;
-    const detail = code ? `${error.message} (${code})` : error.message;
-    return new RipgrepUnavailableError(
-        [
-            `search_code could not start ripgrep from ${rgCommand.source}: ${detail}`,
-            `Platform: ${process.platform}-${process.arch}`,
-            'Checked:',
-            ...rgCommand.checkedLocations.map(location => `- ${location}`),
-            'To enable search_code, install ripgrep so rg is on PATH, or set webcodeGateway.ripgrep.path to the absolute path of rg/rg.exe.'
-        ].join('\n')
-    );
 }
 
 function createRipgrepArgs(options: SearchCodeOptions): string[] {

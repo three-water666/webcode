@@ -11,6 +11,7 @@ import { appendRipgrepMatch } from '../tools/searchCodeRipgrepOutput';
 import type { SearchCodeOptions } from '../tools/searchCodeTypes';
 import {
     createRipgrepExcludeGlobs,
+    getSearchCodeMatchMode,
     normalizeIncludeGlob,
     truncateSearchMatchLine
 } from '../tools/searchCodeUtils';
@@ -140,6 +141,19 @@ suite('Search Code Tool', () => {
             'trailing-space.ts '
         );
         assert.strictEqual(createSearchCandidate(root, ''), null);
+    });
+
+    test('uses substring search by default', () => {
+        assert.strictEqual(getSearchCodeMatchMode(undefined), 'substring');
+        assert.strictEqual(getSearchCodeMatchMode('substring'), 'substring');
+    });
+
+    test('uses regex search when match is regex', () => {
+        assert.strictEqual(getSearchCodeMatchMode('regex'), 'regex');
+    });
+
+    test('rejects invalid search code match modes', () => {
+        assert.throws(() => getSearchCodeMatchMode('glob'), /match must be "substring" or "regex"/);
     });
 });
 
