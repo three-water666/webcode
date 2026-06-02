@@ -2,16 +2,19 @@ import * as assert from 'assert';
 import * as path from 'path';
 import { matchesPattern } from '../tools/filesystemUtils';
 import { createSearchCodeFallbackNotice } from '../tools/searchCodeFallback';
+import { formatSearchCodeOutput } from '../tools/searchCodeOutput';
+import { createSearchCodeRipgrepArgs } from '../tools/searchCodeRipgrepArgs';
 import {
     getVSCodeAppRootCandidatesFromPath,
     getVSCodeRipgrepCandidates
 } from '../tools/searchCodeRipgrepPaths';
-import { createSearchCandidate } from '../tools/searchCodeGitFiles';
+import { createSearchCandidate, sortSearchCandidatesByRelativePath } from '../tools/searchCodeGitFiles';
 import { appendRipgrepMatch } from '../tools/searchCodeRipgrepOutput';
 import type { SearchCodeOptions } from '../tools/searchCodeTypes';
 import {
     createRipgrepExcludeGlobs,
     getSearchCodeMatchMode,
+    looksLikeRegexQuery,
     normalizeIncludeGlob,
     truncateSearchMatchLine
 } from '../tools/searchCodeUtils';
@@ -31,6 +34,29 @@ suite('Search Code Tool', () => {
         assert.ok(!matchesPattern('src/styles/logger.css', includePattern));
     });
 
+    test('sorts ripgrep search_code results by path', () => {
+        const args = createSearchCodeRipgrepArgs(createOptions());
+        const sortIndex = args.indexOf('--sort');
+
+        assert.ok(sortIndex >= 0);
+        assert.strictEqual(args[sortIndex + 1], 'path');
+    });
+
+    test('sorts fallback search candidates by relative path', () => {
+        const root = path.resolve('workspace-root');
+        const sorted = sortSearchCandidatesByRelativePath([
+            { filePath: path.join(root, 'src/b.ts'), relativeToSearchRoot: 'src/b.ts' },
+            { filePath: path.join(root, 'README.md'), relativeToSearchRoot: 'README.md' },
+            { filePath: path.join(root, 'src/a.ts'), relativeToSearchRoot: 'src/a.ts' }
+        ]);
+
+        assert.deepStrictEqual(sorted.map(candidate => candidate.relativeToSearchRoot), [
+            'README.md',
+            'src/a.ts',
+            'src/b.ts'
+        ]);
+    });
+
     test('describes fallback search capabilities when ripgrep is unavailable', () => {
         const notice = createSearchCodeFallbackNotice();
 
@@ -38,6 +64,23 @@ suite('Search Code Tool', () => {
         assert.ok(notice.includes('in-process fallback'));
         assert.ok(notice.includes('simple comma brace alternation'));
         assert.ok(notice.includes('JavaScript RegExp'));
+    });
+
+    test('keeps fallback notices before no-match regex hints', () => {
+        const output = formatSearchCodeOutput({
+            matches: [],
+            limited: false,
+            notices: ['Notice: fallback active.']
+        }, createOptions({
+            query: 'preventDefault|stopPropagation',
+            useRegex: false
+        }));
+
+        assert.deepStrictEqual(output.split('\n'), [
+            'Notice: fallback active.',
+            'No matches found.',
+            'Hint: query looks like a regular expression. Did you mean to set match: "regex"?'
+        ]);
     });
 
     test('infers VS Code app roots from Windows PATH bin directories', () => {
@@ -154,6 +197,19 @@ suite('Search Code Tool', () => {
 
     test('rejects invalid search code match modes', () => {
         assert.throws(() => getSearchCodeMatchMode('glob'), /match must be "substring" or "regex"/);
+    });
+
+    test('detects obvious regex intent in substring queries', () => {
+        assert.ok(looksLikeRegexQuery('preventDefault|stopPropagation'));
+        assert.ok(looksLikeRegexQuery('addEventListener.*(touch|mouse|pointer|drag)'));
+        assert.ok(looksLikeRegexQuery('\\brequest_id\\b'));
+        assert.ok(looksLikeRegexQuery('[A-Z]+'));
+        assert.ok(looksLikeRegexQuery('[a-z]'));
+        assert.ok(!looksLikeRegexQuery('foo.ts'));
+        assert.ok(!looksLikeRegexQuery('preventDefault'));
+        assert.ok(!looksLikeRegexQuery('[TODO]'));
+        assert.ok(!looksLikeRegexQuery('[abc]'));
+        assert.ok(!looksLikeRegexQuery('literal\\|pipe'));
     });
 });
 

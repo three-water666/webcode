@@ -1,6 +1,10 @@
 import * as assert from 'assert';
-import { matchesFileQuery, resolveFileQueryMatchMode } from '../tools/filesystemUtils';
+import * as fs from 'fs/promises';
+import * as os from 'os';
+import * as path from 'path';
+import { isExistingFile, matchesFileQuery, resolveFileQueryMatchMode } from '../tools/filesystemUtils';
 import { createRipgrepFilesArgs } from '../tools/searchFilesRipgrepArgs';
+import { formatSearchResultsLimitedNotice } from '../tools/searchResultLimits';
 
 suite('Search Files Tool', () => {
     test('matches plain file queries against file paths and names', () => {
@@ -65,9 +69,46 @@ suite('Search Files Tool', () => {
         );
     });
 
-    test('lists files ignored by gitignore with ripgrep', () => {
+    test('respects ignore files with ripgrep', () => {
         const args = createRipgrepFilesArgs([]);
 
-        assert.ok(args.includes('--no-ignore'));
+        assert.ok(!args.includes('--no-ignore'));
+    });
+
+    test('filters git fallback candidates to existing files', async () => {
+        await withTempWorkspace(async workspaceRoot => {
+            const filePath = path.join(workspaceRoot, 'sample.ts');
+            const directoryPath = path.join(workspaceRoot, 'src');
+            const missingPath = path.join(workspaceRoot, 'missing.ts');
+
+            await fs.writeFile(filePath, 'sample\n', 'utf8');
+            await fs.mkdir(directoryPath);
+
+            assert.strictEqual(await isExistingFile(filePath), true);
+            assert.strictEqual(await isExistingFile(directoryPath), false);
+            assert.strictEqual(await isExistingFile(missingPath), false);
+        });
+    });
+
+    test('formats limited result notices', () => {
+        const notice = formatSearchResultsLimitedNotice(
+            'search_files',
+            200,
+            'file(s)',
+            'Narrow query/path/exclude_patterns or raise max_results.'
+        );
+
+        assert.ok(notice.includes('Results limited to 200 file(s)'));
+        assert.ok(notice.includes('There may be more results'));
+        assert.ok(notice.includes('Narrow query/path/exclude_patterns'));
     });
 });
+
+async function withTempWorkspace(callback: (workspaceRoot: string) => Promise<void>): Promise<void> {
+    const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'search-files-tool-'));
+    try {
+        await callback(workspaceRoot);
+    } finally {
+        await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+}

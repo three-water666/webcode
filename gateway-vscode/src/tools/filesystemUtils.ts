@@ -134,6 +134,11 @@ export async function resolveWorkspaceDirectory(
     return resolved;
 }
 
+export async function isExistingFile(filePath: string): Promise<boolean> {
+    const stats = await fs.stat(filePath).catch(() => null);
+    return stats?.isFile() === true;
+}
+
 export async function atomicWriteFile(filePath: string, content: string): Promise<void> {
     const tempPath = `${filePath}.${crypto.randomBytes(16).toString('hex')}.tmp`;
     await fs.writeFile(tempPath, content, 'utf8');

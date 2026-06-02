@@ -52,7 +52,7 @@ webcode 早期的文件查找和代码查找采用了两套不同实现：
 | `query` | 文件名或相对路径查询，默认 `*`，表示列出 `path` 下文件。 |
 | `match` | query 解释方式：`auto`、`substring`、`glob`，默认 `auto`。 |
 | `case_sensitive` | 是否区分大小写，默认 `false`。 |
-| `max_results` | 最多返回多少个匹配文件，默认 200。 |
+| `max_results` | 最多返回多少个匹配文件，默认 200。达到上限时输出会提示结果已被限制。 |
 | `exclude_patterns` | 额外排除的 glob 模式，会和内置默认排除目录合并，完整列表见“排除规则”。通常按本次 `path` 搜索根下的相对路径生效；裸名称会扩展为任意层级匹配。 |
 
 ### path
@@ -161,7 +161,7 @@ webcode 早期的文件查找和代码查找采用了两套不同实现：
 | `match` | query 解释方式：`substring` 或 `regex`，默认 `substring`。 |
 | `include` | 可选 include glob，例如 `**/*.ts`。 |
 | `case_sensitive` | 是否区分大小写，默认 `false`。 |
-| `max_results` | 最多返回多少条命中行，默认 100。 |
+| `max_results` | 最多返回多少条命中行，默认 100。达到上限时输出会提示结果已被限制。 |
 | `max_line_chars` | 每条命中行最多返回多少字符，默认 500。 |
 | `exclude_patterns` | 额外排除的 glob 模式，会和内置默认排除目录合并，完整列表见“排除规则”。通常按本次 `path` 搜索根下的相对路径生效；裸名称会扩展为任意层级匹配。 |
 
@@ -193,6 +193,7 @@ event.preventDefault();
 - `|` 是普通竖线。
 - `*` 是普通星号。
 - `(`、`)`、`[`、`]` 都是普通字符。
+- 如果 query 写了 `|`、`.*`、分组、字符类、`\b` 等正则语法，必须传 `match: "regex"`。
 
 ### regex
 
@@ -383,11 +384,13 @@ fixtures
 
 ### rg ignore 文件行为
 
-`exclude_patterns` 是 webcode 工具参数；`.gitignore`、`.ignore`、`.rgignore` 是 ripgrep/git 的 ignore 机制。两个搜索工具在这里有意保持不同策略：
+`exclude_patterns` 是 webcode 工具参数；`.gitignore`、`.ignore`、`.rgignore` 是 ripgrep/git 的 ignore 机制。两个搜索工具默认都尊重 ignore 文件：
+
+> **行为变更**：`search_files` 现在默认尊重 ignore 文件。以前能直接搜到的 `dist/`、`.env` 等被 ignore 文件，可能需要已知路径后用 `read_file` 读取，或把 `path` 指向更具体的默认排除目录内部。
 
 | 工具 | ripgrep ignore 行为 | 原因 |
 | --- | --- | --- |
-| `search_files` | 使用 `rg --files --no-ignore`，不尊重 `.gitignore`、`.ignore`、`.rgignore` 或全局 ignore。 | 文件发现要尽量完整，并和 fallback walker 行为一致。 |
+| `search_files` | 使用 ripgrep 默认 ignore 行为，会尊重 `.gitignore`、`.ignore`、`.rgignore` 等。 | 文件发现结果更贴近日常源码阅读，避免优先返回缓存、生成物或依赖产物。 |
 | `search_code` | 使用 ripgrep 默认 ignore 行为，会尊重 `.gitignore`、`.ignore`、`.rgignore` 等。 | 内容搜索更容易扫到大量生成文件或依赖源码，默认遵守项目 ignore 更稳。 |
 
 因此：
@@ -407,23 +410,29 @@ fixtures
 如果 ripgrep 启动失败：
 
 - `search_code` 使用进程内文本扫描 fallback。
-- `search_files` 使用 workspace 文件遍历 fallback。
+- `search_files` 优先用 `git ls-files --cached --others --exclude-standard` fallback；如果 git 不可用，再使用 workspace 文件遍历 fallback。
 
-fallback 的目标是保持工具可用，但速度和能力可能弱于 ripgrep。
+fallback 的目标是保持工具可用，但速度和能力可能弱于 ripgrep。`search_files` 的 git fallback 会尊重 git ignore 规则；最终的文件遍历 fallback 只应用内置默认排除目录和 `exclude_patterns`。
 
 ## search_files 与 .gitignore
 
-`search_files` 的 ripgrep 文件枚举会传 `--no-ignore`。这意味着它不依赖 `.gitignore`、`.ignore`、`.rgignore` 或全局 ignore 文件决定候选列表。
+`search_files` 的 ripgrep 文件枚举使用 ripgrep 默认 ignore 行为。这意味着它会依赖 `.gitignore`、`.ignore`、`.rgignore` 或全局 ignore 文件决定候选列表。
 
-原因是 fallback walker 本身不读取 `.gitignore`。如果 ripgrep 路径尊重 `.gitignore`，而 fallback 路径不尊重，就会出现“有 rg 时搜不到、没 rg 时搜得到”的不一致。
-
-因此 `search_files` 的文件可见性由 webcode 自己控制：
+如果 ripgrep 不可用，`search_files` 会优先使用 git 枚举文件：
 
 ```text
-workspace 范围 + 内置默认排除目录 + exclude_patterns
+git ls-files --cached --others --exclude-standard
 ```
 
-而不是由 git ignore 文件控制。
+这会返回 tracked 文件和未被 git ignore 的 untracked 文件，并排除 `.gitignore`、`.git/info/exclude` 和全局 git ignore 命中的文件。
+
+因此 `search_files` 的默认文件可见性是：
+
+```text
+workspace 范围 + ignore 文件 + 内置默认排除目录 + exclude_patterns
+```
+
+如果 ripgrep 和 git 都不可用，最终会退回 workspace 文件遍历。这个最后兜底路径不解析 ignore 文件，只应用内置默认排除目录和 `exclude_patterns`。
 
 ## 输出格式
 
@@ -436,6 +445,8 @@ gateway-vscode/src/tools/searchFilesTool.ts
 gateway-vscode/src/unit-test/searchFilesTool.test.ts
 ```
 
+结果按 workspace 相对路径排序。
+
 无匹配时，会返回搜索参数摘要和常见误用提示。例如：
 
 ```text
@@ -447,6 +458,12 @@ Case sensitive: false
 Hint: query "." matches a literal dot. Use query "*" to list files.
 ```
 
+达到 `max_results` 上限时，结果末尾会提示可能还有更多结果。例如：
+
+```text
+[search_files] Results limited to 200 file(s). There may be more results. Narrow query/path/exclude_patterns or raise max_results.
+```
+
 ### search_code
 
 返回格式是：
@@ -455,7 +472,22 @@ Hint: query "." matches a literal dot. Use query "*" to list files.
 relative/path.ts:123: matching line text
 ```
 
+结果按 workspace 相对路径排序，同一文件内按行号升序返回。
+
 长行会围绕命中位置截断，并提示省略字符数量，避免大文件或打包文件撑爆上下文。
+
+达到 `max_results` 上限时，结果末尾会提示可能还有更多结果。例如：
+
+```text
+[search_code] Results limited to 100 match(es). There may be more results. Narrow query/path/include/exclude_patterns or raise max_results.
+```
+
+无匹配时，如果 query 看起来像正则但当前是默认 substring 模式，输出会附带提示：
+
+```text
+No matches found.
+Hint: query looks like a regular expression. Did you mean to set match: "regex"?
+```
 
 ## 推荐使用方式
 

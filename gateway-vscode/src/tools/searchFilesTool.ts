@@ -8,6 +8,7 @@ import {
     type FileQueryMatchMode,
     getNumberArg,
     getStringArrayArg,
+    isExistingFile,
     matchesAnyPattern,
     matchesFileQuery,
     resolveFileQueryMatchMode,
@@ -16,7 +17,10 @@ import {
     walkWorkspaceFiles
 } from './filesystemUtils';
 import { createRipgrepStartError, resolveRipgrepCommand, RipgrepUnavailableError } from './ripgrep';
+import { listGitSearchFiles } from './searchCodeGitFiles';
+import { createRipgrepExcludeGlobs } from './searchCodeUtils';
 import { createRipgrepFilesArgs } from './searchFilesRipgrepArgs';
+import { formatSearchResultsLimitedNotice } from './searchResultLimits';
 
 const DEFAULT_EXCLUDED_DIRECTORY_NAMES = DEFAULT_EXCLUDED_DIRECTORIES.join(', ');
 
@@ -24,7 +28,7 @@ export const searchFilesTool: LocalTool = {
     serverId: 'internal',
     definition: {
         name: 'search_files',
-        description: 'Search file names and relative paths inside the current VS Code workspace. Use this to find a file before reading or editing it.',
+        description: 'Search file names and relative paths inside the current VS Code workspace, ordered by path. Use this to find a file before reading or editing it.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -37,7 +41,13 @@ export const searchFilesTool: LocalTool = {
                     default: 'auto'
                 },
                 case_sensitive: { type: 'boolean', description: 'Whether matching is case-sensitive. Default: false.', default: false },
-                max_results: { type: 'integer', minimum: 1, maximum: 500, description: 'Maximum matches to return. Default: 200.', default: 200 },
+                max_results: {
+                    type: 'integer',
+                    minimum: 1,
+                    maximum: 500,
+                    description: 'Maximum matches to return. If this limit is reached, output includes a limited-results notice. Default: 200.',
+                    default: 200
+                },
                 exclude_patterns: {
                     type: 'array',
                     items: { type: 'string' },
@@ -45,7 +55,7 @@ export const searchFilesTool: LocalTool = {
                         'Additional glob patterns to exclude, merged with the default excluded directory names.',
                         `Default excluded directory names: ${DEFAULT_EXCLUDED_DIRECTORY_NAMES}.`,
                         'Patterns are matched against paths under the search root; bare names match anywhere.',
-                        'search_files ignores .gitignore/.ignore via ripgrep --no-ignore.'
+                        'search_files uses ripgrep default ignore behavior, so .gitignore/.ignore may also exclude files.'
                     ].join(' ')
                 }
             }
@@ -64,9 +74,9 @@ export const searchFilesTool: LocalTool = {
             maxResults: getNumberArg(args.max_results, 200),
             excludePatterns: getStringArrayArg(args.exclude_patterns)
         };
-        const matches = await searchFilePathsWithFallback(options, context.outputChannel);
+        const result = await searchFilePathsWithFallback(options, context.outputChannel);
 
-        return textResult(matches.length > 0 ? matches.join('\n') : formatNoMatchesMessage(options));
+        return textResult(formatSearchFilesOutput(result, options));
     }
 };
 
@@ -80,10 +90,33 @@ type SearchFilesOptions = {
     excludePatterns: string[];
 };
 
+type SearchFilesResult = {
+    matches: string[];
+    limited: boolean;
+};
+
+function formatSearchFilesOutput(result: SearchFilesResult, options: SearchFilesOptions): string {
+    if (result.matches.length === 0) {
+        return formatNoMatchesMessage(options);
+    }
+
+    const lines = [...result.matches];
+    if (result.limited) {
+        lines.push(formatSearchResultsLimitedNotice(
+            'search_files',
+            options.maxResults,
+            'file(s)',
+            'Narrow query/path/exclude_patterns or raise max_results.'
+        ));
+    }
+
+    return lines.join('\n');
+}
+
 async function searchFilePathsWithFallback(
     options: SearchFilesOptions,
     outputChannel: vscode.OutputChannel
-): Promise<string[]> {
+): Promise<SearchFilesResult> {
     try {
         return await runRipgrepFiles(options);
     } catch (error) {
@@ -91,7 +124,7 @@ async function searchFilePathsWithFallback(
             throw error;
         }
 
-        outputChannel.appendLine('[search_files] ripgrep unavailable; using workspace file walker.');
+        outputChannel.appendLine('[search_files] ripgrep unavailable; using git/file walker fallback.');
         for (const line of error.message.split('\n')) {
             outputChannel.appendLine(`[search_files] ${line}`);
         }
@@ -99,7 +132,7 @@ async function searchFilePathsWithFallback(
     }
 }
 
-async function runRipgrepFiles(options: SearchFilesOptions): Promise<string[]> {
+async function runRipgrepFiles(options: SearchFilesOptions): Promise<SearchFilesResult> {
     const rgCommand = resolveRipgrepCommand();
     const args = createRipgrepFilesArgs(options.excludePatterns);
     const matches: string[] = [];
@@ -152,7 +185,10 @@ async function runRipgrepFiles(options: SearchFilesOptions): Promise<string[]> {
             }
 
             if (code === 0 || code === 1 || limitReached) {
-                resolve(matches.slice(0, options.maxResults));
+                resolve({
+                    matches: matches.slice(0, options.maxResults),
+                    limited: limitReached
+                });
                 return;
             }
 
@@ -161,7 +197,30 @@ async function runRipgrepFiles(options: SearchFilesOptions): Promise<string[]> {
     });
 }
 
-async function searchFilesInProcess(options: SearchFilesOptions): Promise<string[]> {
+async function searchFilesInProcess(options: SearchFilesOptions): Promise<SearchFilesResult> {
+    const gitFiles = await listGitSearchFiles(options.searchRoot);
+    if (gitFiles) {
+        const excludePatterns = createRipgrepExcludeGlobs(options.excludePatterns);
+        const matches: string[] = [];
+        for (const candidate of gitFiles) {
+            if (matchesAnyPattern(candidate.relativeToSearchRoot, excludePatterns)) {
+                continue;
+            }
+            if (!await isExistingFile(candidate.filePath)) {
+                continue;
+            }
+
+            appendWorkspaceFileSearchMatch(
+                candidate.filePath,
+                candidate.relativeToSearchRoot,
+                options,
+                matches
+            );
+        }
+
+        return limitSortedFileMatches(matches, options.maxResults);
+    }
+
     const matches: string[] = [];
     await walkWorkspaceFiles(options.searchRoot, (filePath, relativeToSearchRoot) => {
         appendWorkspaceFileSearchMatch(filePath, relativeToSearchRoot, options, matches);
@@ -170,7 +229,15 @@ async function searchFilesInProcess(options: SearchFilesOptions): Promise<string
         excludePatterns: options.excludePatterns
     });
 
-    return matches.sort((left, right) => left.localeCompare(right)).slice(0, options.maxResults);
+    return limitSortedFileMatches(matches, options.maxResults);
+}
+
+function limitSortedFileMatches(matches: string[], maxResults: number): SearchFilesResult {
+    const sortedMatches = matches.sort((left, right) => left.localeCompare(right));
+    return {
+        matches: sortedMatches.slice(0, maxResults),
+        limited: sortedMatches.length > maxResults
+    };
 }
 
 function appendFileSearchMatch(line: string, options: SearchFilesOptions, matches: string[]): void {

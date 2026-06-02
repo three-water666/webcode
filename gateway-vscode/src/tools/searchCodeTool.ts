@@ -4,16 +4,16 @@ import type { LocalTool } from './types';
 import { textResult } from './result';
 import { DEFAULT_EXCLUDED_DIRECTORIES, getNumberArg, getStringArrayArg, resolveWorkspaceDirectory } from './filesystemUtils';
 import { createSearchCodeFallbackNotice, searchCodeInProcess } from './searchCodeFallback';
+import { formatSearchCodeOutput, type SearchCodeResult } from './searchCodeOutput';
 import { appendRipgrepMatch } from './searchCodeRipgrepOutput';
 import { createRipgrepStartError, resolveRipgrepCommand, RipgrepUnavailableError } from './ripgrep';
+import { createSearchCodeRipgrepArgs } from './searchCodeRipgrepArgs';
 import {
-    createRipgrepExcludeGlobs,
     DEFAULT_MATCH_LINE_MAX_CHARS,
     getBoundedSearchLineMaxChars,
     getSearchCodeMatchMode,
     MAX_MATCH_LINE_MAX_CHARS,
     MIN_MATCH_LINE_MAX_CHARS,
-    normalizeIncludeGlob,
 } from './searchCodeUtils';
 import type { SearchCodeOptions } from './searchCodeTypes';
 
@@ -25,7 +25,7 @@ export const searchCodeTool: LocalTool = {
         name: 'search_code',
         description: [
             'Search text content inside workspace files using ripgrep.',
-            'Returns relative file paths with line numbers and matching lines.'
+            'Returns relative file paths with line numbers and matching lines, ordered by path and line number.'
         ].join(' '),
         inputSchema: {
             type: 'object',
@@ -36,7 +36,8 @@ export const searchCodeTool: LocalTool = {
                     description: [
                         'Text to search for.',
                         'match "substring" searches for a literal contained substring.',
-                        'match "regex" treats this as a ripgrep regular expression.'
+                        'match "regex" treats this as a ripgrep regular expression.',
+                        'When using regex syntax such as |, .*, groups, character classes, or \\b, set match to "regex".'
                     ].join(' ')
                 },
                 path: { type: 'string', description: 'Optional workspace directory to search. Defaults to ".".' },
@@ -45,14 +46,19 @@ export const searchCodeTool: LocalTool = {
                 match: {
                     type: 'string',
                     enum: ['substring', 'regex'],
-                    description: 'How to interpret query. "substring" is a literal contained substring; "regex" is a ripgrep regular expression. Default: substring.',
+                    description: [
+                        'How to interpret query.',
+                        '"substring" is a literal contained substring and treats regex metacharacters as plain text.',
+                        '"regex" is a ripgrep regular expression; use it for |, .*, groups, character classes, or \\b.',
+                        'Default: substring.'
+                    ].join(' '),
                     default: 'substring'
                 },
                 max_results: {
                     type: 'integer',
                     minimum: 1,
                     maximum: 500,
-                    description: 'Maximum matching lines to return. Default: 100.',
+                    description: 'Maximum matching lines to return. If this limit is reached, output includes a limited-results notice. Default: 100.',
                     default: 100
                 },
                 max_line_chars: {
@@ -97,26 +103,26 @@ export const searchCodeTool: LocalTool = {
             useRegex: getSearchCodeMatchMode(args.match) === 'regex',
             matchLineMaxChars: getBoundedSearchLineMaxChars(args.max_line_chars)
         };
-        const matches = await runRipgrepWithFallback(options, context.outputChannel);
+        const result = await runRipgrepWithFallback(options, context.outputChannel);
 
-        return textResult(matches.length > 0 ? matches.join('\n') : 'No matches found.');
+        return textResult(formatSearchCodeOutput(result, options));
     }
 };
 
 async function runRipgrepWithFallback(
     options: SearchCodeOptions,
     outputChannel: vscode.OutputChannel
-): Promise<string[]> {
+): Promise<SearchCodeResult> {
     try {
         return await runRipgrep(options);
     } catch (error) {
         if (error instanceof RipgrepUnavailableError) {
             logRipgrepFallback(outputChannel, error);
-            const matches = await searchCodeInProcess(options);
-            return [
-                createSearchCodeFallbackNotice(),
-                ...(matches.length > 0 ? matches : ['No matches found.'])
-            ];
+            const result = await searchCodeInProcess(options);
+            return {
+                ...result,
+                notices: createSearchCodeFallbackNotice().split('\n')
+            };
         }
 
         throw error;
@@ -130,9 +136,9 @@ function logRipgrepFallback(outputChannel: vscode.OutputChannel, error: RipgrepU
     }
 }
 
-async function runRipgrep(options: SearchCodeOptions): Promise<string[]> {
+async function runRipgrep(options: SearchCodeOptions): Promise<SearchCodeResult> {
     const rgCommand = resolveRipgrepCommand();
-    const args = createRipgrepArgs(options);
+    const args = createSearchCodeRipgrepArgs(options);
     const matches: string[] = [];
     let limitReached = false;
     let stdoutBuffer = '';
@@ -183,41 +189,14 @@ async function runRipgrep(options: SearchCodeOptions): Promise<string[]> {
             }
 
             if (code === 0 || code === 1 || limitReached) {
-                resolve(matches.slice(0, options.maxResults));
+                resolve({
+                    matches: matches.slice(0, options.maxResults),
+                    limited: limitReached
+                });
                 return;
             }
 
             reject(new Error(`search_code failed: ${stderr.trim() || `ripgrep exited with code ${code ?? 'unknown'}`}`));
         });
     });
-}
-
-function createRipgrepArgs(options: SearchCodeOptions): string[] {
-    const args = [
-        '--json',
-        '--line-number',
-        '--color',
-        'never',
-        '--no-messages',
-        '--hidden'
-    ];
-
-    if (!options.caseSensitive) {
-        args.push('--ignore-case');
-    }
-    if (!options.useRegex) {
-        args.push('--fixed-strings');
-    }
-
-    const includePattern = normalizeIncludeGlob(options.includePattern);
-    if (includePattern) {
-        args.push('--glob', includePattern);
-    }
-
-    for (const pattern of createRipgrepExcludeGlobs(options.excludePatterns)) {
-        args.push('--glob', `!${pattern}`);
-    }
-
-    args.push('--regexp', options.query, '.');
-    return args;
 }
