@@ -38,6 +38,45 @@ export function getSearchCodeMatchMode(value: unknown): SearchCodeMatchMode {
     throw new Error('match must be "substring" or "regex".');
 }
 
+export function looksLikeRegexQuery(query: string): boolean {
+    const trimmed = query.trim();
+    if (!trimmed) {
+        return false;
+    }
+
+    // foo|bar
+    if (hasUnescapedRegexOr(trimmed)) {
+        return true;
+    }
+    // foo.* or foo.+
+    if (/(^|[^\\])\.(\*|\+)/.test(trimmed)) {
+        return true;
+    }
+    // \b, \d, \s, \w, or Unicode property escapes.
+    if (/\\(?:[bBdDsSwW]|[pP]\{)/.test(trimmed)) {
+        return true;
+    }
+    // Non-capturing groups, lookaheads, or lookbehinds.
+    if (/\(\?(?::|=|!|<=|<!)/.test(trimmed)) {
+        return true;
+    }
+    // Group alternation, e.g. (foo|bar).
+    if (/(^|[^\\])\([^)]*\|[^)]*\)/.test(trimmed)) {
+        return true;
+    }
+    // Quantified groups, e.g. (foo)+ or (foo){2}.
+    if (/(^|[^\\])\([^)]*\)([*+?]|\{\d+(,\d*)?\})/.test(trimmed)) {
+        return true;
+    }
+    // Quantified character classes, e.g. [A-Z]+.
+    if (/(^|[^\\])\[[^\]]+\]([*+?]|\{\d+(,\d*)?\})/.test(trimmed)) {
+        return true;
+    }
+    // Character classes with ranges, negation, or escapes. Plain [abc] is
+    // treated as literal-looking text to avoid noisy hints for tags/labels.
+    return /(^|[^\\])\[(\^|[^\]]*[-\\][^\]]*)\]/.test(trimmed);
+}
+
 export function normalizeIncludeGlob(pattern: string | undefined): string | undefined {
     const normalized = typeof pattern === 'string' ? toPosixPath(pattern.trim()) : '';
     if (!normalized) {
@@ -113,6 +152,25 @@ function expandUserExcludePattern(pattern: string): string[] {
 
 function hasGlobSyntax(value: string): boolean {
     return /[*?[\]{}]/.test(value);
+}
+
+function hasUnescapedRegexOr(value: string): boolean {
+    for (let index = 0; index < value.length; index++) {
+        if (value[index] === '|' && !isEscaped(value, index)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function isEscaped(value: string, index: number): boolean {
+    let backslashes = 0;
+    for (let cursor = index - 1; cursor >= 0 && value[cursor] === '\\'; cursor--) {
+        backslashes++;
+    }
+
+    return backslashes % 2 === 1;
 }
 
 function byteOffsetToStringIndex(text: string, byteOffset: number): number | undefined {

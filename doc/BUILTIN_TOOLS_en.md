@@ -18,8 +18,8 @@ Bare tool names only belong to these local tools. Tools exposed by third-party M
 | `read_file` | Reads UTF-8 text files inside the workspace. Supports `head`, `tail`, `start_line`, `end_line`, and `show_line_numbers` for ranged reads and line numbers. |
 | `write_file` | Creates or fully overwrites UTF-8 text files inside the workspace. |
 | `edit_file` | Applies exact text replacements or unified diff patches to text files inside the workspace. Use `dryRun` to return a diff preview. |
-| `search_files` | Searches files by filename or relative path using ripgrep file listing first, with substring and glob matching that is case-insensitive by default. |
-| `search_code` | Searches workspace text files with ripgrep and returns relative paths, line numbers, and matching lines. |
+| `search_files` | Searches files by filename or relative path using ripgrep file listing first, with substring and glob matching that is case-insensitive by default, and respects ignore files by default. |
+| `search_code` | Searches workspace text files with ripgrep and returns relative paths, line numbers, and matching lines; pass `match: "regex"` when using regex syntax. |
 | `execute_command` | Runs short-lived POSIX/bash commands in the background and returns stdout, stderr, and exitCode. It is intended for builds, tests, git, package managers, and project scripts. Prefer `read_file`, `search_files`, and `search_code` for reading or searching files. |
 | `run_in_terminal` | Starts a long-running POSIX shell command in a visible VS Code terminal session and immediately returns a `session_id`. It is intended for persistent tasks or output that should stay visible to the user. On Windows, Git Bash is required, and commands should use bash/POSIX syntax instead of cmd.exe or PowerShell syntax. Clearly destructive, privileged, or shell-escape commands are rejected before execution. |
 | `terminal_session` | Manages terminal sessions created by `run_in_terminal`: use `action=list` to inspect status, `action=read` to read output, and `action=stop` to stop a session. |
