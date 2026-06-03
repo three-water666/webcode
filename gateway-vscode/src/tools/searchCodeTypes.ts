@@ -4,7 +4,6 @@ export type SearchCodeOptions = {
     query: string;
     maxResults: number;
     includePattern?: string;
-    excludePatterns: string[];
     caseSensitive: boolean;
     useRegex: boolean;
     matchLineMaxChars: number;

@@ -1,6 +1,6 @@
 import type { SearchCodeOptions } from './searchCodeTypes';
 import {
-    createRipgrepExcludeGlobs,
+    createRipgrepGitMetadataExcludeGlobs,
     normalizeIncludeGlob
 } from './searchCodeUtils';
 
@@ -28,7 +28,7 @@ export function createSearchCodeRipgrepArgs(options: SearchCodeOptions): string[
         args.push('--glob', includePattern);
     }
 
-    for (const pattern of createRipgrepExcludeGlobs(options.excludePatterns)) {
+    for (const pattern of createRipgrepGitMetadataExcludeGlobs()) {
         args.push('--glob', `!${pattern}`);
     }
 

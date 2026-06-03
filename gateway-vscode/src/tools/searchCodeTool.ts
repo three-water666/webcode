@@ -2,7 +2,7 @@ import { spawn } from 'child_process';
 import type * as vscode from 'vscode';
 import type { LocalTool } from './types';
 import { textResult } from './result';
-import { DEFAULT_EXCLUDED_DIRECTORIES, getNumberArg, getStringArrayArg, resolveWorkspaceDirectory } from './filesystemUtils';
+import { getNumberArg, resolveWorkspaceDirectory } from './filesystemUtils';
 import { createSearchCodeFallbackNotice, searchCodeInProcess } from './searchCodeFallback';
 import { formatSearchCodeOutput, type SearchCodeResult } from './searchCodeOutput';
 import { appendRipgrepMatch } from './searchCodeRipgrepOutput';
@@ -17,15 +17,15 @@ import {
 } from './searchCodeUtils';
 import type { SearchCodeOptions } from './searchCodeTypes';
 
-const DEFAULT_EXCLUDED_DIRECTORY_NAMES = DEFAULT_EXCLUDED_DIRECTORIES.join(', ');
-
 export const searchCodeTool: LocalTool = {
     serverId: 'internal',
     definition: {
         name: 'search_code',
         description: [
-            'Search text content inside workspace files using ripgrep.',
-            'Returns relative file paths with line numbers and matching lines, ordered by path and line number.'
+            'Search text content inside workspace files.',
+            'Returns relative file paths with line numbers and matching lines, ordered by path and line number.',
+            'Backed by ripgrep when available and follows ripgrep default ignore behavior, so .gitignore/.ignore/.rgignore may hide files.',
+            'Git metadata directories are always skipped.'
         ].join(' '),
         inputSchema: {
             type: 'object',
@@ -70,16 +70,6 @@ export const searchCodeTool: LocalTool = {
                         'Long lines are cropped around the match. Default: 500.'
                     ].join(' '),
                     default: DEFAULT_MATCH_LINE_MAX_CHARS
-                },
-                exclude_patterns: {
-                    type: 'array',
-                    items: { type: 'string' },
-                    description: [
-                        'Additional glob patterns to exclude, merged with the default excluded directory names.',
-                        `Default excluded directory names: ${DEFAULT_EXCLUDED_DIRECTORY_NAMES}.`,
-                        'Patterns are matched against paths under the search root; bare names match anywhere.',
-                        'search_code uses ripgrep default ignore behavior, so .gitignore/.ignore may also exclude files.'
-                    ].join(' ')
                 }
             },
             required: ['query']
@@ -91,14 +81,12 @@ export const searchCodeTool: LocalTool = {
         const workspaceRoot = context.workspaceRoot ?? searchRoot;
         const query = String(args.query);
         const maxResults = getNumberArg(args.max_results, 100);
-        const excludePatterns = getStringArrayArg(args.exclude_patterns);
         const options = {
             searchRoot,
             workspaceRoot,
             query,
             maxResults,
             includePattern: typeof args.include === 'string' ? args.include : undefined,
-            excludePatterns,
             caseSensitive: args.case_sensitive === true,
             useRegex: getSearchCodeMatchMode(args.match) === 'regex',
             matchLineMaxChars: getBoundedSearchLineMaxChars(args.max_line_chars)
