@@ -38,6 +38,7 @@ export const PROTOCOL = {
 
 export const BOOTSTRAP_ONLY_TOOL_NAMES = [
   'get_project_rules',
+  'get_project_context',
   'list_tools',
   'list_skills',
 ] as const;

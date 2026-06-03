@@ -18,7 +18,7 @@ export async function buildWebcodeInitPrompt(options: WebcodeInitPromptOptions =
     : buildInitToolResultHeader();
   finalPrompt += i18n.resources.prompt ?? "";
 
-  Logger.log(`Initializing ${BRANDING.productName} with prompt, project rules, tool list, and skill list`, "action");
+  Logger.log(`Initializing ${BRANDING.productName} with prompt, project rules, project context, tool list, and skill list`, "action");
 
   try {
     const projectRules = (await executeInitToolCall("get_project_rules")).trim();
@@ -27,6 +27,15 @@ export async function buildWebcodeInitPrompt(options: WebcodeInitPromptOptions =
     }
   } catch (error) {
     Logger.log(`Project rules fetch failed: ${getErrorMessage(error)}`, "error");
+  }
+
+  try {
+    const projectContext = (await executeInitToolCall("get_project_context")).trim();
+    if (projectContext) {
+      finalPrompt += `\n\n${projectContext}`;
+    }
+  } catch (error) {
+    Logger.log(`Project context fetch failed: ${getErrorMessage(error)}`, "error");
   }
 
   try {
@@ -85,7 +94,7 @@ function formatToolOutput(data: unknown, fallback: string): string {
 }
 
 function getInitToolFallback(toolName: string): string {
-  return toolName === "get_project_rules" ? "" : "[]";
+  return toolName === "get_project_rules" || toolName === "get_project_context" ? "" : "[]";
 }
 
 function normalizeToolResponse(response: unknown): ToolExecutionResponse {

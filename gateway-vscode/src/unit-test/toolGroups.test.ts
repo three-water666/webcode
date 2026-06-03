@@ -8,6 +8,7 @@ suite('Gateway tool grouping', () => {
         const groups = generateGroupedTools(new Map(), new Map([
             ['list_tools', createLocalTool('list_tools')],
             ['get_project_rules', createLocalTool('get_project_rules')],
+            ['get_project_context', createLocalTool('get_project_context')],
             ['list_skills', createLocalTool('list_skills')],
             ['read_file', createLocalTool('read_file')]
         ]));
