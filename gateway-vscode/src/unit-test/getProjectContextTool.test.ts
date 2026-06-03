@@ -21,6 +21,7 @@ suite('Project Context Tool', () => {
             assert.ok(output.includes(`# Project Context`));
             assert.ok(output.includes(`- Current project folder: ${path.basename(workspaceRoot)}`));
             assert.ok(output.includes('- Git repository: no'));
+            assert.ok(!output.includes('- Git branch:'));
             assert.ok(output.includes('src/'));
             assert.ok(output.includes('src/index.ts'));
             assert.ok(output.includes('docs/guide.md'));
@@ -40,6 +41,7 @@ suite('Project Context Tool', () => {
             const output = await buildProjectContextForPrompt(workspaceRoot);
 
             assert.ok(output.includes('- Git repository: yes'));
+            assert.ok(output.includes('- Git branch: main'));
             assert.ok(output.includes('## Recent Git Commits'));
             assert.ok(output.includes('.git/'));
             assert.ok(!output.includes('.git/HEAD'));

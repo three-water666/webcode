@@ -13,6 +13,7 @@ type GitCommit = {
 };
 
 type GitSummary = {
+    branchName?: string;
     isGitRepository: boolean;
     recentCommits: GitCommit[];
 };
@@ -146,6 +147,7 @@ async function readGitSummary(workspaceRoot: string): Promise<GitSummary> {
     }
 
     return {
+        branchName: await readCurrentGitBranch(workspaceRoot),
         isGitRepository: true,
         recentCommits: parseGitLog(await readRecentGitLog(workspaceRoot))
     };
@@ -173,6 +175,19 @@ async function readRecentGitLog(workspaceRoot: string): Promise<string> {
     }
 }
 
+async function readCurrentGitBranch(workspaceRoot: string): Promise<string | undefined> {
+    const branchFromGit = await readCurrentGitBranchFromCommand(workspaceRoot);
+    return branchFromGit ?? await readCurrentGitBranchFromMetadata(workspaceRoot);
+}
+
+async function readCurrentGitBranchFromCommand(workspaceRoot: string): Promise<string | undefined> {
+    try {
+        return normalizeGitBranchName(await runGit(workspaceRoot, ['rev-parse', '--abbrev-ref', 'HEAD']));
+    } catch {
+        return undefined;
+    }
+}
+
 async function runGit(workspaceRoot: string, args: string[]): Promise<string> {
     const result = await execFileAsync('git', ['-C', workspaceRoot, ...args], {
         encoding: 'utf8',
@@ -181,6 +196,18 @@ async function runGit(workspaceRoot: string, args: string[]): Promise<string> {
         windowsHide: true
     });
     return String(result.stdout);
+}
+
+async function readCurrentGitBranchFromMetadata(workspaceRoot: string): Promise<string | undefined> {
+    const gitPath = path.join(workspaceRoot, '.git');
+    const gitDirectoryPath = await resolveGitDirectoryPath(gitPath);
+    if (!gitDirectoryPath) {return undefined;}
+
+    try {
+        return parseGitBranchFromHead(await fs.readFile(path.join(gitDirectoryPath, 'HEAD'), 'utf8'));
+    } catch {
+        return undefined;
+    }
 }
 
 async function hasGitMetadata(workspaceRoot: string): Promise<boolean> {
@@ -196,6 +223,19 @@ async function hasGitMetadata(workspaceRoot: string): Promise<boolean> {
     }
 }
 
+async function resolveGitDirectoryPath(gitPath: string): Promise<string | null> {
+    try {
+        const stats = await fs.stat(gitPath);
+        if (stats.isDirectory()) {return gitPath;}
+        if (!stats.isFile()) {return null;}
+
+        const gitDirectoryPath = parseGitDirectoryPointer(await fs.readFile(gitPath, 'utf8'));
+        return gitDirectoryPath ? path.resolve(path.dirname(gitPath), gitDirectoryPath) : null;
+    } catch {
+        return null;
+    }
+}
+
 async function isGitDirectory(gitPath: string): Promise<boolean> {
     try {
         const head = await fs.readFile(path.join(gitPath, 'HEAD'), 'utf8');
@@ -208,7 +248,7 @@ async function isGitDirectory(gitPath: string): Promise<boolean> {
 async function isGitFilePointer(gitPath: string): Promise<boolean> {
     try {
         const content = await fs.readFile(gitPath, 'utf8');
-        return /^gitdir:\s*\S+/i.test(content);
+        return parseGitDirectoryPointer(content) !== null;
     } catch {
         return false;
     }
@@ -219,6 +259,7 @@ function formatProjectContext(projectName: string, structure: StructureSummary, 
         '# Project Context',
         `- Current project folder: ${projectName}`,
         `- Git repository: ${git.isGitRepository ? 'yes' : 'no'}`,
+        ...formatGitBranchLine(git),
         '',
         '## Project Structure',
         `Depth 2, breadth-first, up to ${MAX_TOTAL_STRUCTURE_ENTRIES} entries.`,
@@ -239,6 +280,10 @@ function formatProjectContext(projectName: string, structure: StructureSummary, 
     return lines.join('\n');
 }
 
+function formatGitBranchLine(git: GitSummary): string[] {
+    return git.isGitRepository && git.branchName ? [`- Git branch: ${git.branchName}`] : [];
+}
+
 function parseGitLog(output: string): GitCommit[] {
     return output
         .split(/\r?\n/)
@@ -254,6 +299,21 @@ function parseGitLogLine(line: string): GitCommit {
         date,
         subject: subjectParts.join('\t') || '(no subject)'
     };
+}
+
+function normalizeGitBranchName(output: string): string | undefined {
+    const branchName = output.trim();
+    return branchName && branchName !== 'HEAD' ? branchName : undefined;
+}
+
+function parseGitBranchFromHead(content: string): string | undefined {
+    const match = content.trim().match(/^ref:\s+refs\/heads\/(.+)$/);
+    return match?.[1];
+}
+
+function parseGitDirectoryPointer(content: string): string | null {
+    const match = content.trim().match(/^gitdir:\s*(\S.*)$/i);
+    return match?.[1].trim() ?? null;
 }
 
 function formatGitCommit(commit: GitCommit): string {
