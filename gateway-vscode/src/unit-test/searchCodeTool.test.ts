@@ -12,8 +12,9 @@ import { createSearchCandidate, sortSearchCandidatesByRelativePath } from '../to
 import { appendRipgrepMatch } from '../tools/searchCodeRipgrepOutput';
 import type { SearchCodeOptions } from '../tools/searchCodeTypes';
 import {
-    createRipgrepExcludeGlobs,
+    createRipgrepGitMetadataExcludeGlobs,
     getSearchCodeMatchMode,
+    isGitMetadataPath,
     looksLikeRegexQuery,
     normalizeIncludeGlob,
     truncateSearchMatchLine
@@ -116,13 +117,14 @@ suite('Search Code Tool', () => {
         )));
     });
 
-    test('excludes common generated and test artifact directories by default', () => {
-        const globs = createRipgrepExcludeGlobs([]);
+    test('keeps only git metadata as an internal ripgrep exclusion', () => {
+        const globs = createRipgrepGitMetadataExcludeGlobs();
 
-        assert.ok(globs.includes('.vscode-test/**'));
-        assert.ok(globs.includes('**/.vscode-test/**'));
-        assert.ok(globs.includes('.next/**'));
-        assert.ok(globs.includes('target/**'));
+        assert.deepStrictEqual(globs, ['.git', '**/.git', '.git/**', '**/.git/**']);
+        assert.ok(isGitMetadataPath('.git/config'));
+        assert.ok(isGitMetadataPath('nested/.git/config'));
+        assert.ok(!isGitMetadataPath('node_modules/package/index.js'));
+        assert.ok(!globs.includes('target/**'));
     });
 
     test('crops long matching lines around the match', () => {
@@ -220,7 +222,6 @@ function createOptions(overrides: Partial<SearchCodeOptions> = {}): SearchCodeOp
         workspaceRoot: root,
         query: 'needle',
         maxResults: 100,
-        excludePatterns: [],
         caseSensitive: true,
         useRegex: false,
         matchLineMaxChars: 500,

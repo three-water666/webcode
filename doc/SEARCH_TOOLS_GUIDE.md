@@ -53,7 +53,6 @@ webcode 早期的文件查找和代码查找采用了两套不同实现：
 | `match` | query 解释方式：`auto`、`substring`、`glob`，默认 `auto`。 |
 | `case_sensitive` | 是否区分大小写，默认 `false`。 |
 | `max_results` | 最多返回多少个匹配文件，默认 200。达到上限时输出会提示结果已被限制。 |
-| `exclude_patterns` | 额外排除的 glob 模式，会和内置默认排除目录合并，完整列表见“排除规则”。通常按本次 `path` 搜索根下的相对路径生效；裸名称会扩展为任意层级匹配。 |
 
 ### path
 
@@ -163,7 +162,6 @@ webcode 早期的文件查找和代码查找采用了两套不同实现：
 | `case_sensitive` | 是否区分大小写，默认 `false`。 |
 | `max_results` | 最多返回多少条命中行，默认 100。达到上限时输出会提示结果已被限制。 |
 | `max_line_chars` | 每条命中行最多返回多少字符，默认 500。 |
-| `exclude_patterns` | 额外排除的 glob 模式，会和内置默认排除目录合并，完整列表见“排除规则”。通常按本次 `path` 搜索根下的相对路径生效；裸名称会扩展为任意层级匹配。 |
 
 `search_code` 不再使用 `use_regex`。是否启用正则只由 `match` 控制。
 
@@ -241,152 +239,26 @@ event.preventDefault();
 }
 ```
 
-## 排除规则
+## ignore 与 .git 规则
 
-`exclude_patterns` 不会覆盖默认排除项，而是与默认排除项合并。
+两个搜索工具不维护普通目录的内置排除列表。`node_modules`、`dist`、`build`、`coverage` 等目录是否被搜索，取决于项目的 ignore 文件、当前 `path` 和搜索条件。
 
-内置默认排除目录包括：
+两个工具也不提供额外排除参数。结果过多时，应优先收紧正向范围：
 
-- `.git`
-- `node_modules`
-- `.pnpm-store`
-- `.vscode-test`
-- `.next`
-- `.nuxt`
-- `.svelte-kit`
-- `.turbo`
-- `.cache`
-- `.parcel-cache`
-- `.pytest_cache`
-- `.mypy_cache`
-- `.ruff_cache`
-- `.tox`
-- `.venv`
-- `venv`
-- `.gradle`
-- `dist`
-- `out`
-- `build`
-- `target`
-- `coverage`
+- `search_files`：细化 `path`、`query` 或 `match`。
+- `search_code`：细化 `path`、`query`、`include` 或 `match`。
 
-因此实际排除集合是：
+### .git 元数据
 
-```text
-内置默认排除目录 + exclude_patterns
-```
+`.git` 是唯一的内部硬排除。两个工具都会跳过仓库元数据目录，包括 workspace 根目录下的 `.git` 和嵌套仓库的 `.git`。
 
-### 默认排除目录的生效范围
-
-默认排除目录用于阻止搜索从当前搜索根继续递归进入这些目录。它不会阻止用户把 `path` 直接设置到这些目录内部。
-
-例如，从 workspace 根目录搜索：
-
-```json
-{
-  "path": ".",
-  "query": "react"
-}
-```
-
-默认不会进入 `node_modules`。
-
-但明确搜索某个库：
-
-```json
-{
-  "path": "node_modules/react",
-  "query": "*"
-}
-```
-
-可以列出 `node_modules/react` 下的文件。此时默认排除规则不会因为搜索根本身位于 `node_modules` 而拒绝整个搜索；但如果这个目录里面还有嵌套的 `node_modules`、`dist`、`build` 等默认排除目录，仍会被跳过。
-
-### exclude_patterns 的匹配基准
-
-`exclude_patterns` 推荐按本次 `path` 搜索根下的相对路径来写。
-
-例如：
-
-```json
-{
-  "path": "gateway-vscode/src",
-  "query": "*.ts",
-  "exclude_patterns": ["**/*.test.ts"]
-}
-```
-
-会排除 `gateway-vscode/src` 下任意层级的 `.test.ts`。
-
-如果 pattern 不含 `/` 且不含 glob 语法，会被扩展为“任意层级同名文件或目录”：
-
-```json
-{
-  "exclude_patterns": ["fixtures"]
-}
-```
-
-会按类似下面的规则处理：
-
-```text
-fixtures
-**/fixtures
-**/fixtures/**
-```
-
-因此裸名称适合排除某个目录名或文件名。
-
-如果 pattern 包含 `/`，它通常按搜索根相对路径匹配：
-
-```json
-{
-  "path": "node_modules/react",
-  "exclude_patterns": ["cjs/**"]
-}
-```
-
-会排除 `node_modules/react/cjs` 下的文件。
-
-需要注意：如果已经把 `path` 设到某个子目录里，再写 workspace 根目录风格的排除路径，可能不会按预期生效。
-
-例如：
-
-```json
-{
-  "path": "node_modules/react",
-  "exclude_patterns": ["node_modules/react/cjs/**"]
-}
-```
-
-对 `search_code` 来说，这类 pattern 通常不会匹配，因为 ripgrep 看到的是相对 `node_modules/react` 的路径，例如 `cjs/react.development.js`，而不是 `node_modules/react/cjs/react.development.js`。
-
-推荐写法是：
-
-```json
-{
-  "path": "node_modules/react",
-  "exclude_patterns": ["cjs/**"]
-}
-```
-
-`search_files` 在最终结果过滤时会同时检查搜索根相对路径和 workspace 相对路径，因此对某些 workspace 根目录风格 pattern 更宽容；但为了让 `search_files` 和 `search_code` 心智一致，仍推荐按当前 `path` 内的相对路径写。
-
-示例：
-
-```json
-{
-  "query": "*.ts",
-  "exclude_patterns": ["**/*.test.ts"]
-}
-```
-
-这会在默认排除目录之外，再排除所有 `.test.ts` 文件。
+即使把 `path` 直接指向 `.git`，搜索结果也不会返回 `.git` 元数据文件。
 
 ### rg ignore 文件行为
 
-`exclude_patterns` 是 webcode 工具参数；`.gitignore`、`.ignore`、`.rgignore` 是 ripgrep/git 的 ignore 机制。两个搜索工具默认都尊重 ignore 文件：
+`.gitignore`、`.ignore`、`.rgignore` 是 ripgrep/git 的 ignore 机制。两个搜索工具默认都尊重 ignore 文件：
 
-> **行为变更**：`search_files` 现在默认尊重 ignore 文件。以前能直接搜到的 `dist/`、`.env` 等被 ignore 文件，可能需要已知路径后用 `read_file` 读取，或把 `path` 指向更具体的默认排除目录内部。
+> **行为变更**：`search_files` 现在默认尊重 ignore 文件。以前能直接搜到的 `dist/`、`.env` 等被 ignore 文件，可能需要已知路径后用 `read_file` 读取，或把 `path` 指向更具体的目录。
 
 | 工具 | ripgrep ignore 行为 | 原因 |
 | --- | --- | --- |
@@ -397,7 +269,7 @@ fixtures
 
 - 想“发现文件是否存在”，优先用 `search_files`。
 - 想“搜索被 ignore 文件的内容”，如果已知路径，优先用 `read_file` 直接读取。
-- 想看默认排除目录里的依赖源码，把 `path` 直接设置到具体库目录，例如 `node_modules/react`。
+- 想看依赖源码，把 `path` 直接设置到具体库目录，例如 `node_modules/react`。
 
 ## ripgrep 与 fallback
 
@@ -412,7 +284,7 @@ fixtures
 - `search_code` 使用进程内文本扫描 fallback。
 - `search_files` 优先用 `git ls-files --cached --others --exclude-standard` fallback；如果 git 不可用，再使用 workspace 文件遍历 fallback。
 
-fallback 的目标是保持工具可用，但速度和能力可能弱于 ripgrep。`search_files` 的 git fallback 会尊重 git ignore 规则；最终的文件遍历 fallback 只应用内置默认排除目录和 `exclude_patterns`。
+fallback 的目标是保持工具可用，但速度和能力可能弱于 ripgrep。`search_files` 的 git fallback 会尊重 git ignore 规则；最终的文件遍历 fallback 不解析 ignore 文件，只跳过 `.git` 元数据目录。
 
 ## search_files 与 .gitignore
 
@@ -429,10 +301,10 @@ git ls-files --cached --others --exclude-standard
 因此 `search_files` 的默认文件可见性是：
 
 ```text
-workspace 范围 + ignore 文件 + 内置默认排除目录 + exclude_patterns
+workspace 范围 + ignore 文件 + .git 元数据排除
 ```
 
-如果 ripgrep 和 git 都不可用，最终会退回 workspace 文件遍历。这个最后兜底路径不解析 ignore 文件，只应用内置默认排除目录和 `exclude_patterns`。
+如果 ripgrep 和 git 都不可用，最终会退回 workspace 文件遍历。这个最后兜底路径不解析 ignore 文件，只跳过 `.git` 元数据目录。
 
 ## 输出格式
 
@@ -461,7 +333,7 @@ Hint: query "." matches a literal dot. Use query "*" to list files.
 达到 `max_results` 上限时，结果末尾会提示可能还有更多结果。例如：
 
 ```text
-[search_files] Results limited to 200 file(s). There may be more results. Narrow query/path/exclude_patterns or raise max_results.
+[search_files] Results limited to 200 file(s). There may be more results. Narrow query/path or raise max_results.
 ```
 
 ### search_code
@@ -479,7 +351,7 @@ relative/path.ts:123: matching line text
 达到 `max_results` 上限时，结果末尾会提示可能还有更多结果。例如：
 
 ```text
-[search_code] Results limited to 100 match(es). There may be more results. Narrow query/path/include/exclude_patterns or raise max_results.
+[search_code] Results limited to 100 match(es). There may be more results. Narrow query/path/include or raise max_results.
 ```
 
 无匹配时，如果 query 看起来像正则但当前是默认 substring 模式，输出会附带提示：
@@ -527,7 +399,6 @@ Hint: query looks like a regular expression. Did you mean to set match: "regex"?
 - `search_code` 当前只返回命中行，不返回前后文。需要上下文时继续用 `read_file` 按行号读取。
 - `search_files` 暂不支持 `queries: []` 多 query 字段。简单 OR 可用 glob brace，例如 `*{foo,bar}*`。
 - `path` 只支持单个目录，不支持多目录或 glob 目录。
-- `exclude_patterns` 只能增加排除项，不能关闭内置默认排除目录。
 - `search_code` fallback 会跳过过大的文件和二进制文件，能力弱于 ripgrep。
 - `search_code` 正则 fallback 使用 JavaScript `RegExp`，和 ripgrep 正则存在少数语法差异。
 
@@ -535,6 +406,5 @@ Hint: query looks like a regular expression. Did you mean to set match: "regex"?
 
 - 给 `search_code` 增加 `context_lines`，直接返回命中行前后文。
 - 给 `search_files` 增加 `queries`，支持多个查询条件，不依赖 glob brace。
-- 增加 `use_default_excludes: false`，允许高级用户搜索 `dist`、`build` 等默认排除目录。
 - 增加更结构化的返回内容，例如总候选数、是否截断、实际匹配模式。
 - 为 `search_code` 正则模式补充更多 ripgrep 与 fallback 差异测试。

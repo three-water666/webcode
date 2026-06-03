@@ -11,7 +11,6 @@ export type WorkspacePathOptions = {
 };
 
 type WalkOptions = {
-    excludePatterns?: string[];
     includePattern?: string;
 };
 
@@ -36,33 +35,6 @@ type DiffBounds = {
     oldEnd: number;
     newEnd: number;
 };
-
-export const DEFAULT_EXCLUDED_DIRECTORIES = [
-    '.git',
-    'node_modules',
-    '.pnpm-store',
-    '.vscode-test',
-    '.next',
-    '.nuxt',
-    '.svelte-kit',
-    '.turbo',
-    '.cache',
-    '.parcel-cache',
-    '.pytest_cache',
-    '.mypy_cache',
-    '.ruff_cache',
-    '.tox',
-    '.venv',
-    'venv',
-    '.gradle',
-    'dist',
-    'out',
-    'build',
-    'target',
-    'coverage'
-] as const;
-
-const DEFAULT_EXCLUDED_DIRECTORY_SET: ReadonlySet<string> = new Set(DEFAULT_EXCLUDED_DIRECTORIES);
 
 export function normalizeLineEndings(text: string): string {
     return text.replace(/\r\n/g, '\n');
@@ -195,7 +167,7 @@ async function visitWorkspaceEntry(
     const normalizedRelative = toPosixPath(path.relative(context.rootPath, absolute));
 
     if (entry.isDirectory()) {
-        return visitWorkspaceDirectory(context, absolute, normalizedRelative, entry.name);
+        return visitWorkspaceDirectory(context, absolute, entry.name);
     }
     if (!entry.isFile() || shouldSkipFile(context, normalizedRelative, entry.name)) {
         return false;
@@ -207,26 +179,20 @@ async function visitWorkspaceEntry(
 async function visitWorkspaceDirectory(
     context: WalkContext,
     absolute: string,
-    normalizedRelative: string,
     entryName: string
 ): Promise<boolean> {
-    if (shouldSkipDirectory(context, normalizedRelative, entryName)) {
+    if (shouldSkipDirectory(entryName)) {
         return false;
     }
 
     return walkDirectory(context, absolute);
 }
 
-function shouldSkipDirectory(context: WalkContext, normalizedRelative: string, entryName: string): boolean {
-    return DEFAULT_EXCLUDED_DIRECTORY_SET.has(entryName) ||
-        matchesAnyPattern(normalizedRelative, context.options.excludePatterns ?? []);
+function shouldSkipDirectory(entryName: string): boolean {
+    return entryName === '.git';
 }
 
 function shouldSkipFile(context: WalkContext, normalizedRelative: string, entryName: string): boolean {
-    if (matchesAnyPattern(normalizedRelative, context.options.excludePatterns ?? [])) {
-        return true;
-    }
-
     return !matchesIncludePattern(context.options.includePattern, normalizedRelative, entryName);
 }
 
