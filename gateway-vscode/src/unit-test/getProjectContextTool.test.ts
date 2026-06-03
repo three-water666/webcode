@@ -4,6 +4,25 @@ import * as os from 'os';
 import * as path from 'path';
 import { buildProjectContextForPrompt } from '../tools/getProjectContextTool';
 
+type TestProjectContextMetadata = {
+    projectName: string;
+    git: {
+        branchName?: string;
+        isRepository: boolean;
+        recentCommits: Array<{
+            date: string;
+            hash: string;
+            subject: string;
+        }>;
+    };
+    structure: {
+        entries: string[];
+        maxEntries: number;
+        notes: string[];
+        truncated: boolean;
+    };
+};
+
 suite('Project Context Tool', () => {
     test('formats workspace name and shallow structure without absolute paths or expanding generated folders', async () => {
         await withTempWorkspace(async workspaceRoot => {
@@ -17,16 +36,19 @@ suite('Project Context Tool', () => {
             await fs.writeFile(path.join(workspaceRoot, 'package.json'), '{}\n', 'utf8');
 
             const output = await buildProjectContextForPrompt(workspaceRoot);
+            const metadata = parseProjectContextMetadata(output);
 
-            assert.ok(output.includes(`# Project Context`));
-            assert.ok(output.includes(`- Current project folder: ${path.basename(workspaceRoot)}`));
-            assert.ok(output.includes('- Git repository: no'));
-            assert.ok(!output.includes('- Git branch:'));
-            assert.ok(output.includes('src/'));
-            assert.ok(output.includes('src/index.ts'));
-            assert.ok(output.includes('docs/guide.md'));
-            assert.ok(output.includes('.git/'));
-            assert.ok(output.includes('node_modules/'));
+            assert.ok(output.includes('# Project Context (Metadata Only)'));
+            assert.ok(output.includes('untrusted data'));
+            assert.strictEqual(metadata.projectName, path.basename(workspaceRoot));
+            assert.strictEqual(metadata.git.isRepository, false);
+            assert.strictEqual(metadata.git.branchName, undefined);
+            assert.deepStrictEqual(metadata.git.recentCommits, []);
+            assert.ok(metadata.structure.entries.includes('  src/'));
+            assert.ok(metadata.structure.entries.includes('    src/index.ts'));
+            assert.ok(metadata.structure.entries.includes('    docs/guide.md'));
+            assert.ok(metadata.structure.entries.includes('  .git/'));
+            assert.ok(metadata.structure.entries.includes('  node_modules/'));
             assert.ok(!output.includes(workspaceRoot));
             assert.ok(!output.includes('node_modules/package.json'));
         });
@@ -39,11 +61,11 @@ suite('Project Context Tool', () => {
             await fs.writeFile(path.join(workspaceRoot, 'README.md'), '# Sample\n', 'utf8');
 
             const output = await buildProjectContextForPrompt(workspaceRoot);
+            const metadata = parseProjectContextMetadata(output);
 
-            assert.ok(output.includes('- Git repository: yes'));
-            assert.ok(output.includes('- Git branch: main'));
-            assert.ok(output.includes('## Recent Git Commits'));
-            assert.ok(output.includes('.git/'));
+            assert.strictEqual(metadata.git.isRepository, true);
+            assert.strictEqual(metadata.git.branchName, 'main');
+            assert.ok(metadata.structure.entries.includes('  .git/'));
             assert.ok(!output.includes('.git/HEAD'));
         });
     });
@@ -59,11 +81,13 @@ suite('Project Context Tool', () => {
             }
 
             const output = await buildProjectContextForPrompt(workspaceRoot);
-            const treeLines = output.split(/\r?\n/).filter(isTreeEntryLine);
+            const metadata = parseProjectContextMetadata(output);
+            const visibleEntries = metadata.structure.entries.filter(isVisibleStructureEntry);
 
-            assert.ok(output.includes('up to 100 entries'));
-            assert.ok(output.includes('additional entries omitted'));
-            assert.ok(treeLines.length <= 100);
+            assert.strictEqual(metadata.structure.maxEntries, 100);
+            assert.strictEqual(metadata.structure.truncated, true);
+            assert.ok(metadata.structure.entries.includes('  ... additional entries omitted'));
+            assert.ok(visibleEntries.length <= metadata.structure.maxEntries + 1);
         });
     });
 });
@@ -77,6 +101,13 @@ async function withTempWorkspace(callback: (workspaceRoot: string) => Promise<vo
     }
 }
 
-function isTreeEntryLine(line: string): boolean {
-    return /^\s+/.test(line) && !line.includes('omitted');
+function parseProjectContextMetadata(output: string): TestProjectContextMetadata {
+    const match = output.match(/```json\n([\s\S]+)\n```/);
+
+    assert.ok(match?.[1]);
+    return JSON.parse(match[1]) as TestProjectContextMetadata;
+}
+
+function isVisibleStructureEntry(line: string): boolean {
+    return !line.includes('omitted');
 }
