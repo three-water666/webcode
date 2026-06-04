@@ -59,7 +59,7 @@ Notes:
 
 - No manual browser-extension installation is needed.
 - Sign-in state is separate from your everyday Edge profile, so you need to sign in to the target AI site once inside this isolated profile.
-- After signing in, return to VS Code and open the same AI site from the webcode launch menu again. Some sites redirect after sign-in, which can invalidate the first connection token.
+- If sign-in redirects to a third-party provider such as Google or Microsoft, the bridge pauses page capabilities and keeps the session; it resumes automatically after the browser returns to the target AI site.
 - You can choose `Open Edge Isolated Profile` from the webcode menu to open the dedicated profile directly for sign-in or extension management.
 - After a VS Code extension upgrade, an already-running isolated Edge process may keep using the old bundled bridge. The bridge page will show a version mismatch; close all isolated Edge windows and launch from VS Code again to load the new bridge.
 
