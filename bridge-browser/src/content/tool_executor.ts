@@ -16,7 +16,7 @@ import { type ToolRequestIdentity, type ToolRequestRegistry } from "./tool_reque
 
 interface ToolExecutorOptions {
   getSelectors: () => SiteSelectors | null;
-  getPlatformId: () => string | null;
+  getSiteId: () => string | null;
   getWorkspaceId: () => string;
   getApprovalState: () => ApprovalState;
   requestRegistry: ToolRequestRegistry;
@@ -198,7 +198,7 @@ export class ToolExecutor {
    */
   private async initializeWebcode(request: ToolExecutionRequest): Promise<void> {
     const finalPrompt = await buildWebcodeInitPrompt({
-      platformId: this.options.getPlatformId(),
+      siteId: this.options.getSiteId(),
     });
 
     this.options.requestRegistry.saveRawResult(request.identity.requestKey, finalPrompt);

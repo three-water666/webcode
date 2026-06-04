@@ -2,12 +2,12 @@ import * as crypto from 'crypto';
 import type express from 'express';
 import { BRANDING } from '@webcode/shared';
 
-import { getDefaultBridgeTarget } from '../platforms';
+import { findAiSiteById, isTargetAllowedForSite, type ResolvedAiSiteConfig } from '../platforms';
 import type { GatewayLogger } from './types';
 
 type BridgeRouteOptions = {
     getPort: () => number;
-    getAllowedOrigins: () => readonly string[];
+    getAiSites: () => readonly ResolvedAiSiteConfig[];
     getWorkspaceRoot: () => string | null;
     log: GatewayLogger;
 };
@@ -22,10 +22,18 @@ function createWorkspaceId(workspaceRoot: string | null): string {
 
 export function registerBridgeRoute(app: express.Express, options: BridgeRouteOptions): void {
     app.get('/bridge', (req, res) => {
-        const rawTarget = getSingleQueryValue(req.query.target) ?? getDefaultBridgeTarget();
-        const target = resolveAllowedBridgeTarget(rawTarget, options.getAllowedOrigins());
+        const aiSites = options.getAiSites();
+        const site = resolveBridgeSite(getSingleQueryValue(req.query.siteId), aiSites);
+        if (!site) {
+            options.log(`⛔ Rejected bridge site id: ${getSingleQueryValue(req.query.siteId) ?? '<missing>'}`);
+            res.status(400).send(renderInvalidBridgePage());
+            return;
+        }
+
+        const rawTarget = getSingleQueryValue(req.query.target) ?? site.address;
+        const target = resolveAllowedBridgeTarget(rawTarget, site);
         if (!target) {
-            options.log(`⛔ Rejected bridge target: ${rawTarget}`);
+            options.log(`⛔ Rejected bridge target for ${site.id}: ${rawTarget}`);
             res.status(400).send(renderInvalidBridgePage());
             return;
         }
@@ -35,14 +43,16 @@ export function registerBridgeRoute(app: express.Express, options: BridgeRouteOp
         const storeUrl = 'https://chromewebstore.google.com/detail/webcode-bridge/kghhldphcmpiimophipabdhldfipgiio';
         const workspaceId = createWorkspaceId(options.getWorkspaceRoot());
 
-        options.log(`🌉 Bridge handshake requested for workspace [${workspaceId}].`);
+        options.log(`🌉 Bridge handshake requested for ${site.id} in workspace [${workspaceId}].`);
 
-        res.send(renderBridgePage({ port, workspaceId, releaseUrl, storeUrl }));
+        res.send(renderBridgePage({ port, siteId: site.id, target, workspaceId, releaseUrl, storeUrl }));
     });
 }
 
 type BridgePageOptions = {
     port: number;
+    siteId: string;
+    target: string;
     workspaceId: string;
     releaseUrl: string;
     storeUrl: string;
@@ -50,6 +60,8 @@ type BridgePageOptions = {
 
 function renderBridgePage({
     port,
+    siteId,
+    target,
     workspaceId,
     releaseUrl,
     storeUrl
@@ -61,7 +73,7 @@ function renderBridgePage({
                 <body>
                     ${renderMainCard()}
 
-                    ${renderBridgeData({ port, workspaceId })}
+                    ${renderBridgeData({ port, siteId, target, workspaceId })}
 
                     ${renderInstallGuide({ releaseUrl, storeUrl })}
 
@@ -71,7 +83,10 @@ function renderBridgePage({
             `;
 }
 
-export function resolveAllowedBridgeTarget(rawTarget: string, allowedOrigins: readonly string[]): string | null {
+export function resolveAllowedBridgeTarget(
+    rawTarget: string,
+    site: Pick<ResolvedAiSiteConfig, 'address'>
+): string | null {
     let parsedTarget: URL;
     try {
         parsedTarget = new URL(rawTarget);
@@ -83,12 +98,22 @@ export function resolveAllowedBridgeTarget(rawTarget: string, allowedOrigins: re
         return null;
     }
 
-    const allowedOriginSet = new Set(allowedOrigins);
-    if (!allowedOriginSet.has(parsedTarget.origin)) {
+    if (!isTargetAllowedForSite(parsedTarget.href, site)) {
         return null;
     }
 
     return parsedTarget.href;
+}
+
+export function resolveBridgeSite(
+    rawSiteId: string | null,
+    aiSites: readonly ResolvedAiSiteConfig[]
+): ResolvedAiSiteConfig | null {
+    if (rawSiteId) {
+        return findAiSiteById(aiSites, rawSiteId);
+    }
+
+    return aiSites[0] ?? null;
 }
 
 function getSingleQueryValue(value: unknown): string | null {
@@ -103,7 +128,7 @@ function getSingleQueryValue(value: unknown): string | null {
     return null;
 }
 
-function renderBridgeData(options: Pick<BridgePageOptions, 'port' | 'workspaceId'>): string {
+function renderBridgeData(options: Pick<BridgePageOptions, 'port' | 'siteId' | 'target' | 'workspaceId'>): string {
     return `<script id="mcp-data" type="application/json">${escapeHtmlText(JSON.stringify(options))}</script>`;
 }
 

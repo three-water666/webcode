@@ -4,7 +4,7 @@ import { t } from '../i18n';
 import { getConfiguredAiSites } from '../platforms';
 import { launchBridge, launchIsolatedEdgeProfile } from './browserLauncher';
 import type { GatewayServiceController } from './serviceController';
-import type { AISiteConfig, CustomActionItem } from './types';
+import type { AISiteConfig, CustomActionItem, ResolvedAiSiteConfig } from './types';
 
 interface RegisterGatewayConnectCommandOptions {
     context: vscode.ExtensionContext;
@@ -121,13 +121,14 @@ async function showOnlineMenu(context: OnlineMenuContext): Promise<void> {
     await handleOnlineSelection(selection, aiSites, context);
 }
 
-function buildOnlineMenuItems(aiSites: AISiteConfig[]): CustomActionItem[] {
+function buildOnlineMenuItems(aiSites: ResolvedAiSiteConfig[]): CustomActionItem[] {
     // 2. 动态生成快速启动项 (仅显示 showQuickLaunch 为 true 的项)
     const quickLaunchItems: CustomActionItem[] = aiSites
         .filter(site => site.showQuickLaunch === true)
         .map(site => ({
             label: t('open_label', { name: site.name }),
             description: site.address.replace(/^https?:\/\//, ''),
+            siteId: site.id,
             target: site.address,
         }));
 
@@ -145,7 +146,7 @@ function buildOnlineMenuItems(aiSites: AISiteConfig[]): CustomActionItem[] {
 
 async function handleOnlineSelection(
     selection: CustomActionItem,
-    aiSites: AISiteConfig[],
+    aiSites: ResolvedAiSiteConfig[],
     context: OnlineMenuContext
 ): Promise<void> {
     // 0. 查看日志
@@ -188,6 +189,7 @@ async function handleOnlineSelection(
     if (selection.target) {
         launchBridge({
             context: context.extensionContext,
+            siteId: selection.siteId ?? '',
             targetUrl: selection.target,
             browserMode: 'auto',
             currentPort: context.currentPort,
@@ -197,7 +199,7 @@ async function handleOnlineSelection(
 }
 
 async function launchCustomBridge(
-    aiSites: AISiteConfig[],
+    aiSites: ResolvedAiSiteConfig[],
     extensionContext: vscode.ExtensionContext,
     currentPort: number,
     currentToken: string
@@ -206,6 +208,7 @@ async function launchCustomBridge(
     const aiOptionsForCustomLaunch: CustomActionItem[] = aiSites.map(site => ({
         label: `$(globe) ${site.name}`,
         description: site.address,
+        siteId: site.id,
         target: site.address,
     }));
 
@@ -242,6 +245,7 @@ async function launchCustomBridge(
 
     launchBridge({
         context: extensionContext,
+        siteId: aiSelection.siteId ?? "",
         targetUrl: aiSelection.target ?? "",
         browserMode: browserSelection.value ?? "",
         currentPort,

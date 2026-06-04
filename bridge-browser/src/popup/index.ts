@@ -1,5 +1,5 @@
 import { BRANDING } from '@webcode/shared';
-import { isMessageRequest, isStatusResponse, isStoredSession, isSuccessResponse } from '../types';
+import { isMessageRequest, isStatusResponse, isSuccessResponse } from '../types';
 
 type PopupElements = {
   connectedView: HTMLElement;
@@ -9,14 +9,11 @@ type PopupElements = {
   manualInitBtn: HTMLButtonElement;
   autoSendInput: HTMLInputElement;
   showLogInput: HTMLInputElement;
-  availableView: HTMLElement;
-  gatewayList: HTMLElement;
   title: HTMLElement;
   connectedText: HTMLElement;
   portLabel: HTMLElement;
   autoSendLabel: HTMLElement;
   showLogLabel: HTMLElement;
-  availableGateways: HTMLElement;
   disconnectedTitle: HTMLElement;
   installedTitle: HTMLElement;
   installedDesc: HTMLElement;
@@ -34,11 +31,6 @@ type ManualInitStatusState = {
   token: number;
 };
 
-type GatewaySession = {
-  port: number;
-  token: string;
-};
-
 const UI: Record<string, Record<string, string>> = {
   en: {
     title: BRANDING.bridgeName,
@@ -53,13 +45,11 @@ const UI: Record<string, Record<string, string>> = {
     manual_init_unavailable: "Cannot initialize here",
     auto_send: "Auto Send Message",
     show_log: "Show Floating Log",
-    available_gateways: "⚡ Available Gateways",
     disconnected: "🔴 Disconnected",
     installed_title: "👉 Already Installed?",
     installed_desc: `Click ${BRANDING.productName} in the VS Code status bar (bottom right) and follow the steps to launch.`,
     not_installed_title: "👉 Not Installed?",
     marketplace_hint: "Search in VS Code Marketplace:",
-    connect_to: "Connect to",
   },
   zh: {
     title: BRANDING.bridgeName,
@@ -74,13 +64,11 @@ const UI: Record<string, Record<string, string>> = {
     manual_init_unavailable: "当前页面无法初始化",
     auto_send: "自动发送消息",
     show_log: "显示悬浮日志",
-    available_gateways: "⚡ 可用网关",
     disconnected: "🔴 未连接",
     installed_title: "👉 已安装？",
     installed_desc: `点击 VS Code 右下角状态栏中的 ${BRANDING.productName}，并按提示启动服务。`,
     not_installed_title: "👉 未安装？",
     marketplace_hint: "在 VS Code 扩展市场中搜索：",
-    connect_to: "连接到",
   },
 };
 
@@ -100,7 +88,7 @@ async function initializePopup(): Promise<void> {
   }
 
   listenForLogVisibilityChanges(currentTabId, context.elements);
-  requestCurrentStatus(currentTab, currentTabId, context);
+  requestCurrentStatus(currentTabId, context);
   bindPopupControls(currentTabId, context);
 }
 
@@ -123,14 +111,11 @@ function getPopupElements(): PopupElements {
     manualInitBtn: document.getElementById("manualInitBtn") as HTMLButtonElement,
     autoSendInput: document.getElementById("autoSend") as HTMLInputElement,
     showLogInput: document.getElementById("showLog") as HTMLInputElement,
-    availableView: document.getElementById("availableView") as HTMLElement,
-    gatewayList: document.getElementById("gatewayList") as HTMLElement,
     title: document.getElementById("title") as HTMLElement,
     connectedText: document.getElementById("connectedText") as HTMLElement,
     portLabel: document.getElementById("portLabel") as HTMLElement,
     autoSendLabel: document.getElementById("autoSendLabel") as HTMLElement,
     showLogLabel: document.getElementById("showLogLabel") as HTMLElement,
-    availableGateways: document.getElementById("availableGateways") as HTMLElement,
     disconnectedTitle: document.getElementById("disconnectedTitle") as HTMLElement,
     installedTitle: document.getElementById("installedTitle") as HTMLElement,
     installedDesc: document.getElementById("installedDesc") as HTMLElement,
@@ -148,7 +133,6 @@ function initializeLabels(context: PopupContext): void {
   elements.manualInitBtn.title = t("manual_init_title");
   elements.autoSendLabel.textContent = t("auto_send");
   elements.showLogLabel.textContent = t("show_log");
-  elements.availableGateways.innerHTML = `<span>⚡</span> ${t("available_gateways").replace(/^⚡\s*/, "")}`;
   elements.disconnectedTitle.textContent = t("disconnected");
   elements.installedTitle.textContent = t("installed_title");
   elements.installedDesc.innerHTML = renderInstalledDescription(t);
@@ -171,14 +155,14 @@ function listenForLogVisibilityChanges(currentTabId: number, elements: PopupElem
   });
 }
 
-function requestCurrentStatus(currentTab: chrome.tabs.Tab, currentTabId: number, context: PopupContext): void {
+function requestCurrentStatus(currentTabId: number, context: PopupContext): void {
   chrome.runtime.sendMessage(
     { type: "GET_STATUS", tabId: currentTabId },
     (response: unknown) => {
       if (isStatusResponse(response) && response.connected) {
         showConnectedStatus(response, context.elements);
       } else {
-        showDisconnectedStatus(currentTab.url ?? "", currentTabId, context);
+        showDisconnectedStatus(context.elements);
       }
     }
   );
@@ -192,103 +176,10 @@ function showConnectedStatus(response: { port?: number; showLog?: boolean }, ele
   elements.showLogInput.checked = response.showLog === true;
 }
 
-function showDisconnectedStatus(currentUrl: string, currentTabId: number, context: PopupContext): void {
-  context.elements.connectedView.classList.add("hidden");
-  context.elements.statusDot.classList.remove("online");
-
-  if (!isManualAttachUrl(currentUrl)) {
-    showNoAvailableGateways(context.elements);
-    return;
-  }
-
-  chrome.storage.local.get(null, (items: Record<string, unknown>) => {
-    renderAvailableGateways(collectStoredGateways(items), currentUrl, currentTabId, context);
-  });
-}
-
-function isManualAttachUrl(currentUrl: string): boolean {
-  return currentUrl.startsWith('http://127.0.0.1:') ||
-    currentUrl.startsWith('http://localhost:') ||
-    currentUrl.startsWith('https://') ||
-    currentUrl.startsWith('http://');
-}
-
-function collectStoredGateways(items: Record<string, unknown>): GatewaySession[] {
-  const uniqueGateways = new Map<number, string>();
-  for (const [key, value] of Object.entries(items)) {
-    if (key.startsWith("session_") && isStoredSession(value)) {
-      uniqueGateways.set(value.port, value.token);
-    }
-  }
-
-  return Array.from(uniqueGateways, ([port, token]) => ({ port, token }));
-}
-
-function renderAvailableGateways(
-  gateways: GatewaySession[],
-  currentUrl: string,
-  currentTabId: number,
-  context: PopupContext
-): void {
-  if (gateways.length === 0) {
-    showNoAvailableGateways(context.elements);
-    return;
-  }
-
-  context.elements.availableView.classList.remove("hidden");
-  context.elements.disconnectedView.classList.add("hidden");
-  context.elements.gatewayList.innerHTML = "";
-  for (const gateway of gateways) {
-    context.elements.gatewayList.appendChild(createGatewayButton(gateway, currentUrl, currentTabId, context.t));
-  }
-}
-
-function showNoAvailableGateways(elements: PopupElements): void {
-  elements.availableView.classList.add("hidden");
+function showDisconnectedStatus(elements: PopupElements): void {
+  elements.connectedView.classList.add("hidden");
+  elements.statusDot.classList.remove("online");
   elements.disconnectedView.classList.remove("hidden");
-}
-
-function createGatewayButton(
-  gateway: GatewaySession,
-  currentUrl: string,
-  currentTabId: number,
-  t: PopupContext["t"]
-): HTMLButtonElement {
-  const button = document.createElement("button");
-  button.className = "btn";
-  button.style.marginBottom = "8px";
-  button.style.display = "flex";
-  button.style.justifyContent = "space-between";
-  button.innerHTML = `<span>🔗 ${t("connect_to")} <b>${gateway.port}</b></span> <span>⚡</span>`;
-  button.onclick = () => {
-    connectExistingGateway(gateway, currentUrl, currentTabId);
-  };
-  return button;
-}
-
-function connectExistingGateway(gateway: GatewaySession, currentUrl: string, currentTabId: number): void {
-  chrome.runtime.sendMessage(
-    {
-      type: "CONNECT_EXISTING",
-      port: gateway.port,
-      token: gateway.token,
-      tabId: currentTabId,
-      targetOrigin: getTargetOrigin(currentUrl),
-    },
-    (response: unknown) => {
-      if (isSuccessResponse(response) && response.success) {
-        window.close();
-      }
-    }
-  );
-}
-
-function getTargetOrigin(currentUrl: string): string | undefined {
-  try {
-    return new URL(currentUrl).origin;
-  } catch {
-    return undefined;
-  }
 }
 
 function bindPopupControls(currentTabId: number, context: PopupContext): void {

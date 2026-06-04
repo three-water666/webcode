@@ -41,11 +41,11 @@ export const PLATFORM_PROMPT_KEY_PREFIX = 'platform_prompt_';
 export type PromptLanguage = 'zh' | 'en';
 
 export function getPlatformPromptStorageKey(
-  platformId: string | null | undefined,
+  siteId: string | null | undefined,
   lang: PromptLanguage
 ): string | null {
-  const normalizedPlatformId = normalizePlatformId(platformId);
-  return normalizedPlatformId ? `${PLATFORM_PROMPT_KEY_PREFIX}${normalizedPlatformId}_${lang}` : null;
+  const normalizedSiteId = normalizePromptSiteId(siteId);
+  return normalizedSiteId ? `${PLATFORM_PROMPT_KEY_PREFIX}${normalizedSiteId}_${lang}` : null;
 }
 
 export function joinPromptSections(...sections: Array<string | null | undefined>): string {
@@ -68,8 +68,8 @@ export function isBootstrapOnlyToolName(name: string): name is BootstrapOnlyTool
   return (BOOTSTRAP_ONLY_TOOL_NAMES as readonly string[]).includes(name);
 }
 
-function normalizePlatformId(platformId: string | null | undefined): string {
-  return String(platformId ?? '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+function normalizePromptSiteId(siteId: string | null | undefined): string {
+  return String(siteId ?? '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
 }
 
 /**
@@ -103,5 +103,8 @@ export interface Session {
   token: string;
   showLog: boolean;
   workspaceId: string;
+  siteId?: string;
+  targetOrigin?: string;
+  targetUrl?: string;
   allowedOrigins?: string[];
 }

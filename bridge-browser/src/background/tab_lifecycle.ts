@@ -18,7 +18,7 @@ export async function handleTabUpdated(
 
   if (changeInfo.url) {
     const session = await getSession(tabId);
-    const isSafe = await checkUrlSafety(changeInfo.url, session, isBridgePage);
+    const isSafe = checkUrlSafety(changeInfo.url, session, isBridgePage);
     if (!isSafe) {
       if (session) {
         console.log(`${BRANDING.logPrefix} Security Fuse: Url changed to ${changeInfo.url}, revoking session.`);
@@ -33,13 +33,18 @@ export async function handleTabUpdated(
     const session = await getSession(tabId);
     if (!session) {return;}
 
-    const isSafe = await checkUrlSafety(currentUrl, session, isBridgePage);
+    const isSafe = checkUrlSafety(currentUrl, session, isBridgePage);
 
     if (isSafe) {
       updateBadge(tabId, true);
       // [Sync] Restore connection state in Content Script after reload
       void chrome.tabs
-        .sendMessage(tabId, { type: "STATUS_UPDATE", connected: true, workspaceId: session.workspaceId })
+        .sendMessage(tabId, {
+          type: "STATUS_UPDATE",
+          connected: true,
+          workspaceId: session.workspaceId,
+          siteId: session.siteId,
+        })
         .catch(ignoreRuntimeError);
       if (session.showLog) {
         void chrome.tabs.sendMessage(tabId, { type: "TOGGLE_LOG", show: true }).catch(ignoreRuntimeError);

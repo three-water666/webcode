@@ -30,6 +30,7 @@ type HandshakeParams = {
   port: number;
   token: string;
   target: string;
+  siteId: string;
   targetOrigin?: string;
   workspaceId: string;
 };
@@ -95,11 +96,13 @@ function getHandshakeElements(): HandshakeElements {
 
 function readHandshakeParams(): HandshakeParams | null {
   const params = new URLSearchParams(window.location.search);
+  const bridgeData = readBridgeData();
   const token = params.get("token");
-  const target = params.get("target");
+  const target = bridgeData.target ?? params.get("target");
+  const siteId = bridgeData.siteId ?? params.get("siteId");
   const portStr = window.location.port;
 
-  if (!token || !target || !portStr) {
+  if (!token || !target || !siteId || !portStr) {
     return null;
   }
 
@@ -107,8 +110,9 @@ function readHandshakeParams(): HandshakeParams | null {
     port: Number.parseInt(portStr, 10),
     token,
     target,
+    siteId,
     targetOrigin: readTargetOrigin(target),
-    workspaceId: readWorkspaceId(),
+    workspaceId: bridgeData.workspaceId ?? "global",
   };
 }
 
@@ -126,7 +130,9 @@ function attemptHandshake(params: HandshakeParams, elements: HandshakeElements, 
       type: "HANDSHAKE",
       port: params.port,
       token: params.token,
+      siteId: params.siteId,
       targetOrigin: params.targetOrigin,
+      targetUrl: params.target,
       workspaceId: params.workspaceId,
       force,
     },
@@ -231,18 +237,24 @@ function showConnectionFailed(response: HandshakeResponse, elements: ReadyHandsh
   elements.statusText.style.color = "#ff6b6b";
 }
 
-function readWorkspaceId(): string {
+function readBridgeData(): Partial<Pick<HandshakeParams, "siteId" | "target" | "workspaceId">> {
   const dataEl = document.getElementById("mcp-data");
   const rawData = dataEl?.textContent ?? "";
   try {
     const parsed: unknown = JSON.parse(rawData);
-    if (isRecord(parsed) && typeof parsed.workspaceId === "string" && parsed.workspaceId) {
-      return parsed.workspaceId;
+    if (!isRecord(parsed)) {
+      return {};
     }
+
+    return {
+      siteId: typeof parsed.siteId === "string" && parsed.siteId ? parsed.siteId : undefined,
+      target: typeof parsed.target === "string" && parsed.target ? parsed.target : undefined,
+      workspaceId: typeof parsed.workspaceId === "string" && parsed.workspaceId ? parsed.workspaceId : undefined,
+    };
   } catch {
   }
 
-  return "global";
+  return {};
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

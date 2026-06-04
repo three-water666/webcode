@@ -16,7 +16,7 @@ import { buildWebcodeInitPrompt } from "./init_context";
 
 interface AutoInitPromptControllerOptions {
   getSelectors: () => SiteSelectors | null;
-  getPlatformId: () => string | null;
+  getSiteId: () => string | null;
   isClientConnected: () => boolean;
   loadPromptsFromStorage: () => Promise<void>;
 }
@@ -260,7 +260,7 @@ export class AutoInitPromptController {
     try {
       return await buildWebcodeInitPrompt({
         includeInitToolResultHeader: false,
-        platformId: this.options.getPlatformId(),
+        siteId: this.options.getSiteId(),
       });
     } catch (error) {
       Logger.log(`Direct initialization prompt build failed: ${getErrorMessage(error)}`, "error");

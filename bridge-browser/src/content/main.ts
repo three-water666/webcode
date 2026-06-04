@@ -4,7 +4,7 @@ import * as UI from "../modules/ui";
 import { type SiteSelectors } from "../modules/config";
 import { looksLikeToolCall, parseToolCall } from "../modules/toolCallProtocol";
 import { BRANDING, PROTOCOL } from "@webcode/shared";
-import { getSyncedAiSites, isMessageRequest, isSiteSelectors, isStatusResponse } from "../types";
+import { getSyncedAiSites, isMessageRequest, isSiteSelectors, isStatusResponse, type MessageRequest, type StatusResponse, type SyncedAiSite } from "../types";
 import { AutoInitPromptController } from "./auto_init_prompt";
 import { createApprovalState, parseStoredApprovalEntries, type ApprovalState } from "./approval_policy";
 import { CompletionNotifier } from "./completion_notifier";
@@ -66,8 +66,17 @@ void loadWorkspaceData(currentWorkspaceId);
 
 type RuntimeSendResponse = (response?: unknown) => void;
 
+// === DOM 选择器与配置 ===
+let DOM: SiteSelectors | null = null;
+let currentSiteName: string | null = null;
+let currentSiteId: string | null = null;
+
 // 监听消息 (日志开关 & 状态同步)
-chrome.runtime.onMessage.addListener((request: unknown, _sender, sendResponse): boolean | void => {
+chrome.runtime.onMessage.addListener((request: unknown, _sender, sendResponse): boolean | void => (
+  handleRuntimeMessage(request, sendResponse)
+));
+
+function handleRuntimeMessage(request: unknown, sendResponse: RuntimeSendResponse): boolean | void {
   if (!isMessageRequest(request)) {return;}
 
   if (request.type === "MANUAL_INIT") {
@@ -81,34 +90,52 @@ chrome.runtime.onMessage.addListener((request: unknown, _sender, sendResponse): 
     Logger.log("Logger Visible: " + show, "info");
   }
   if (request.type === "STATUS_UPDATE") {
-    const wasConnected = isClientConnected;
-    isClientConnected = request.connected === true;
-
-    const wasWorkspaceId = currentWorkspaceId;
-    if (typeof request.workspaceId === "string") {
-      currentWorkspaceId = request.workspaceId;
-    }
-
-    if (isClientConnected !== wasConnected) {
-      Logger.log(`[MCP] Connection Status: ${isClientConnected ? "Connected" : "Disconnected"}`, "info");
-    }
-
-    if (isClientConnected && (isClientConnected !== wasConnected || currentWorkspaceId !== wasWorkspaceId)) {
-      void (async () => {
-        // 连接状态或工作区发生变化时，页面 DOM 不一定会同步变化，因此不能只依赖 MutationObserver。
-        // 这里先刷新当前工作区的放行规则和提示词资源，再主动触发自动初始化检查和主循环扫描。
-        // runMainLoop 直接执行一次，可以立刻捕获页面上已经存在、但在连接前还不能执行的工具调用。
-        await loadWorkspaceData(currentWorkspaceId);
-        await loadPromptsFromStorage();
-        autoInitPrompt.scheduleCheck();
-        if (DOM) {
-          completionNotifier.observe(DOM);
-        }
-        runMainLoop();
-      })();
-    }
+    handleStatusUpdate(request);
   }
-});
+}
+
+function handleStatusUpdate(request: MessageRequest): void {
+  const wasConnected = isClientConnected;
+  const wasWorkspaceId = currentWorkspaceId;
+  const wasSiteId = currentSiteId;
+
+  isClientConnected = request.connected === true;
+  if (typeof request.workspaceId === "string") {
+    currentWorkspaceId = request.workspaceId;
+  }
+  if (typeof request.siteId === "string") {
+    currentSiteId = request.siteId;
+  }
+
+  if (!isClientConnected) {
+    resetCurrentSite();
+  }
+
+  if (isClientConnected !== wasConnected) {
+    Logger.log(`[MCP] Connection Status: ${isClientConnected ? "Connected" : "Disconnected"}`, "info");
+  }
+
+  if (isClientConnected && currentSiteId !== wasSiteId) {
+    initDOMConfig();
+  }
+
+  if (isClientConnected && (isClientConnected !== wasConnected || currentWorkspaceId !== wasWorkspaceId)) {
+    void refreshConnectedState();
+  }
+}
+
+async function refreshConnectedState(): Promise<void> {
+  // 连接状态或工作区发生变化时，页面 DOM 不一定会同步变化，因此不能只依赖 MutationObserver。
+  // 这里先刷新当前工作区的放行规则和提示词资源，再主动触发自动初始化检查和主循环扫描。
+  // runMainLoop 直接执行一次，可以立刻捕获页面上已经存在、但在连接前还不能执行的工具调用。
+  await loadWorkspaceData(currentWorkspaceId);
+  await loadPromptsFromStorage();
+  autoInitPrompt.scheduleCheck();
+  if (DOM) {
+    completionNotifier.observe(DOM);
+  }
+  runMainLoop();
+}
 
 async function handleManualInitRequest(sendResponse: RuntimeSendResponse): Promise<void> {
   try {
@@ -121,47 +148,76 @@ async function handleManualInitRequest(sendResponse: RuntimeSendResponse): Promi
   }
 }
 
-// === DOM 选择器与配置 ===
-let DOM: SiteSelectors | null = null;
-let currentPlatform: string | null = null;
-let currentPlatformId: string | null = null;
-
 const autoInitPrompt = new AutoInitPromptController({
   getSelectors: () => DOM,
-  getPlatformId: () => currentPlatformId,
+  getSiteId: () => currentSiteId,
   isClientConnected: () => isClientConnected,
   loadPromptsFromStorage,
 });
 
-function initDOMConfig() {
-  chrome.storage.sync.get(
-    ["autoSend"],
-    (items: Record<string, unknown>) => {
-      CONFIG.autoSend = typeof items.autoSend === "boolean" ? items.autoSend : true;
+function initDOMConfig(): void {
+  void loadDOMConfig();
+}
 
-      chrome.storage.local.get(["syncedAiSites"], (localItems: Record<string, unknown>) => {
-        const sites = getSyncedAiSites(localItems.syncedAiSites);
-        const currentUrl = location.href;
+async function loadDOMConfig(): Promise<void> {
+  const syncItems = await getStorage(chrome.storage.sync, ["autoSend"]);
+  CONFIG.autoSend = typeof syncItems.autoSend === "boolean" ? syncItems.autoSend : true;
 
-        // Find matching site by URL prefix
-        const matchedSite = sites.find((site) => currentUrl.startsWith(site.address));
+  const status = await getCurrentStatus();
+  if (!status?.connected || typeof status.siteId !== "string") {
+    resetCurrentSite();
+    console.log(`${BRANDING.productName}: Current tab is not connected to a configured site. Idle.`);
+    return;
+  }
 
-        if (matchedSite && isSiteSelectors(matchedSite.selectors)) {
-          DOM = matchedSite.selectors;
-          currentPlatform = matchedSite.name ?? matchedSite.address;
-          currentPlatformId = matchedSite.platformId ?? null;
-          completionNotifier.reset();
-          autoInitPrompt.setupTrigger();
-          void loadPromptsFromStorage();
-          autoInitPrompt.scheduleCheck();
-          startObserver();
-        } else {
-          currentPlatformId = null;
-          console.log(`${BRANDING.productName}: Current site is not configured in VS Code. Idle.`);
-        }
-      });
-    }
-  );
+  isClientConnected = true;
+  currentSiteId = status.siteId;
+  if (typeof status.workspaceId === "string") {
+    currentWorkspaceId = status.workspaceId;
+  }
+
+  const localItems = await getStorage(chrome.storage.local, ["syncedAiSites"]);
+  const sites = getSyncedAiSites(localItems.syncedAiSites);
+  applySyncedSiteConfig(status.siteId, sites);
+}
+
+function applySyncedSiteConfig(siteId: string, sites: SyncedAiSite[]): void {
+  const matchedSite = sites.find((site) => site.id === siteId);
+
+  if (matchedSite && isSiteSelectors(matchedSite.selectors)) {
+    DOM = matchedSite.selectors;
+    currentSiteName = matchedSite.name ?? matchedSite.id;
+    completionNotifier.reset();
+    autoInitPrompt.setupTrigger();
+    void loadPromptsFromStorage();
+    autoInitPrompt.scheduleCheck();
+    startObserver();
+    return;
+  }
+
+  DOM = null;
+  currentSiteName = null;
+  console.log(`${BRANDING.productName}: Site '${siteId}' is not configured in VS Code. Idle.`);
+}
+
+function resetCurrentSite(): void {
+  DOM = null;
+  currentSiteName = null;
+  currentSiteId = null;
+}
+
+function getCurrentStatus(): Promise<StatusResponse | null> {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ type: "GET_STATUS" }, (response: unknown) => {
+      resolve(isStatusResponse(response) ? response : null);
+    });
+  });
+}
+
+function getStorage(area: chrome.storage.StorageArea, keys: string[]): Promise<Record<string, unknown>> {
+  return new Promise((resolve) => {
+    area.get(keys, (items: Record<string, unknown>) => resolve(items));
+  });
 }
 
 chrome.storage.onChanged.addListener((changes, namespace) => {
@@ -181,7 +237,7 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
       initDOMConfig();
       Logger.log(t("config_updated"), "action");
     }
-    if (hasPromptResourceChange(changes, currentPlatformId)) {
+    if (hasPromptResourceChange(changes, currentSiteId)) {
       void loadPromptsFromStorage().then(() => {
         autoInitPrompt.scheduleCheck();
       });
@@ -208,7 +264,7 @@ const toolCallTracker = new ToolCallTracker({
 
 const toolExecutor = new ToolExecutor({
   getSelectors: () => DOM,
-  getPlatformId: () => currentPlatformId,
+  getSiteId: () => currentSiteId,
   getWorkspaceId: () => currentWorkspaceId,
   getApprovalState: () => approvalState,
   requestRegistry,
@@ -442,7 +498,7 @@ const observer = new MutationObserver(() => {
  * 立即刷新工作区数据、加载提示资源，并直接调用 runMainLoop 做一次首轮扫描。
  */
 function startObserver() {
-  if (!currentPlatform || !DOM) {return;}
+  if (!currentSiteName || !DOM) {return;}
   // Initialize observer only once
   const observerWindow = window as unknown as Record<string, boolean | undefined>;
   if (observerWindow[PROTOCOL.observerStartedFlag]) {return;}
@@ -466,7 +522,7 @@ function startObserver() {
         await loadWorkspaceData(currentWorkspaceId);
       }
       await loadPromptsFromStorage();
-      Logger.log(`${BRANDING.productName} activated for ${currentPlatform} (Connected)`, "info");
+      Logger.log(`${BRANDING.productName} activated for ${currentSiteName} (Connected)`, "info");
       // 连接恢复后先检查自动初始化触发词，再立刻扫描现有消息，避免等待下一次页面变化。
       autoInitPrompt.scheduleCheck();
       if (DOM) {
@@ -475,7 +531,7 @@ function startObserver() {
       runMainLoop();
     } else {
       isClientConnected = false;
-      console.log(`${BRANDING.productName} loaded for ${currentPlatform} (Disconnected - Idle)`);
+      console.log(`${BRANDING.productName} loaded for ${currentSiteName} (Disconnected - Idle)`);
       // Optional: Inform user that connection is missing
     }
   });

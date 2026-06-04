@@ -1,5 +1,6 @@
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 
+import type { ResolvedAiSiteConfig } from '../platforms';
 import type { ToolDefinition } from '../tools';
 
 export interface ServerConfig {
@@ -12,19 +13,12 @@ export interface ServerConfig {
     disabled?: boolean;
 }
 
-export interface AiSiteConfig {
-    address: string;
-    selectors?: Record<string, unknown>;
-}
-
-export type BuiltinSelectors = object;
-
 export interface GatewayConfig {
     port: number;
     preferredPort?: number;
     mcpServers: Record<string, ServerConfig>;
     allowedOrigins: string[];
-    aiSites?: AiSiteConfig[];
+    aiSites?: ResolvedAiSiteConfig[];
     skillDirectories?: string[];
     commandShellPath?: string;
 }

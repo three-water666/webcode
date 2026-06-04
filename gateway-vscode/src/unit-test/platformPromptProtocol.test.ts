@@ -3,7 +3,7 @@ import * as assert from 'assert';
 import { getPlatformPromptStorageKey, joinPromptSections, PLATFORM_PROMPT_KEY_PREFIX } from '@webcode/shared';
 
 suite('platform prompt protocol', () => {
-    test('builds platform prompt keys from platform id and language', () => {
+    test('builds platform prompt keys from site id and language', () => {
         assert.strictEqual(
             getPlatformPromptStorageKey('chatgpt', 'zh'),
             `${PLATFORM_PROMPT_KEY_PREFIX}chatgpt_zh`
@@ -14,7 +14,7 @@ suite('platform prompt protocol', () => {
         );
     });
 
-    test('does not build a prompt key without a platform id', () => {
+    test('does not build a prompt key without a site id', () => {
         assert.strictEqual(getPlatformPromptStorageKey(null, 'zh'), null);
         assert.strictEqual(getPlatformPromptStorageKey('', 'en'), null);
     });

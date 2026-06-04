@@ -11,14 +11,14 @@ interface ToolExecutionResponse {
 
 interface WebcodeInitPromptOptions {
   includeInitToolResultHeader?: boolean;
-  platformId?: string | null;
+  siteId?: string | null;
 }
 
 export async function buildWebcodeInitPrompt(options: WebcodeInitPromptOptions = {}): Promise<string> {
   let finalPrompt = options.includeInitToolResultHeader === false
     ? ""
     : buildInitToolResultHeader();
-  finalPrompt += await buildBasePrompt(options.platformId);
+  finalPrompt += await buildBasePrompt(options.siteId);
 
   Logger.log(`Initializing ${BRANDING.productName} with prompt, project rules, project context, tool list, and skill list`, "action");
 
@@ -56,8 +56,8 @@ export async function buildWebcodeInitPrompt(options: WebcodeInitPromptOptions =
   return finalPrompt;
 }
 
-async function buildBasePrompt(platformId?: string | null): Promise<string> {
-  const platformPrompt = await readPlatformPromptFromStorage(platformId);
+async function buildBasePrompt(siteId?: string | null): Promise<string> {
+  const platformPrompt = await readPlatformPromptFromStorage(siteId);
 
   return joinPromptSections(i18n.resources.prompt, platformPrompt);
 }

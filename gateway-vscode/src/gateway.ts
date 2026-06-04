@@ -4,7 +4,6 @@ import type { Server as HttpServer } from 'http';
 import * as vscode from 'vscode';
 
 import { getErrorMessage } from './gateway/errorUtils';
-import { getDefaultSelectors } from './platforms';
 import { SkillManager } from './skillManager';
 import { TerminalSessionManager } from './terminalSessionManager';
 import {
@@ -31,8 +30,6 @@ import type {
     ServerConfig,
     StartResult
 } from './gateway/types';
-
-const BUILTIN_SELECTORS = getDefaultSelectors();
 
 export class GatewayManager {
     private app: express.Express | null = null;
@@ -147,10 +144,10 @@ export class GatewayManager {
         this.app.use(createRequestLoggerMiddleware(() => this.resetWatchdog(), this.log.bind(this)));
         this.app.use(createAuthMiddleware(() => this.authToken, this.log.bind(this)));
 
-        registerConfigRoutes(this.app, config, BUILTIN_SELECTORS, this.log.bind(this));
+        registerConfigRoutes(this.app, config, this.log.bind(this));
         registerBridgeRoute(this.app, {
             getPort: () => this.getServerPort(),
-            getAllowedOrigins: () => config.allowedOrigins,
+            getAiSites: () => config.aiSites ?? [],
             getWorkspaceRoot: () => this.getPrimaryWorkspaceRoot(),
             log: this.log.bind(this)
         });
