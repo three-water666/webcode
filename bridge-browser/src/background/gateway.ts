@@ -2,11 +2,11 @@ import { PROTOCOL } from '@webcode/shared';
 
 import { isRecord, type MessageRequest, type ToolExecutionPayload } from '../types';
 import { getErrorMessage } from './errors';
-import { getSession } from './sessions';
+import { getCurrentProtocolSession } from './sessions';
 
 export async function executeTool(request: MessageRequest, tabId: number | null | undefined) {
   if (!tabId) {return { success: false, error: "No Session Tab" };}
-  const session = await getSession(tabId);
+  const session = await getCurrentProtocolSession(tabId);
   if (!session) {
     return {
       success: false,

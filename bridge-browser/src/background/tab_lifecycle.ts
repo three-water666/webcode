@@ -1,7 +1,7 @@
 import { BRANDING } from '@webcode/shared';
 
 import { updateBadge } from './badge';
-import { getSession, removeSession } from './sessions';
+import { getCurrentProtocolSession, removeSession } from './sessions';
 import { checkUrlSafety, isBridgePageUrl } from './url_safety';
 
 export async function handleTabUpdated(
@@ -17,7 +17,7 @@ export async function handleTabUpdated(
   const isBridgePage = isBridgePageUrl(currentUrl);
 
   if (changeInfo.url) {
-    const session = await getSession(tabId);
+    const session = await getCurrentProtocolSession(tabId);
     const isSafe = checkUrlSafety(changeInfo.url, session, isBridgePage);
     if (!isSafe) {
       if (session) {
@@ -30,7 +30,7 @@ export async function handleTabUpdated(
   }
 
   if (changeInfo.status === "complete") {
-    const session = await getSession(tabId);
+    const session = await getCurrentProtocolSession(tabId);
     if (!session) {return;}
 
     const isSafe = checkUrlSafety(currentUrl, session, isBridgePage);

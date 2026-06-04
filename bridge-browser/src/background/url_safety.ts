@@ -11,6 +11,7 @@ export function checkUrlSafety(
 ): boolean {
   if (isBridgePage) {return true;}
   if (!session) {return false;}
+  if (!session.siteId) {return false;}
 
   const targetOrigin = session.targetOrigin ?? session.allowedOrigins?.[0];
   const currentOrigin = getOrigin(url);

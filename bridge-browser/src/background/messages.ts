@@ -4,7 +4,7 @@ import { handleHandshake } from './connection';
 import { getErrorMessage } from './errors';
 import { executeTool } from './gateway';
 import { showNotification, updateWindowAttention } from './notifications';
-import { getSession, updateSessionLog } from './sessions';
+import { getCurrentProtocolSession, updateSessionLog } from './sessions';
 
 type SendResponse = (response?: unknown) => void;
 
@@ -69,7 +69,7 @@ function handleGetStatus(
   }
 
   respondAsync(
-    getSession(targetTabId).then((session) => ({
+    getCurrentProtocolSession(targetTabId).then((session) => ({
       connected: Boolean(session),
       port: session?.port,
       showLog: session?.showLog ?? false,
