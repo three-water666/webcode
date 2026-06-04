@@ -4,7 +4,7 @@ import { handleHandshake } from './connection';
 import { getErrorMessage } from './errors';
 import { executeTool } from './gateway';
 import { showNotification, updateWindowAttention } from './notifications';
-import { getActiveProtocolSession, updateSessionLog } from './sessions';
+import { getActiveProtocolSession, getCurrentProtocolSession, updateSessionLog } from './sessions';
 
 type SendResponse = (response?: unknown) => void;
 
@@ -68,16 +68,29 @@ function handleGetStatus(
     return;
   }
 
-  respondAsync(
-    getActiveProtocolSession(targetTabId).then((session) => ({
-      connected: Boolean(session),
-      port: session?.port,
-      showLog: session?.showLog ?? false,
-      workspaceId: session?.workspaceId ?? 'global',
-      siteId: session?.siteId,
-    })),
-    sendResponse
-  );
+  respondAsync(getStatusResponse(targetTabId), sendResponse);
+}
+
+async function getStatusResponse(targetTabId: number) {
+  const session = await getCurrentProtocolSession(targetTabId);
+  if (!session) {
+    return {
+      connected: false,
+      suspended: false,
+      showLog: false,
+      workspaceId: 'global',
+    };
+  }
+
+  const activeSession = await getActiveProtocolSession(targetTabId);
+  return {
+    connected: Boolean(activeSession),
+    suspended: !activeSession,
+    port: activeSession?.port,
+    showLog: (activeSession ?? session).showLog ?? false,
+    workspaceId: (activeSession ?? session).workspaceId ?? 'global',
+    siteId: (activeSession ?? session).siteId,
+  };
 }
 
 function handleSetLogVisible(

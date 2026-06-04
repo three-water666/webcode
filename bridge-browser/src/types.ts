@@ -35,6 +35,7 @@ export interface HandshakeResponse {
 
 export interface StatusResponse {
   connected: boolean;
+  suspended?: boolean;
   error?: string;
   port?: number;
   showLog?: boolean;

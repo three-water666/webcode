@@ -28,6 +28,10 @@
         background: #4caf50;
         box-shadow: 0 0 8px rgba(76, 175, 80, 0.4);
       }
+      .status-dot.suspended {
+        background: #ffb74d;
+        box-shadow: 0 0 8px rgba(255, 183, 77, 0.35);
+      }
 
       .card {
         background: #252526;
@@ -54,6 +58,10 @@
         border-color: #4a3030;
         background: #2a2424;
       }
+      .status-card.suspended {
+        border-color: #5a482a;
+        background: #2e2a20;
+      }
       .connection-label {
         color: #fff;
         font-weight: 600;
@@ -61,6 +69,9 @@
       }
       .connection-label.disconnected {
         color: #ffb4aa;
+      }
+      .connection-label.suspended {
+        color: #ffd89b;
       }
       .status-meta {
         flex: none;
@@ -80,6 +91,10 @@
       }
       .disconnected-stack .card {
         margin-bottom: 0;
+      }
+      .suspended-hint {
+        color: #d9c7a4;
+        font-size: 12px;
       }
       .install-section {
         padding: 12px;
@@ -214,13 +229,17 @@
 
     <div id="disconnectedView">
       <div class="disconnected-stack">
-        <div class="card status-card disconnected">
+        <div id="disconnectedStatusCard" class="card status-card disconnected">
           <p id="disconnectedTitle" class="connection-label disconnected">
             🔴 Disconnected from VS Code
           </p>
         </div>
 
-        <div class="card install-card">
+        <p id="suspendedHint" class="card suspended-hint hidden">
+          The VS Code connection is paused on this page. Return to the connected site to resume automatically.
+        </p>
+
+        <div id="installCard" class="card install-card">
           <div class="install-section">
             <p class="section-title">
               <span id="installedTitle">VS Code extension installed?</span>
