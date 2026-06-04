@@ -50,10 +50,17 @@
         justify-content: space-between;
         gap: 12px;
       }
+      .status-card.disconnected {
+        border-color: #4a3030;
+        background: #2a2424;
+      }
       .connection-label {
         color: #fff;
         font-weight: 600;
         line-height: 1.35;
+      }
+      .connection-label.disconnected {
+        color: #ffb4aa;
       }
       .status-meta {
         flex: none;
@@ -65,6 +72,52 @@
       }
       .settings-card {
         padding: 4px 12px;
+      }
+      .disconnected-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .disconnected-stack .card {
+        margin-bottom: 0;
+      }
+      .install-section {
+        padding: 12px;
+      }
+      .install-section + .install-section {
+        border-top: 1px solid #333;
+      }
+      .section-title {
+        color: #fff;
+        font-size: 12px;
+        font-weight: 700;
+        margin-bottom: 6px;
+      }
+      .installed-action-card,
+      .marketplace-card {
+        border-radius: 4px;
+        margin-top: 6px;
+        padding: 8px;
+      }
+      .installed-action-card {
+        background: #263342;
+        border: 1px solid #365778;
+        color: #cfe7ff;
+        font-size: 11px;
+      }
+      .marketplace-card {
+        background: #273629;
+        border: 1px solid #3f6344;
+      }
+      .marketplace-hint {
+        color: #aeb8ae;
+        font-size: 10px;
+        margin-bottom: 2px;
+      }
+      .marketplace-query {
+        color: #7bd88f;
+        font-size: 12px;
+        font-weight: 700;
       }
       .btn {
         display: block;
@@ -160,68 +213,35 @@
     </div>
 
     <div id="disconnectedView">
-      <div class="card" style="padding: 15px 10px; border: 1px solid #555">
-        <h3
-          id="disconnectedTitle"
-          style="
-            color: #e74c3c;
-            margin: 0 0 10px 0;
-            font-size: 14px;
-            text-align: center;
-          "
-        >
-          🔴 Disconnected
-        </h3>
-
-        <div
-          style="
-            margin-bottom: 15px;
-            border-bottom: 1px solid #444;
-            padding-bottom: 10px;
-          "
-        >
-          <p
-            style="
-              font-size: 12px;
-              color: #fff;
-              font-weight: bold;
-              margin-bottom: 5px;
-            "
-          >
-            <span id="installedTitle">👉 Already Installed?</span>
-          </p>
-          <p id="installedDesc" style="font-size: 11px; color: #ccc; line-height: 1.4">
-            Click
-            <span style="color: #3498db; font-weight: bold">webcode</span> in VS
-            Code Status Bar (bottom right) and follow the steps to launch.
+      <div class="disconnected-stack">
+        <div class="card status-card disconnected">
+          <p id="disconnectedTitle" class="connection-label disconnected">
+            🔴 Disconnected from VS Code
           </p>
         </div>
 
-        <div>
-          <p
-            style="
-              font-size: 12px;
-              color: #fff;
-              font-weight: bold;
-              margin-bottom: 5px;
-            "
-          >
-            <span id="notInstalledTitle">👉 Not Installed?</span>
-          </p>
-          <div
-            style="
-              background: #333;
-              padding: 8px;
-              border-radius: 4px;
-              margin: 5px 0;
-            "
-          >
-            <p id="marketplaceHint" style="font-size: 10px; color: #888; margin-bottom: 2px">
-              Search in VS Code Marketplace:
+        <div class="card install-card">
+          <div class="install-section">
+            <p class="section-title">
+              <span id="installedTitle">VS Code extension installed?</span>
             </p>
-            <p style="font-weight: bold; color: #4caf50; font-size: 12px">
-              webcode gateway
+            <p id="installedDesc" class="installed-action-card">
+              Click
+              <span style="color: #3498db; font-weight: bold">webcode</span> in VS
+              Code Status Bar (bottom right) and follow the steps to launch.
             </p>
+          </div>
+
+          <div class="install-section">
+            <p class="section-title">
+              <span id="notInstalledTitle">VS Code extension not installed?</span>
+            </p>
+            <div class="marketplace-card">
+              <p id="marketplaceHint" class="marketplace-hint">
+                Search in VS Code Marketplace:
+              </p>
+              <p class="marketplace-query">webcode gateway</p>
+            </div>
           </div>
         </div>
       </div>
