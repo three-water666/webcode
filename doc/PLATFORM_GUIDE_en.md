@@ -58,9 +58,9 @@ Each connected tab stores a browser session:
   token: string;
   workspaceId: string;
   showLog: boolean;
-  siteId?: string;
-  targetOrigin?: string;
-  targetUrl?: string;
+  siteId: string;
+  targetOrigin: string;
+  targetUrl: string;
 }
 ```
 
@@ -167,12 +167,14 @@ Custom sites do not inherit defaults, so the selector set must be complete.
 ## Runtime Flow
 
 1. The user picks a site from the VS Code status bar menu.
-2. VS Code opens `/bridge?token=...&siteId=<id>&target=<address>`.
-3. The gateway validates that `siteId` exists and that `target` belongs to the selected site.
-4. The bridge handshake stores `siteId`, `targetOrigin`, and `targetUrl` in `session_<tabId>`.
-5. The background script fetches `/v1/init` and writes prompts plus `syncedAiSites` to `chrome.storage.local`.
-6. The target page content script calls `GET_STATUS` to get `siteId`.
-7. The content script uses `siteId` to find selectors in `syncedAiSites`.
+2. VS Code opens `/bridge?bridgeToken=...&siteId=<id>&target=<address>`.
+3. The gateway validates `bridgeToken`, `siteId`, and `target`; `target` must belong to the selected site.
+4. The gateway writes the VS Code extension version into the bridge page data.
+5. The browser bridge reads the token from page data, then compares that version with the browser extension manifest version.
+6. If the versions match, the handshake stores `siteId`, `targetOrigin`, and `targetUrl` in `session_<tabId>`.
+7. The background script fetches `/v1/init` and writes prompts plus `syncedAiSites` to `chrome.storage.local`.
+8. The target page content script calls `GET_STATUS` to get `siteId`.
+9. The content script uses `siteId` to find selectors in `syncedAiSites`.
 
 This avoids URL guessing in the content script and avoids a race where URL safety depends on `/v1/init` finishing first.
 
@@ -235,3 +237,7 @@ Manual checks:
 - Multiple VS Code instances
   - Tool execution uses each tab session's `port/token`.
   - Prompts and `syncedAiSites` are still global browser-extension storage; the latest `/v1/init` wins.
+
+- VS Code extension and browser extension versions differ
+  - The bridge page rejects the handshake and no session is created.
+  - In isolated browser mode, an already-running browser process may keep using the old bundled bridge. Close all isolated browser windows and launch from VS Code again to load the current bundled bridge.

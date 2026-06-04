@@ -36,7 +36,7 @@ export function launchIsolatedEdgeProfile(context: vscode.ExtensionContext): voi
 
 function buildBridgeUrl(currentPort: number, currentToken: string, siteId: string, targetUrl: string): string {
     const params = new URLSearchParams({
-        token: currentToken,
+        bridgeToken: currentToken,
         siteId,
         target: targetUrl
     });

@@ -61,9 +61,9 @@ VS Code 端完整站点结构：
   token: string;
   workspaceId: string;
   showLog: boolean;
-  siteId?: string;
-  targetOrigin?: string;
-  targetUrl?: string;
+  siteId: string;
+  targetOrigin: string;
+  targetUrl: string;
 }
 ```
 
@@ -186,12 +186,14 @@ const BUILTIN_AI_SITES: ResolvedAiSiteConfig[] = [
 从 VS Code 打开站点时：
 
 1. 用户在 VS Code 状态栏菜单选择某个站点。
-2. VS Code 打开 `/bridge?token=...&siteId=<id>&target=<address>`。
-3. Gateway 校验 `siteId` 存在，且 `target` 属于该站点的 `address`。
-4. 浏览器 bridge 页面握手，把 `siteId`、`targetOrigin`、`targetUrl` 写进 `session_<tabId>`。
-5. background 异步请求 `/v1/init`，把 prompts 和 `syncedAiSites` 写进 `chrome.storage.local`。
-6. 目标 AI 页面里的 content script 通过 `GET_STATUS` 拿到 `siteId`。
-7. content script 用 `siteId` 在 `syncedAiSites` 中查 selectors。
+2. VS Code 打开 `/bridge?bridgeToken=...&siteId=<id>&target=<address>`。
+3. Gateway 校验 `bridgeToken`、`siteId` 和 `target`；`target` 必须属于该站点的 `address`。
+4. Gateway 在 bridge 页面里写入 VS Code 扩展版本。
+5. 浏览器 bridge 页面从页面数据读取 token，再读取浏览器扩展版本，要求它和 VS Code 扩展版本完全一致。
+6. 版本一致后，bridge 页面握手，把 `siteId`、`targetOrigin`、`targetUrl` 写进 `session_<tabId>`。
+7. background 异步请求 `/v1/init`，把 prompts 和 `syncedAiSites` 写进 `chrome.storage.local`。
+8. 目标 AI 页面里的 content script 通过 `GET_STATUS` 拿到 `siteId`。
+9. content script 用 `siteId` 在 `syncedAiSites` 中查 selectors。
 
 这个设计避免了两个问题：
 
@@ -271,3 +273,7 @@ pnpm lint
 - 多个 VS Code 同时运行
   - 每个 tab 的工具执行按 session 的 `port/token` 走。
   - prompts 和 `syncedAiSites` 仍存储在浏览器扩展全局 `chrome.storage.local`，最后一次 `/v1/init` 会覆盖全局配置。
+
+- VS Code 扩展版本和浏览器扩展版本不一致
+  - bridge 页面会拒绝握手，不会创建 session。
+  - 独立浏览器模式如果仍有旧浏览器进程在运行，可能继续使用旧 bridge；关闭所有独立浏览器窗口后重新从 VS Code 打开即可重新加载内置 bridge。

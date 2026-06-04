@@ -14,6 +14,8 @@ export interface MessageRequest {
   siteId?: string;
   targetOrigin?: string;
   targetUrl?: string;
+  vscodeExtensionVersion?: string;
+  browserExtensionVersion?: string;
   workspaceId?: string;
   force?: boolean;
   show?: boolean;

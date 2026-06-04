@@ -148,6 +148,8 @@ export class GatewayManager {
         registerBridgeRoute(this.app, {
             getPort: () => this.getServerPort(),
             getAiSites: () => config.aiSites ?? [],
+            getAuthToken: () => this.authToken,
+            getExtensionVersion: () => this.getExtensionVersion(),
             getWorkspaceRoot: () => this.getPrimaryWorkspaceRoot(),
             log: this.log.bind(this)
         });
@@ -169,6 +171,11 @@ export class GatewayManager {
             throw new Error('Gateway server is not listening on a TCP port.');
         }
         return address.port;
+    }
+
+    private getExtensionVersion(): string {
+        const version = (this.context.extension.packageJSON as { version?: unknown }).version;
+        return typeof version === 'string' && version.trim() ? version : 'unknown';
     }
 
     async start(config: GatewayConfig): Promise<StartResult> {

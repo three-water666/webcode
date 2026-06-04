@@ -8,11 +8,13 @@ import { removeSession, saveSession } from './sessions';
 interface HandshakeParams {
   port: number;
   token: string;
-  siteId?: string;
+  siteId: string;
   force?: boolean;
   workspaceId: string;
-  targetOrigin?: string;
-  targetUrl?: string;
+  targetOrigin: string;
+  targetUrl: string;
+  vscodeExtensionVersion: string;
+  browserExtensionVersion: string;
 }
 
 export async function handleHandshake(request: MessageRequest, tabId: number | null | undefined): Promise<HandshakeResponse> {
@@ -51,9 +53,9 @@ interface BindSessionOptions {
   port: number;
   token: string;
   workspaceId: string;
-  siteId?: string;
-  targetOrigin?: string;
-  targetUrl?: string;
+  siteId: string;
+  targetOrigin: string;
+  targetUrl: string;
 }
 
 export async function bindSession(tabId: number, options: BindSessionOptions) {
@@ -84,7 +86,14 @@ function ignoreRuntimeError(_error: unknown): void {
 }
 
 function getHandshakeParams(request: MessageRequest): HandshakeParams | null {
-  if (typeof request.port !== "number" || typeof request.token !== "string") {
+  if (
+    !isValidPort(request.port) ||
+    !isNonEmptyString(request.token) ||
+    !isNonEmptyString(request.siteId) ||
+    !isNonEmptyString(request.targetOrigin) ||
+    !isNonEmptyString(request.targetUrl) ||
+    !isCompatibleExtensionVersions(request)
+  ) {
     return null;
   }
 
@@ -96,7 +105,29 @@ function getHandshakeParams(request: MessageRequest): HandshakeParams | null {
     workspaceId: request.workspaceId ?? 'global',
     targetOrigin: request.targetOrigin,
     targetUrl: request.targetUrl,
+    vscodeExtensionVersion: request.vscodeExtensionVersion,
+    browserExtensionVersion: request.browserExtensionVersion,
   };
+}
+
+function isValidPort(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isCompatibleExtensionVersions(request: MessageRequest): request is MessageRequest & {
+  vscodeExtensionVersion: string;
+  browserExtensionVersion: string;
+} {
+  const currentBrowserVersion = chrome.runtime.getManifest().version;
+
+  return isNonEmptyString(request.vscodeExtensionVersion) &&
+    isNonEmptyString(request.browserExtensionVersion) &&
+    request.vscodeExtensionVersion === currentBrowserVersion &&
+    request.browserExtensionVersion === currentBrowserVersion;
 }
 
 async function findConflictTabId(port: number, tabId: number): Promise<string | null> {
