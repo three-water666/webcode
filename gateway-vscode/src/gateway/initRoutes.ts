@@ -20,6 +20,7 @@ export function registerConfigRoutes(
 
             return {
                 ...site,
+                platformId: platformId ?? undefined,
                 selectors: { ...defaultSelectors, ...(site.selectors ?? {}) }
             };
         });

@@ -124,9 +124,11 @@ async function handleManualInitRequest(sendResponse: RuntimeSendResponse): Promi
 // === DOM 选择器与配置 ===
 let DOM: SiteSelectors | null = null;
 let currentPlatform: string | null = null;
+let currentPlatformId: string | null = null;
 
 const autoInitPrompt = new AutoInitPromptController({
   getSelectors: () => DOM,
+  getPlatformId: () => currentPlatformId,
   isClientConnected: () => isClientConnected,
   loadPromptsFromStorage,
 });
@@ -147,11 +149,14 @@ function initDOMConfig() {
         if (matchedSite && isSiteSelectors(matchedSite.selectors)) {
           DOM = matchedSite.selectors;
           currentPlatform = matchedSite.name ?? matchedSite.address;
+          currentPlatformId = matchedSite.platformId ?? null;
           completionNotifier.reset();
           autoInitPrompt.setupTrigger();
+          void loadPromptsFromStorage();
           autoInitPrompt.scheduleCheck();
           startObserver();
         } else {
+          currentPlatformId = null;
           console.log(`${BRANDING.productName}: Current site is not configured in VS Code. Idle.`);
         }
       });
@@ -176,7 +181,7 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
       initDOMConfig();
       Logger.log(t("config_updated"), "action");
     }
-    if (hasPromptResourceChange(changes)) {
+    if (hasPromptResourceChange(changes, currentPlatformId)) {
       void loadPromptsFromStorage().then(() => {
         autoInitPrompt.scheduleCheck();
       });
@@ -203,6 +208,7 @@ const toolCallTracker = new ToolCallTracker({
 
 const toolExecutor = new ToolExecutor({
   getSelectors: () => DOM,
+  getPlatformId: () => currentPlatformId,
   getWorkspaceId: () => currentWorkspaceId,
   getApprovalState: () => approvalState,
   requestRegistry,

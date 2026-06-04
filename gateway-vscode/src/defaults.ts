@@ -8,7 +8,9 @@ import initEn from '../prompts/init_en.md';
 import initZh from '../prompts/init_zh.md';
 import oversizeEn from '../prompts/oversize_en.md';
 import oversizeZh from '../prompts/oversize_zh.md';
-import { BRANDING, PROTOCOL } from '@webcode/shared';
+import chatgptPlatformPromptEn from '../prompts/platforms/chatgpt_en.md';
+import chatgptPlatformPromptZh from '../prompts/platforms/chatgpt_zh.md';
+import { BRANDING, PLATFORM_PROMPT_KEY_PREFIX, PROTOCOL } from '@webcode/shared';
 
 function applyBranding(content: string): string {
   return content
@@ -17,6 +19,11 @@ function applyBranding(content: string): string {
     .replaceAll('{{MENTION_COMMAND}}', BRANDING.mentionCommand)
     .replaceAll('{{INIT_TOOL_NAME}}', PROTOCOL.initToolName);
 }
+
+const PLATFORM_PROMPTS = {
+  [`${PLATFORM_PROMPT_KEY_PREFIX}chatgpt_en`]: applyBranding(chatgptPlatformPromptEn),
+  [`${PLATFORM_PROMPT_KEY_PREFIX}chatgpt_zh`]: applyBranding(chatgptPlatformPromptZh)
+};
 
 export const PROMPTS = {
   prompt_en: applyBranding(promptEn),
@@ -28,5 +35,6 @@ export const PROMPTS = {
   init_en: applyBranding(initEn),
   init_zh: applyBranding(initZh),
   oversize_en: applyBranding(oversizeEn),
-  oversize_zh: applyBranding(oversizeZh)
+  oversize_zh: applyBranding(oversizeZh),
+  ...PLATFORM_PROMPTS
 };

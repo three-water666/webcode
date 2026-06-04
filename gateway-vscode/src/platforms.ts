@@ -32,7 +32,7 @@ const BUILTIN_PLATFORMS: BuiltinPlatformDefinition[] = [
             address: 'https://chatgpt.com',
             showQuickLaunch: true
         },
-        addressIncludes: ['chatgpt.com', 'openai.com'],
+        addressIncludes: ['chatgpt.com', 'chat.openai.com'],
         selectors: {
             messageBlocks: '.agent-turn',
             codeBlocks: 'pre code',
@@ -175,9 +175,9 @@ export function getConfiguredAiSites(configuredSites: AISiteConfig[] | undefined
 }
 
 export function getPlatformIdByAddress(address: string): BuiltinPlatformId | null {
-    const normalizedAddress = address.toLowerCase();
+    const hostname = getAddressHostname(address);
     const matched = BUILTIN_PLATFORMS.find(platform =>
-        platform.addressIncludes.some(fragment => normalizedAddress.includes(fragment))
+        platform.addressIncludes.some(fragment => hostnameMatchesFragment(hostname, fragment))
     );
     return matched?.id ?? null;
 }
@@ -195,6 +195,24 @@ export function getDefaultSelectors(): Record<BuiltinPlatformId, SiteSelectors> 
 
 function normalizeSiteName(name: string | undefined): string {
     return String(name ?? '').trim().toLowerCase();
+}
+
+function getAddressHostname(address: string): string {
+    const normalizedAddress = address.trim().toLowerCase();
+    try {
+        return new URL(normalizedAddress).hostname;
+    } catch {
+        try {
+            return new URL(`https://${normalizedAddress}`).hostname;
+        } catch {
+            return normalizedAddress;
+        }
+    }
+}
+
+function hostnameMatchesFragment(hostname: string, fragment: string): boolean {
+    const normalizedFragment = fragment.trim().toLowerCase();
+    return hostname === normalizedFragment || hostname.endsWith(`.${normalizedFragment}`);
 }
 
 function mergeAiSiteConfig(base: AISiteConfig, override: AISiteConfig): AISiteConfig {

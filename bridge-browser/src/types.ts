@@ -45,6 +45,7 @@ export interface SuccessResponse {
 export interface SyncedAiSite {
   name?: string;
   address: string;
+  platformId?: string;
   selectors?: unknown;
 }
 
@@ -134,6 +135,10 @@ export function isSyncedAiSite(value: unknown): value is SyncedAiSite {
     (
       value.name === undefined ||
       typeof value.name === "string"
+    ) &&
+    (
+      value.platformId === undefined ||
+      typeof value.platformId === "string"
     );
 }
 

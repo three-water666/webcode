@@ -1,3 +1,4 @@
+import { getPlatformPromptStorageKey as buildPlatformPromptStorageKey } from "@webcode/shared";
 import { i18n } from "../modules/i18n";
 
 const lang = i18n.lang;
@@ -31,8 +32,31 @@ export function loadPromptsFromStorage(): Promise<void> {
   });
 }
 
-export function hasPromptResourceChange(changes: Record<string, chrome.storage.StorageChange>): boolean {
-  return promptStorageKeyList.some((key) => Boolean(changes[key]));
+export function hasPromptResourceChange(
+  changes: Record<string, chrome.storage.StorageChange>,
+  platformId?: string | null
+): boolean {
+  const platformPromptKey = getPlatformPromptStorageKey(platformId);
+  return promptStorageKeyList.some((key) => Boolean(changes[key])) ||
+    Boolean(platformPromptKey && changes[platformPromptKey]);
+}
+
+export function getPlatformPromptStorageKey(platformId?: string | null): string | null {
+  return buildPlatformPromptStorageKey(platformId, lang);
+}
+
+export function readPlatformPromptFromStorage(platformId?: string | null): Promise<string | null> {
+  return new Promise((resolve) => {
+    const platformPromptKey = getPlatformPromptStorageKey(platformId);
+    if (!platformPromptKey) {
+      resolve(null);
+      return;
+    }
+
+    chrome.storage.local.get([platformPromptKey], (items: Record<string, unknown>) => {
+      resolve(readStorageString(items, platformPromptKey) ?? null);
+    });
+  });
 }
 
 function readStorageString(items: Record<string, unknown>, key: string): string | undefined {

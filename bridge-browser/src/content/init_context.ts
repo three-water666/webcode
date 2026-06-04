@@ -1,6 +1,7 @@
-import { BRANDING, PROTOCOL } from "@webcode/shared";
+import { BRANDING, joinPromptSections, PROTOCOL } from "@webcode/shared";
 import { i18n } from "../modules/i18n";
 import { Logger } from "../modules/logger";
+import { readPlatformPromptFromStorage } from "./prompt_resources";
 
 interface ToolExecutionResponse {
   success: boolean;
@@ -10,13 +11,14 @@ interface ToolExecutionResponse {
 
 interface WebcodeInitPromptOptions {
   includeInitToolResultHeader?: boolean;
+  platformId?: string | null;
 }
 
 export async function buildWebcodeInitPrompt(options: WebcodeInitPromptOptions = {}): Promise<string> {
   let finalPrompt = options.includeInitToolResultHeader === false
     ? ""
     : buildInitToolResultHeader();
-  finalPrompt += i18n.resources.prompt ?? "";
+  finalPrompt += await buildBasePrompt(options.platformId);
 
   Logger.log(`Initializing ${BRANDING.productName} with prompt, project rules, project context, tool list, and skill list`, "action");
 
@@ -52,6 +54,12 @@ export async function buildWebcodeInitPrompt(options: WebcodeInitPromptOptions =
   }
 
   return finalPrompt;
+}
+
+async function buildBasePrompt(platformId?: string | null): Promise<string> {
+  const platformPrompt = await readPlatformPromptFromStorage(platformId);
+
+  return joinPromptSections(i18n.resources.prompt, platformPrompt);
 }
 
 function buildInitToolResultHeader(): string {

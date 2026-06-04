@@ -16,6 +16,7 @@ import { type ToolRequestIdentity, type ToolRequestRegistry } from "./tool_reque
 
 interface ToolExecutorOptions {
   getSelectors: () => SiteSelectors | null;
+  getPlatformId: () => string | null;
   getWorkspaceId: () => string;
   getApprovalState: () => ApprovalState;
   requestRegistry: ToolRequestRegistry;
@@ -196,7 +197,9 @@ export class ToolExecutor {
    * 状态写完后调用 scheduleMainLoop，让主循环发现该 requestKey 已完成并把初始化内容写回输入框。
    */
   private async initializeWebcode(request: ToolExecutionRequest): Promise<void> {
-    const finalPrompt = await buildWebcodeInitPrompt();
+    const finalPrompt = await buildWebcodeInitPrompt({
+      platformId: this.options.getPlatformId(),
+    });
 
     this.options.requestRegistry.saveRawResult(request.identity.requestKey, finalPrompt);
     this.options.requestRegistry.markSettled(request.identity.requestKey);
