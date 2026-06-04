@@ -2,15 +2,19 @@ import { PROTOCOL } from '@webcode/shared';
 
 import { isRecord, type MessageRequest, type ToolExecutionPayload } from '../types';
 import { getErrorMessage } from './errors';
-import { getCurrentProtocolSession } from './sessions';
+import { getActiveProtocolSession } from './sessions';
 
-export async function executeTool(request: MessageRequest, tabId: number | null | undefined) {
+export async function executeTool(
+  request: MessageRequest,
+  tabId: number | null | undefined,
+  senderUrl?: string
+) {
   if (!tabId) {return { success: false, error: "No Session Tab" };}
-  const session = await getCurrentProtocolSession(tabId);
+  const session = await getActiveProtocolSession(tabId, senderUrl);
   if (!session) {
     return {
       success: false,
-      error: "Session Lost. Please reconnect from VS Code.",
+      error: "Session suspended for this page. Return to the connected site to continue.",
     };
   }
   const { port, token } = session;

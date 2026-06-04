@@ -1,7 +1,7 @@
 import { BRANDING } from '@webcode/shared';
 
 import { updateBadge } from './badge';
-import { getCurrentProtocolSession, removeSession } from './sessions';
+import { getCurrentProtocolSession, removeSession, suspendSession } from './sessions';
 import { checkUrlSafety, isBridgePageUrl } from './url_safety';
 
 export async function handleTabUpdated(
@@ -21,8 +21,8 @@ export async function handleTabUpdated(
     const isSafe = checkUrlSafety(changeInfo.url, session, isBridgePage);
     if (!isSafe) {
       if (session) {
-        console.log(`${BRANDING.logPrefix} Security Fuse: Url changed to ${changeInfo.url}, revoking session.`);
-        await removeSession(tabId);
+        console.log(`${BRANDING.logPrefix} Security Fuse: Url changed to ${changeInfo.url}, suspending session.`);
+        suspendSession(tabId);
         updateBadge(tabId, false);
         return;
       }
@@ -50,7 +50,7 @@ export async function handleTabUpdated(
         void chrome.tabs.sendMessage(tabId, { type: "TOGGLE_LOG", show: true }).catch(ignoreRuntimeError);
       }
     } else {
-      await removeSession(tabId);
+      suspendSession(tabId);
       updateBadge(tabId, false);
     }
   }

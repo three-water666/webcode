@@ -4,7 +4,7 @@ import { handleHandshake } from './connection';
 import { getErrorMessage } from './errors';
 import { executeTool } from './gateway';
 import { showNotification, updateWindowAttention } from './notifications';
-import { getCurrentProtocolSession, updateSessionLog } from './sessions';
+import { getActiveProtocolSession, updateSessionLog } from './sessions';
 
 type SendResponse = (response?: unknown) => void;
 
@@ -44,7 +44,7 @@ function dispatchRuntimeMessage(
       respondAsync(updateWindowAttention(sender, false), sendResponse);
       return true;
     case "EXECUTE_TOOL":
-      respondAsync(executeTool(request, currentTabId), sendResponse);
+      respondAsync(executeTool(request, currentTabId, sender.url), sendResponse);
       return true;
     case "SHOW_NOTIFICATION":
       respondAsync(showNotification(request, sender), sendResponse);
@@ -69,7 +69,7 @@ function handleGetStatus(
   }
 
   respondAsync(
-    getCurrentProtocolSession(targetTabId).then((session) => ({
+    getActiveProtocolSession(targetTabId).then((session) => ({
       connected: Boolean(session),
       port: session?.port,
       showLog: session?.showLog ?? false,
