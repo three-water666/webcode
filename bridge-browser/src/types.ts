@@ -11,7 +11,11 @@ export interface MessageRequest {
   tabId?: number;
   port?: number;
   token?: string;
+  siteId?: string;
   targetOrigin?: string;
+  targetUrl?: string;
+  vscodeExtensionVersion?: string;
+  browserExtensionVersion?: string;
   workspaceId?: string;
   force?: boolean;
   show?: boolean;
@@ -35,6 +39,7 @@ export interface StatusResponse {
   port?: number;
   showLog?: boolean;
   workspaceId?: string;
+  siteId?: string;
 }
 
 export interface SuccessResponse {
@@ -43,8 +48,8 @@ export interface SuccessResponse {
 }
 
 export interface SyncedAiSite {
+  id: string;
   name?: string;
-  address: string;
   selectors?: unknown;
 }
 
@@ -53,6 +58,9 @@ export interface StoredSession {
   token: string;
   showLog?: boolean;
   workspaceId?: string;
+  siteId?: string;
+  targetOrigin?: string;
+  targetUrl?: string;
   allowedOrigins?: string[];
 }
 
@@ -86,21 +94,14 @@ export function isSession(value: unknown): value is Session {
 export function isStoredSession(value: unknown): value is StoredSession {
   if (!isRecord(value)) {return false;}
 
-  const allowedOrigins = value.allowedOrigins;
   return typeof value.port === "number" &&
     typeof value.token === "string" &&
-    (
-      value.showLog === undefined ||
-      typeof value.showLog === "boolean"
-    ) &&
-    (
-      value.workspaceId === undefined ||
-      typeof value.workspaceId === "string"
-    ) &&
-    (
-      allowedOrigins === undefined ||
-      (Array.isArray(allowedOrigins) && allowedOrigins.every((origin) => typeof origin === "string"))
-    );
+    isOptionalBoolean(value.showLog) &&
+    isOptionalString(value.workspaceId) &&
+    isOptionalString(value.siteId) &&
+    isOptionalString(value.targetOrigin) &&
+    isOptionalString(value.targetUrl) &&
+    isOptionalStringArray(value.allowedOrigins);
 }
 
 export function normalizeSession(value: unknown): Session | null {
@@ -111,6 +112,9 @@ export function normalizeSession(value: unknown): Session | null {
     token: value.token,
     showLog: value.showLog ?? false,
     workspaceId: value.workspaceId ?? "global",
+    siteId: value.siteId,
+    targetOrigin: value.targetOrigin ?? value.allowedOrigins?.[0],
+    targetUrl: value.targetUrl,
     allowedOrigins: value.allowedOrigins,
   };
 }
@@ -130,7 +134,7 @@ export function isSiteSelectors(value: unknown): value is SiteSelectors {
 
 export function isSyncedAiSite(value: unknown): value is SyncedAiSite {
   return isRecord(value) &&
-    typeof value.address === "string" &&
+    typeof value.id === "string" &&
     (
       value.name === undefined ||
       typeof value.name === "string"
@@ -139,4 +143,17 @@ export function isSyncedAiSite(value: unknown): value is SyncedAiSite {
 
 export function getSyncedAiSites(value: unknown): SyncedAiSite[] {
   return Array.isArray(value) ? value.filter(isSyncedAiSite) : [];
+}
+
+function isOptionalBoolean(value: unknown): boolean {
+  return value === undefined || typeof value === "boolean";
+}
+
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || typeof value === "string";
+}
+
+function isOptionalStringArray(value: unknown): boolean {
+  return value === undefined ||
+    (Array.isArray(value) && value.every((item) => typeof item === "string"));
 }

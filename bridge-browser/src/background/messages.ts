@@ -1,10 +1,10 @@
 import { isMessageRequest, type MessageRequest } from '../types';
 import { playAttentionSound } from './attention_sound';
-import { bindSession, handleHandshake } from './connection';
+import { handleHandshake } from './connection';
 import { getErrorMessage } from './errors';
 import { executeTool } from './gateway';
 import { showNotification, updateWindowAttention } from './notifications';
-import { getSession, updateSessionLog } from './sessions';
+import { getCurrentProtocolSession, updateSessionLog } from './sessions';
 
 type SendResponse = (response?: unknown) => void;
 
@@ -52,9 +52,6 @@ function dispatchRuntimeMessage(
     case "SYNC_CONFIG":
       sendResponse({ success: true });
       return true;
-    case "CONNECT_EXISTING":
-      handleConnectExisting(request, currentTabId, sendResponse);
-      return true;
     default:
       return false;
   }
@@ -72,11 +69,12 @@ function handleGetStatus(
   }
 
   respondAsync(
-    getSession(targetTabId).then((session) => ({
+    getCurrentProtocolSession(targetTabId).then((session) => ({
       connected: Boolean(session),
       port: session?.port,
       showLog: session?.showLog ?? false,
       workspaceId: session?.workspaceId ?? 'global',
+      siteId: session?.siteId,
     })),
     sendResponse
   );
@@ -102,31 +100,6 @@ function handleSetLogVisible(
       });
       return { success: true };
     }),
-    sendResponse
-  );
-}
-
-function handleConnectExisting(
-  request: MessageRequest,
-  currentTabId: number | null | undefined,
-  sendResponse: SendResponse
-): void {
-  const targetTabId = request.tabId ?? currentTabId;
-  if (!targetTabId) {
-    sendResponse({ success: false, error: "Missing Tab ID" });
-    return;
-  }
-
-  void chrome.storage.local.remove("session_null");
-  if (!request.port || !request.token) {
-    sendResponse({ success: false, error: "Missing port or token" });
-    return;
-  }
-
-  const workspaceId = request.workspaceId ?? 'global';
-  respondAsync(
-    bindSession(targetTabId, request.port, request.token, workspaceId, request.targetOrigin)
-      .then(() => ({ success: true })),
     sendResponse
   );
 }

@@ -8,9 +8,13 @@ import { removeSession, saveSession } from './sessions';
 interface HandshakeParams {
   port: number;
   token: string;
+  siteId: string;
   force?: boolean;
   workspaceId: string;
-  targetOrigin?: string;
+  targetOrigin: string;
+  targetUrl: string;
+  vscodeExtensionVersion: string;
+  browserExtensionVersion: string;
 }
 
 export async function handleHandshake(request: MessageRequest, tabId: number | null | undefined): Promise<HandshakeResponse> {
@@ -34,19 +38,47 @@ export async function handleHandshake(request: MessageRequest, tabId: number | n
       }
     }
   }
-  await bindSession(tabId, params.port, params.token, params.workspaceId, params.targetOrigin);
+  await bindSession(tabId, {
+    port: params.port,
+    token: params.token,
+    workspaceId: params.workspaceId,
+    siteId: params.siteId,
+    targetOrigin: params.targetOrigin,
+    targetUrl: params.targetUrl,
+  });
   return { success: true };
 }
 
-export async function bindSession(tabId: number, port: number, token: string, workspaceId: string, targetOrigin?: string) {
-  const allowedOrigins = targetOrigin ? [targetOrigin] : [];
-  await saveSession(tabId, { port, token, showLog: false, workspaceId, allowedOrigins });
-  console.log(`${BRANDING.logPrefix} Tab ${tabId} bound to Port ${port} [Workspace: ${workspaceId}]`);
+interface BindSessionOptions {
+  port: number;
+  token: string;
+  workspaceId: string;
+  siteId: string;
+  targetOrigin: string;
+  targetUrl: string;
+}
+
+export async function bindSession(tabId: number, options: BindSessionOptions) {
+  await saveSession(tabId, {
+    port: options.port,
+    token: options.token,
+    showLog: false,
+    workspaceId: options.workspaceId,
+    siteId: options.siteId,
+    targetOrigin: options.targetOrigin,
+    targetUrl: options.targetUrl,
+  });
+  console.log(`${BRANDING.logPrefix} Tab ${tabId} bound to Port ${options.port} [Workspace: ${options.workspaceId}]`);
   updateBadge(tabId, true);
   // [Sync] Notify Content Script
-  void chrome.tabs.sendMessage(tabId, { type: "STATUS_UPDATE", connected: true, workspaceId }).catch(ignoreRuntimeError);
+  void chrome.tabs.sendMessage(tabId, {
+    type: "STATUS_UPDATE",
+    connected: true,
+    workspaceId: options.workspaceId,
+    siteId: options.siteId,
+  }).catch(ignoreRuntimeError);
   // 不再 await，避免网关初始化请求阻塞握手响应
-  void fetchInitDataFromGateway(port, token);
+  void fetchInitDataFromGateway(options.port, options.token);
 }
 
 function ignoreRuntimeError(_error: unknown): void {
@@ -54,17 +86,48 @@ function ignoreRuntimeError(_error: unknown): void {
 }
 
 function getHandshakeParams(request: MessageRequest): HandshakeParams | null {
-  if (typeof request.port !== "number" || typeof request.token !== "string") {
+  if (
+    !isValidPort(request.port) ||
+    !isNonEmptyString(request.token) ||
+    !isNonEmptyString(request.siteId) ||
+    !isNonEmptyString(request.targetOrigin) ||
+    !isNonEmptyString(request.targetUrl) ||
+    !isCompatibleExtensionVersions(request)
+  ) {
     return null;
   }
 
   return {
     port: request.port,
     token: request.token,
+    siteId: request.siteId,
     force: request.force,
     workspaceId: request.workspaceId ?? 'global',
     targetOrigin: request.targetOrigin,
+    targetUrl: request.targetUrl,
+    vscodeExtensionVersion: request.vscodeExtensionVersion,
+    browserExtensionVersion: request.browserExtensionVersion,
   };
+}
+
+function isValidPort(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isCompatibleExtensionVersions(request: MessageRequest): request is MessageRequest & {
+  vscodeExtensionVersion: string;
+  browserExtensionVersion: string;
+} {
+  const currentBrowserVersion = chrome.runtime.getManifest().version;
+
+  return isNonEmptyString(request.vscodeExtensionVersion) &&
+    isNonEmptyString(request.browserExtensionVersion) &&
+    request.vscodeExtensionVersion === currentBrowserVersion &&
+    request.browserExtensionVersion === currentBrowserVersion;
 }
 
 async function findConflictTabId(port: number, tabId: number): Promise<string | null> {

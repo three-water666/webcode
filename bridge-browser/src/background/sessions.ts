@@ -1,9 +1,35 @@
 import { normalizeSession, type Session } from '../types';
 
+export type CurrentProtocolSession = Session & {
+  siteId: string;
+  targetOrigin: string;
+  targetUrl: string;
+};
+
 export async function getSession(tabId: number): Promise<Session | undefined> {
   const key = `session_${tabId}`;
   const result = await chrome.storage.local.get([key]) as Record<string, unknown>;
   return normalizeSession(result[key]) ?? undefined;
+}
+
+export async function getCurrentProtocolSession(tabId: number): Promise<CurrentProtocolSession | undefined> {
+  const session = await getSession(tabId);
+  if (!session) {
+    return undefined;
+  }
+
+  if (isCurrentProtocolSession(session)) {
+    return session;
+  }
+
+  await removeSession(tabId);
+  return undefined;
+}
+
+export function isCurrentProtocolSession(session: Session): session is CurrentProtocolSession {
+  return isNonEmptyString(session.siteId) &&
+    isNonEmptyString(session.targetOrigin) &&
+    isNonEmptyString(session.targetUrl);
 }
 
 export async function saveSession(tabId: number, data: Session) {
@@ -28,4 +54,8 @@ export async function removeSession(tabId: number) {
 
 function ignoreRuntimeError(_error: unknown): void {
   void chrome.runtime.lastError;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }

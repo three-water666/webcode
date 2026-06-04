@@ -11,7 +11,13 @@ interface I18nState {
 
 export const i18n: I18nState = {
   lang: navigator.language.startsWith("zh") ? "zh" : "en",
-  resources: { prompt: null, train: null, error: null, init: null, oversize: null },
+  resources: {
+    prompt: null,
+    train: null,
+    error: null,
+    init: null,
+    oversize: null,
+  },
 };
 
 const I18N_MESSAGES: Record<string, { en: string; zh: string }> = {

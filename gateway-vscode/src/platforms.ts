@@ -1,9 +1,19 @@
 export interface AISiteConfig {
+    id?: string;
+    name?: string;
+    address?: string;
+    showQuickLaunch?: boolean;
+    browser?: string;
+    selectors?: Partial<SiteSelectors>;
+}
+
+export interface ResolvedAiSiteConfig {
+    id: string;
     name: string;
     address: string;
     showQuickLaunch?: boolean;
     browser?: string;
-    selectors?: Partial<SiteSelectors>;
+    selectors: SiteSelectors;
 }
 
 export type BuiltinPlatformId = 'chatgpt' | 'gemini' | 'aistudio' | 'deepseek' | 'glm' | 'claude' | 'qwen';
@@ -17,22 +27,12 @@ export interface SiteSelectors {
     maxInlineChars?: number;
 }
 
-interface BuiltinPlatformDefinition {
-    id: BuiltinPlatformId;
-    defaultSite: AISiteConfig;
-    addressIncludes: string[];
-    selectors: SiteSelectors;
-}
-
-const BUILTIN_PLATFORMS: BuiltinPlatformDefinition[] = [
+const BUILTIN_AI_SITES: ResolvedAiSiteConfig[] = [
     {
         id: 'chatgpt',
-        defaultSite: {
-            name: 'ChatGPT',
-            address: 'https://chatgpt.com',
-            showQuickLaunch: true
-        },
-        addressIncludes: ['chatgpt.com', 'openai.com'],
+        name: 'ChatGPT',
+        address: 'https://chatgpt.com',
+        showQuickLaunch: true,
         selectors: {
             messageBlocks: '.agent-turn',
             codeBlocks: 'pre code',
@@ -44,12 +44,9 @@ const BUILTIN_PLATFORMS: BuiltinPlatformDefinition[] = [
     },
     {
         id: 'gemini',
-        defaultSite: {
-            name: 'Gemini',
-            address: 'https://gemini.google.com',
-            showQuickLaunch: true
-        },
-        addressIncludes: ['gemini.google.com'],
+        name: 'Gemini',
+        address: 'https://gemini.google.com',
+        showQuickLaunch: true,
         selectors: {
             messageBlocks: '.markdown',
             codeBlocks: 'pre code',
@@ -60,12 +57,9 @@ const BUILTIN_PLATFORMS: BuiltinPlatformDefinition[] = [
     },
     {
         id: 'aistudio',
-        defaultSite: {
-            name: 'aistudio',
-            address: 'https://aistudio.google.com/',
-            showQuickLaunch: true
-        },
-        addressIncludes: ['aistudio.google.com'],
+        name: 'aistudio',
+        address: 'https://aistudio.google.com/',
+        showQuickLaunch: true,
         selectors: {
             messageBlocks: "div[data-turn-role='Model']",
             codeBlocks: 'pre code',
@@ -76,12 +70,9 @@ const BUILTIN_PLATFORMS: BuiltinPlatformDefinition[] = [
     },
     {
         id: 'deepseek',
-        defaultSite: {
-            name: 'DeepSeek',
-            address: 'https://chat.deepseek.com',
-            showQuickLaunch: true
-        },
-        addressIncludes: ['deepseek.com'],
+        name: 'DeepSeek',
+        address: 'https://chat.deepseek.com',
+        showQuickLaunch: true,
         selectors: {
             messageBlocks: '.ds-message',
             codeBlocks: '.ds-markdown.ds-assistant-message-main-content pre',
@@ -92,12 +83,9 @@ const BUILTIN_PLATFORMS: BuiltinPlatformDefinition[] = [
     },
     {
         id: 'glm',
-        defaultSite: {
-            name: 'GLM',
-            address: 'https://chatglm.cn/',
-            showQuickLaunch: true
-        },
-        addressIncludes: ['chatglm.cn'],
+        name: 'GLM',
+        address: 'https://chatglm.cn/',
+        showQuickLaunch: true,
         selectors: {
             messageBlocks: '.code-box.flex1 > .answer-content-wrap',
             codeBlocks: 'pre code',
@@ -109,12 +97,9 @@ const BUILTIN_PLATFORMS: BuiltinPlatformDefinition[] = [
     },
     {
         id: 'claude',
-        defaultSite: {
-            name: 'Claude',
-            address: 'https://claude.ai/',
-            showQuickLaunch: true
-        },
-        addressIncludes: ['claude.ai'],
+        name: 'Claude',
+        address: 'https://claude.ai/',
+        showQuickLaunch: true,
         selectors: {
             messageBlocks: '.font-claude-response',
             codeBlocks: 'pre code',
@@ -125,12 +110,9 @@ const BUILTIN_PLATFORMS: BuiltinPlatformDefinition[] = [
     },
     {
         id: 'qwen',
-        defaultSite: {
-            name: 'Qwen',
-            address: 'https://chat.qwen.ai/',
-            showQuickLaunch: true
-        },
-        addressIncludes: ['chat.qwen.ai', 'qwen.ai'],
+        name: 'Qwen',
+        address: 'https://chat.qwen.ai/',
+        showQuickLaunch: true,
         selectors: {
             messageBlocks: '.qwen-chat-message-assistant',
             codeBlocks: [
@@ -144,66 +126,172 @@ const BUILTIN_PLATFORMS: BuiltinPlatformDefinition[] = [
     }
 ];
 
-export function getBuiltinAiSites(): AISiteConfig[] {
-    return BUILTIN_PLATFORMS.map(platform => ({ ...platform.defaultSite }));
+export function getBuiltinAiSites(): ResolvedAiSiteConfig[] {
+    return BUILTIN_AI_SITES.map(cloneResolvedAiSite);
 }
 
-export function getConfiguredAiSites(configuredSites: AISiteConfig[] | undefined): AISiteConfig[] {
+export function getConfiguredAiSites(configuredSites: AISiteConfig[] | undefined): ResolvedAiSiteConfig[] {
     const builtinSites = getBuiltinAiSites();
 
     if (!configuredSites || configuredSites.length === 0) {
         return builtinSites;
     }
 
-    const configuredByName = new Map(
-        configuredSites.map(site => [normalizeSiteName(site.name), site] as const)
-    );
+    const configuredById = new Map<string, AISiteConfig>();
+    const configuredByName = new Map<string, AISiteConfig>();
 
+    for (const site of configuredSites) {
+        const id = normalizeSiteId(site.id);
+        if (id) {
+            configuredById.set(id, site);
+            continue;
+        }
+
+        const name = normalizeSiteName(site.name);
+        if (name) {
+            configuredByName.set(name, site);
+        }
+    }
+
+    const usedConfiguredSites = new Set<AISiteConfig>();
     const mergedBuiltinSites = builtinSites.map(site => {
-        const override = configuredByName.get(normalizeSiteName(site.name));
+        const override = configuredById.get(site.id) ?? configuredByName.get(normalizeSiteName(site.name));
         if (!override) {
             return site;
         }
 
+        usedConfiguredSites.add(override);
         return mergeAiSiteConfig(site, override);
     });
 
-    const builtinNames = new Set(builtinSites.map(site => normalizeSiteName(site.name)));
-    const customSites = configuredSites.filter(site => !builtinNames.has(normalizeSiteName(site.name)));
+    const customSites = configuredSites
+        .filter(site => !usedConfiguredSites.has(site))
+        .map(resolveCustomAiSite)
+        .filter((site): site is ResolvedAiSiteConfig => Boolean(site));
 
     return [...mergedBuiltinSites, ...customSites];
 }
 
-export function getPlatformIdByAddress(address: string): BuiltinPlatformId | null {
-    const normalizedAddress = address.toLowerCase();
-    const matched = BUILTIN_PLATFORMS.find(platform =>
-        platform.addressIncludes.some(fragment => normalizedAddress.includes(fragment))
-    );
-    return matched?.id ?? null;
+export function findAiSiteById(
+    aiSites: readonly ResolvedAiSiteConfig[],
+    siteId: string | null | undefined
+): ResolvedAiSiteConfig | null {
+    const normalizedSiteId = normalizeSiteId(siteId);
+    if (!normalizedSiteId) {
+        return null;
+    }
+
+    return aiSites.find(site => site.id === normalizedSiteId) ?? null;
 }
 
 export function getDefaultBridgeTarget(): string {
-    return BUILTIN_PLATFORMS[0].defaultSite.address;
+    return BUILTIN_AI_SITES[0].address;
 }
 
-export function getDefaultSelectors(): Record<BuiltinPlatformId, SiteSelectors> {
-    return BUILTIN_PLATFORMS.reduce((acc, platform) => {
-        acc[platform.id] = platform.selectors;
-        return acc;
-    }, {} as Record<BuiltinPlatformId, SiteSelectors>);
+export function isTargetAllowedForSite(target: string, site: Pick<ResolvedAiSiteConfig, 'address'>): boolean {
+    const parsedTarget = parseHttpUrl(target);
+    const parsedSiteAddress = parseHttpUrl(site.address);
+    if (!parsedTarget || !parsedSiteAddress) {
+        return false;
+    }
+
+    if (parsedTarget.origin !== parsedSiteAddress.origin) {
+        return false;
+    }
+
+    const sitePath = normalizeUrlPath(parsedSiteAddress.pathname);
+    if (sitePath === '/') {
+        return true;
+    }
+
+    const targetPath = normalizeUrlPath(parsedTarget.pathname);
+    return targetPath === sitePath || targetPath.startsWith(`${sitePath}/`);
+}
+
+export function normalizeSiteId(siteId: string | null | undefined): string {
+    return String(siteId ?? '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+}
+
+function mergeAiSiteConfig(base: ResolvedAiSiteConfig, override: AISiteConfig): ResolvedAiSiteConfig {
+    return {
+        ...base,
+        name: readConfiguredString(override.name) ?? base.name,
+        address: readConfiguredString(override.address) ?? base.address,
+        showQuickLaunch: override.showQuickLaunch ?? base.showQuickLaunch,
+        browser: override.browser ?? base.browser,
+        selectors: {
+            ...base.selectors,
+            ...(override.selectors ?? {})
+        }
+    };
+}
+
+function resolveCustomAiSite(site: AISiteConfig): ResolvedAiSiteConfig | null {
+    const id = normalizeSiteId(site.id ?? site.name);
+    const name = readConfiguredString(site.name) ?? readConfiguredString(site.id) ?? id;
+    const address = readConfiguredString(site.address);
+
+    if (!id || !name || !address || !isCompleteSelectors(site.selectors)) {
+        return null;
+    }
+
+    return {
+        id,
+        name,
+        address,
+        showQuickLaunch: site.showQuickLaunch,
+        browser: site.browser,
+        selectors: { ...site.selectors }
+    };
+}
+
+function isCompleteSelectors(selectors: Partial<SiteSelectors> | undefined): selectors is SiteSelectors {
+    return Boolean(
+        selectors &&
+        typeof selectors.messageBlocks === 'string' &&
+        typeof selectors.codeBlocks === 'string' &&
+        typeof selectors.inputArea === 'string' &&
+        typeof selectors.sendButton === 'string' &&
+        typeof selectors.stopButton === 'string' &&
+        (
+            selectors.maxInlineChars === undefined ||
+            typeof selectors.maxInlineChars === 'number'
+        )
+    );
+}
+
+function cloneResolvedAiSite(site: ResolvedAiSiteConfig): ResolvedAiSiteConfig {
+    return {
+        ...site,
+        selectors: { ...site.selectors }
+    };
 }
 
 function normalizeSiteName(name: string | undefined): string {
     return String(name ?? '').trim().toLowerCase();
 }
 
-function mergeAiSiteConfig(base: AISiteConfig, override: AISiteConfig): AISiteConfig {
-    return {
-        ...base,
-        ...override,
-        selectors: {
-            ...(base.selectors ?? {}),
-            ...(override.selectors ?? {})
+function readConfiguredString(value: string | undefined): string | undefined {
+    const trimmed = value?.trim();
+    if (!trimmed) {
+        return undefined;
+    }
+    return trimmed;
+}
+
+function parseHttpUrl(value: string): URL | null {
+    try {
+        const parsed = new URL(value);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            return null;
         }
-    };
+        return parsed;
+    } catch {
+        return null;
+    }
+}
+
+function normalizeUrlPath(pathname: string): string {
+    const normalized = pathname.replace(/\/+$/, '');
+    return normalized === '' ? '/' : normalized;
 }

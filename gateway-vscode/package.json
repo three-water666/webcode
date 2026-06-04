@@ -50,6 +50,10 @@
           "items": {
             "type": "object",
             "properties": {
+              "id": {
+                "type": "string",
+                "description": "Stable site id. Use a built-in id such as chatgpt to override that site, or a new id to add a complete custom site."
+              },
               "name": {
                 "type": "string",
                 "description": "Display name"

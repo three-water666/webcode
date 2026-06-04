@@ -1,7 +1,7 @@
 import { BRANDING } from '@webcode/shared';
 
 import { updateBadge } from './badge';
-import { getSession, removeSession } from './sessions';
+import { getCurrentProtocolSession, removeSession } from './sessions';
 import { checkUrlSafety, isBridgePageUrl } from './url_safety';
 
 export async function handleTabUpdated(
@@ -17,8 +17,8 @@ export async function handleTabUpdated(
   const isBridgePage = isBridgePageUrl(currentUrl);
 
   if (changeInfo.url) {
-    const session = await getSession(tabId);
-    const isSafe = await checkUrlSafety(changeInfo.url, session, isBridgePage);
+    const session = await getCurrentProtocolSession(tabId);
+    const isSafe = checkUrlSafety(changeInfo.url, session, isBridgePage);
     if (!isSafe) {
       if (session) {
         console.log(`${BRANDING.logPrefix} Security Fuse: Url changed to ${changeInfo.url}, revoking session.`);
@@ -30,16 +30,21 @@ export async function handleTabUpdated(
   }
 
   if (changeInfo.status === "complete") {
-    const session = await getSession(tabId);
+    const session = await getCurrentProtocolSession(tabId);
     if (!session) {return;}
 
-    const isSafe = await checkUrlSafety(currentUrl, session, isBridgePage);
+    const isSafe = checkUrlSafety(currentUrl, session, isBridgePage);
 
     if (isSafe) {
       updateBadge(tabId, true);
       // [Sync] Restore connection state in Content Script after reload
       void chrome.tabs
-        .sendMessage(tabId, { type: "STATUS_UPDATE", connected: true, workspaceId: session.workspaceId })
+        .sendMessage(tabId, {
+          type: "STATUS_UPDATE",
+          connected: true,
+          workspaceId: session.workspaceId,
+          siteId: session.siteId,
+        })
         .catch(ignoreRuntimeError);
       if (session.showLog) {
         void chrome.tabs.sendMessage(tabId, { type: "TOGGLE_LOG", show: true }).catch(ignoreRuntimeError);

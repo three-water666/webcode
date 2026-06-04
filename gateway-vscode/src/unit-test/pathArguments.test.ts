@@ -1,9 +1,10 @@
 import * as assert from 'assert';
 import * as path from 'path';
 
-import { resolveAllowedBridgeTarget } from '../gateway/bridgeRoute';
+import { resolveAllowedBridgeTarget, resolveBridgeSite } from '../gateway/bridgeRoute';
 import { resolveInsideWorkspace, resolveLocalPathArguments } from '../gateway/pathArguments';
 import type { RemoteToolRoute } from '../gateway/types';
+import type { ResolvedAiSiteConfig } from '../platforms';
 
 suite('Gateway path and bridge guards', () => {
     test('resolves relative remote tool paths inside the workspace', () => {
@@ -47,23 +48,33 @@ suite('Gateway path and bridge guards', () => {
 
     test('allows bridge targets whose origin is configured', () => {
         assert.strictEqual(
-            resolveAllowedBridgeTarget('https://chatgpt.com/g/example', ['https://chatgpt.com']),
+            resolveAllowedBridgeTarget('https://chatgpt.com/g/example', createSite('chatgpt', 'https://chatgpt.com')),
             'https://chatgpt.com/g/example'
         );
     });
 
-    test('rejects bridge targets outside configured origins', () => {
+    test('rejects bridge targets outside the selected site', () => {
         assert.strictEqual(
-            resolveAllowedBridgeTarget('https://example.test/', ['https://chatgpt.com']),
+            resolveAllowedBridgeTarget('https://example.test/', createSite('chatgpt', 'https://chatgpt.com')),
             null
         );
     });
 
     test('rejects non-http bridge targets', () => {
         assert.strictEqual(
-            resolveAllowedBridgeTarget('javascript:alert(1)', ['https://chatgpt.com']),
+            resolveAllowedBridgeTarget('javascript:alert(1)', createSite('chatgpt', 'https://chatgpt.com')),
             null
         );
+    });
+
+    test('resolves bridge sites by explicit site id', () => {
+        const sites = [
+            createSite('chatgpt', 'https://chatgpt.com'),
+            createSite('gemini', 'https://gemini.google.com')
+        ];
+
+        assert.strictEqual(resolveBridgeSite('gemini', sites)?.id, 'gemini');
+        assert.strictEqual(resolveBridgeSite('missing', sites), null);
     });
 });
 
@@ -73,5 +84,20 @@ function createRoute(toolName: string): RemoteToolRoute {
         definition: {} as RemoteToolRoute['definition'],
         serverId: 'filesystem',
         toolName
+    };
+}
+
+function createSite(id: string, address: string): ResolvedAiSiteConfig {
+    return {
+        id,
+        name: id,
+        address,
+        selectors: {
+            messageBlocks: '.message',
+            codeBlocks: 'pre code',
+            inputArea: 'textarea',
+            sendButton: 'button.send',
+            stopButton: 'button.stop',
+        }
     };
 }

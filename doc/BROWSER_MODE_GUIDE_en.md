@@ -61,6 +61,7 @@ Notes:
 - Sign-in state is separate from your everyday Edge profile, so you need to sign in to the target AI site once inside this isolated profile.
 - After signing in, return to VS Code and open the same AI site from the webcode launch menu again. Some sites redirect after sign-in, which can invalidate the first connection token.
 - You can choose `Open Edge Isolated Profile` from the webcode menu to open the dedicated profile directly for sign-in or extension management.
+- After a VS Code extension upgrade, an already-running isolated Edge process may keep using the old bundled bridge. The bridge page will show a version mismatch; close all isolated Edge windows and launch from VS Code again to load the new bridge.
 
 ## Regular Chrome / Edge
 
@@ -93,4 +94,5 @@ Notes:
 - Chrome for Testing or Chromium must be installed.
 - If webcode cannot find the browser, configure `webcodeGateway.isolatedChrome.executablePath`.
 - Regular Google Chrome is not suitable for this isolated auto-loaded-extension mode because newer Chrome versions no longer support this unpacked-extension loading path.
+- After a VS Code extension upgrade, an already-running isolated Chrome/Chromium process may keep using the old bundled bridge. Close all isolated browser windows and launch from VS Code again.
 - If you are not sure which mode to use, prefer `Edge Isolated Keepalive`.

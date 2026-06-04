@@ -1,48 +1,65 @@
-import { getSyncedAiSites, type Session } from '../types';
+import { type Session } from '../types';
 
 export function isBridgePageUrl(url: string): boolean {
   return url.startsWith('http://127.0.0.1:') || url.startsWith('http://localhost:');
 }
 
-export async function checkUrlSafety(
+export function checkUrlSafety(
   url: string,
   session: Session | undefined,
   isBridgePage: boolean
-): Promise<boolean> {
+): boolean {
   if (isBridgePage) {return true;}
+  if (!session) {return false;}
+  if (!session.siteId) {return false;}
 
+  const targetOrigin = session.targetOrigin ?? session.allowedOrigins?.[0];
   const currentOrigin = getOrigin(url);
-  if (currentOrigin && session?.allowedOrigins?.includes(currentOrigin)) {
+  if (!targetOrigin || !currentOrigin || currentOrigin !== targetOrigin) {
+    return false;
+  }
+
+  if (!session.targetUrl) {
     return true;
   }
 
-  // Check against dynamic sites configuration
-  const localItems = await chrome.storage.local.get(["syncedAiSites"]) as Record<string, unknown>;
-  const sites = getSyncedAiSites(localItems.syncedAiSites);
-
-  // Allow if the URL starts with any configured address or fallback address
-  const baseUrl = getBaseUrl(url);
-  const inDynamic = sites.some((site) => baseUrl.startsWith(site.address));
-
-  return inDynamic;
+  return urlBelongsToTarget(url, session.targetUrl);
 }
 
-// Helper to extract the core domain/URL path without query parameters or hash
-function getBaseUrl(url: string): string {
-  try {
-    const urlObj = new URL(url);
-    // Special handling for legacy matching behavior (e.g. ignoring trailing slashes)
-    return urlObj.origin + urlObj.pathname;
-  } catch {
-    return url;
+function urlBelongsToTarget(url: string, targetUrl: string): boolean {
+  const parsedUrl = parseUrl(url);
+  const parsedTarget = parseUrl(targetUrl);
+  if (!parsedUrl || !parsedTarget) {
+    return false;
   }
+
+  if (parsedUrl.origin !== parsedTarget.origin) {
+    return false;
+  }
+
+  const targetPath = normalizePath(parsedTarget.pathname);
+  if (targetPath === '/') {
+    return true;
+  }
+
+  const currentPath = normalizePath(parsedUrl.pathname);
+  return currentPath === targetPath || currentPath.startsWith(`${targetPath}/`);
 }
 
 function getOrigin(url: string | undefined): string | null {
+  return parseUrl(url)?.origin ?? null;
+}
+
+function parseUrl(url: string | undefined): URL | null {
   if (!url) {return null;}
   try {
-    return new URL(url).origin;
+    return new URL(url);
   } catch {
     return null;
   }
+}
+
+function normalizePath(pathname: string): string {
+  const normalized = pathname.replace(/\/+$/, '');
+  return normalized === '' ? '/' : normalized;
 }
