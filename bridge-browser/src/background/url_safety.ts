@@ -1,7 +1,15 @@
 import { type Session } from '../types';
 
-export function isBridgePageUrl(url: string): boolean {
-  return url.startsWith('http://127.0.0.1:') || url.startsWith('http://localhost:');
+export function isBridgePageUrl(url: string, port: number | undefined): boolean {
+  const parsedUrl = parseUrl(url);
+  if (!parsedUrl || typeof port !== "number") {
+    return false;
+  }
+
+  return parsedUrl.protocol === "http:" &&
+    (parsedUrl.hostname === "127.0.0.1" || parsedUrl.hostname === "localhost") &&
+    parsedUrl.port === String(port) &&
+    normalizePath(parsedUrl.pathname) === "/bridge";
 }
 
 export function checkUrlSafety(

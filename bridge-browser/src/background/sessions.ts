@@ -7,6 +7,12 @@ export type CurrentProtocolSession = Session & {
   targetUrl: string;
 };
 
+export type ActiveProtocolSessionResult =
+  | { status: "active"; session: CurrentProtocolSession }
+  | { status: "missing" }
+  | { status: "invalid" }
+  | { status: "suspended"; session: CurrentProtocolSession };
+
 export async function getSession(tabId: number): Promise<Session | undefined> {
   const key = `session_${tabId}`;
   const result = await chrome.storage.local.get([key]) as Record<string, unknown>;
@@ -31,17 +37,32 @@ export async function getActiveProtocolSession(
   tabId: number,
   url?: string
 ): Promise<CurrentProtocolSession | undefined> {
-  const session = await getCurrentProtocolSession(tabId);
+  const result = await getActiveProtocolSessionResult(tabId, url);
+  return result.status === "active" ? result.session : undefined;
+}
+
+export async function getActiveProtocolSessionResult(
+  tabId: number,
+  url?: string
+): Promise<ActiveProtocolSessionResult> {
+  const session = await getSession(tabId);
   if (!session) {
-    return undefined;
+    return { status: "missing" };
+  }
+
+  if (!isCurrentProtocolSession(session)) {
+    await removeSession(tabId);
+    return { status: "invalid" };
   }
 
   const currentUrl = url ?? await getTabUrl(tabId);
   if (!currentUrl) {
-    return undefined;
+    return { status: "suspended", session };
   }
 
-  return checkUrlSafety(currentUrl, session, isBridgePageUrl(currentUrl)) ? session : undefined;
+  return checkUrlSafety(currentUrl, session, isBridgePageUrl(currentUrl, session.port))
+    ? { status: "active", session }
+    : { status: "suspended", session };
 }
 
 export function isCurrentProtocolSession(session: Session): session is CurrentProtocolSession {

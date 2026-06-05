@@ -4,7 +4,7 @@ import { handleHandshake } from './connection';
 import { getErrorMessage } from './errors';
 import { executeTool } from './gateway';
 import { showNotification, updateWindowAttention } from './notifications';
-import { getActiveProtocolSession, getCurrentProtocolSession, updateSessionLog } from './sessions';
+import { getActiveProtocolSessionResult, updateSessionLog } from './sessions';
 
 type SendResponse = (response?: unknown) => void;
 
@@ -72,8 +72,8 @@ function handleGetStatus(
 }
 
 async function getStatusResponse(targetTabId: number) {
-  const session = await getCurrentProtocolSession(targetTabId);
-  if (!session) {
+  const sessionResult = await getActiveProtocolSessionResult(targetTabId);
+  if (sessionResult.status === "missing") {
     return {
       connected: false,
       suspended: false,
@@ -82,14 +82,25 @@ async function getStatusResponse(targetTabId: number) {
     };
   }
 
-  const activeSession = await getActiveProtocolSession(targetTabId);
+  if (sessionResult.status === "invalid") {
+    return {
+      connected: false,
+      suspended: false,
+      showLog: false,
+      workspaceId: 'global',
+      error: "Session data is incomplete. Reconnect from VS Code to continue.",
+    };
+  }
+
+  const session = sessionResult.session;
+  const isActive = sessionResult.status === "active";
   return {
-    connected: Boolean(activeSession),
-    suspended: !activeSession,
-    port: activeSession?.port,
-    showLog: (activeSession ?? session).showLog ?? false,
-    workspaceId: (activeSession ?? session).workspaceId ?? 'global',
-    siteId: (activeSession ?? session).siteId,
+    connected: isActive,
+    suspended: !isActive,
+    port: isActive ? session.port : undefined,
+    showLog: session.showLog ?? false,
+    workspaceId: session.workspaceId ?? 'global',
+    siteId: session.siteId,
   };
 }
 

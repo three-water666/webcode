@@ -14,11 +14,9 @@ export async function handleTabUpdated(
 
   if (!currentUrl) {return;}
 
-  const isBridgePage = isBridgePageUrl(currentUrl);
-
   if (changeInfo.url) {
     const session = await getCurrentProtocolSession(tabId);
-    const isSafe = checkUrlSafety(changeInfo.url, session, isBridgePage);
+    const isSafe = checkUrlSafety(changeInfo.url, session, isBridgePageUrl(changeInfo.url, session?.port));
     if (!isSafe) {
       if (session) {
         console.log(`${BRANDING.logPrefix} Security Fuse: Url changed to ${changeInfo.url}, suspending session.`);
@@ -33,7 +31,7 @@ export async function handleTabUpdated(
     const session = await getCurrentProtocolSession(tabId);
     if (!session) {return;}
 
-    const isSafe = checkUrlSafety(currentUrl, session, isBridgePage);
+    const isSafe = checkUrlSafety(currentUrl, session, isBridgePageUrl(currentUrl, session.port));
 
     if (isSafe) {
       updateBadge(tabId, true);

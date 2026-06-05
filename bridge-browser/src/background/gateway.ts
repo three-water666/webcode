@@ -2,7 +2,9 @@ import { PROTOCOL } from '@webcode/shared';
 
 import { isRecord, type MessageRequest, type ToolExecutionPayload } from '../types';
 import { getErrorMessage } from './errors';
-import { getActiveProtocolSession } from './sessions';
+import { getActiveProtocolSessionResult, type ActiveProtocolSessionResult } from './sessions';
+
+type InactiveProtocolSessionStatus = Exclude<ActiveProtocolSessionResult["status"], "active">;
 
 export async function executeTool(
   request: MessageRequest,
@@ -10,13 +12,11 @@ export async function executeTool(
   senderUrl?: string
 ) {
   if (!tabId) {return { success: false, error: "No Session Tab" };}
-  const session = await getActiveProtocolSession(tabId, senderUrl);
-  if (!session) {
-    return {
-      success: false,
-      error: "Session suspended for this page. Return to the connected site to continue.",
-    };
+  const sessionResult = await getActiveProtocolSessionResult(tabId, senderUrl);
+  if (sessionResult.status !== "active") {
+    return getInactiveSessionToolResponse(sessionResult.status);
   }
+  const session = sessionResult.session;
   const { port, token } = session;
   const apiEndpoint = `http://127.0.0.1:${port}/v1/tools/call`;
   const payload = getToolPayload(request);
@@ -50,6 +50,27 @@ export async function executeTool(
   } catch (err: unknown) {
     return { success: false, error: `Connection Failed: ${getErrorMessage(err)}` };
   }
+}
+
+function getInactiveSessionToolResponse(status: InactiveProtocolSessionStatus): { success: false; error: string } {
+  if (status === "suspended") {
+    return {
+      success: false,
+      error: "Session suspended for this page. Return to the connected site to continue.",
+    };
+  }
+
+  if (status === "invalid") {
+    return {
+      success: false,
+      error: "Session data is incomplete. Reconnect from VS Code to continue.",
+    };
+  }
+
+  return {
+    success: false,
+    error: "No active session for this tab. Connect from VS Code to continue.",
+  };
 }
 
 function getToolPayload(request: MessageRequest): ToolExecutionPayload | null {
