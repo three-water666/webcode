@@ -67,7 +67,7 @@ VS Code 端完整站点结构：
 }
 ```
 
-`targetOrigin` 和 `targetUrl` 来自 bridge 握手时的跳转目标，立即可用，不依赖 `/v1/init`。URL 安全熔断用它们判断当前 tab 是否还停留在原始 AI 站点范围内。
+`targetOrigin` 和 `targetUrl` 来自 bridge 握手时的跳转目标，立即可用，不依赖 `/v1/init`。URL 安全判断用它们确认当前 tab 是否还停留在原始 AI 站点范围内；如果跳转到登录页或其他不匹配 URL，session 会保留，但页面能力会暂停，直到回到安全 URL 后恢复。
 
 ## 内置站点与用户覆盖规则
 
@@ -198,7 +198,7 @@ const BUILTIN_AI_SITES: ResolvedAiSiteConfig[] = [
 这个设计避免了两个问题：
 
 - content script 不再根据当前 URL 猜当前站点。
-- URL 安全判断不依赖 `/v1/init` 是否已经完成，不会因为配置还没同步就销毁 session。
+- URL 安全判断不依赖 `/v1/init` 是否已经完成，不会因为配置还没同步就误删 session；如果当前 URL 不安全，只会暂停页面能力，回到安全 URL 后恢复。
 
 ## 连接已有网页
 

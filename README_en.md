@@ -29,7 +29,7 @@ When the status bar shows a port number, the local gateway is running. The AI la
 4. The bridge page completes the handshake with the local gateway automatically.
 5. After the handshake succeeds, the browser redirects to the target AI site.
 
-On first use, sign in to the target AI site once in the isolated Edge profile. After signing in, return to VS Code and open the same target site from the webcode launch menu again; some sites redirect or change domains after login, which can invalidate the token from the first connection. After the second launch, when the bridge extension shows `ON`, the connection is ready to use.
+On first use, sign in to the target AI site once in the isolated Edge profile. If sign-in redirects to a third-party provider such as Google or Microsoft, the bridge temporarily pauses page capabilities and keeps the session; it resumes automatically after the browser returns to the target AI site. When the bridge extension shows `ON`, the connection is ready to use.
 
 If the gateway is already running, click `webcode: <port>` in the status bar to open the same launch menu again.
 

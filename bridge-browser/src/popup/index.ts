@@ -4,6 +4,9 @@ import { isMessageRequest, isStatusResponse, isSuccessResponse } from '../types'
 type PopupElements = {
   connectedView: HTMLElement;
   disconnectedView: HTMLElement;
+  disconnectedStatusCard: HTMLElement;
+  installCard: HTMLElement;
+  suspendedHint: HTMLElement;
   statusDot: HTMLElement;
   portDisplay: HTMLElement;
   manualInitBtn: HTMLButtonElement;
@@ -46,6 +49,8 @@ const UI: Record<string, Record<string, string>> = {
     auto_send: "Auto Send Message",
     show_log: "Show Floating Log",
     disconnected: "🔴 Disconnected from VS Code",
+    suspended: "⏸️ Connection paused on this page",
+    suspended_hint: "Return to the connected site to resume automatically. Local tools stay disabled here.",
     installed_title: "VS Code extension installed?",
     installed_desc: `Click ${BRANDING.productName} in the VS Code status bar (bottom right) and follow the steps to launch.`,
     not_installed_title: "VS Code extension not installed?",
@@ -65,6 +70,8 @@ const UI: Record<string, Record<string, string>> = {
     auto_send: "自动发送消息",
     show_log: "显示悬浮日志",
     disconnected: "🔴 未连接到 VS Code",
+    suspended: "⏸️ 当前页面连接已暂停",
+    suspended_hint: "回到已连接的网站后会自动恢复；本页面无法调用本地工具。",
     installed_title: "VS Code 插件已安装？",
     installed_desc: `点击 VS Code 右下角状态栏中的 ${BRANDING.productName}，并按提示启动服务。`,
     not_installed_title: "VS Code 插件未安装？",
@@ -106,6 +113,9 @@ function getPopupElements(): PopupElements {
   return {
     connectedView: document.getElementById("connectedView") as HTMLElement,
     disconnectedView: document.getElementById("disconnectedView") as HTMLElement,
+    disconnectedStatusCard: document.getElementById("disconnectedStatusCard") as HTMLElement,
+    installCard: document.getElementById("installCard") as HTMLElement,
+    suspendedHint: document.getElementById("suspendedHint") as HTMLElement,
     statusDot: document.getElementById("statusDot") as HTMLElement,
     portDisplay: document.getElementById("portDisplay") as HTMLElement,
     manualInitBtn: document.getElementById("manualInitBtn") as HTMLButtonElement,
@@ -134,6 +144,7 @@ function initializeLabels(context: PopupContext): void {
   elements.autoSendLabel.textContent = t("auto_send");
   elements.showLogLabel.textContent = t("show_log");
   elements.disconnectedTitle.textContent = t("disconnected");
+  elements.suspendedHint.textContent = t("suspended_hint");
   elements.installedTitle.textContent = t("installed_title");
   elements.installedDesc.innerHTML = renderInstalledDescription(t);
   elements.notInstalledTitle.textContent = t("not_installed_title");
@@ -161,8 +172,10 @@ function requestCurrentStatus(currentTabId: number, context: PopupContext): void
     (response: unknown) => {
       if (isStatusResponse(response) && response.connected) {
         showConnectedStatus(response, context.elements);
+      } else if (isStatusResponse(response) && response.suspended === true) {
+        showSuspendedStatus(context);
       } else {
-        showDisconnectedStatus(context.elements);
+        showDisconnectedStatus(context);
       }
     }
   );
@@ -172,13 +185,37 @@ function showConnectedStatus(response: { port?: number; showLog?: boolean }, ele
   elements.connectedView.classList.remove("hidden");
   elements.disconnectedView.classList.add("hidden");
   elements.statusDot.classList.add("online");
+  elements.statusDot.classList.remove("suspended");
   elements.portDisplay.innerText = String(response.port ?? "");
   elements.showLogInput.checked = response.showLog === true;
 }
 
-function showDisconnectedStatus(elements: PopupElements): void {
+function showSuspendedStatus(context: PopupContext): void {
+  const { elements, t } = context;
   elements.connectedView.classList.add("hidden");
+  elements.disconnectedView.classList.remove("hidden");
   elements.statusDot.classList.remove("online");
+  elements.statusDot.classList.add("suspended");
+  elements.disconnectedStatusCard.classList.remove("disconnected");
+  elements.disconnectedStatusCard.classList.add("suspended");
+  elements.disconnectedTitle.classList.remove("disconnected");
+  elements.disconnectedTitle.classList.add("suspended");
+  elements.disconnectedTitle.textContent = t("suspended");
+  elements.suspendedHint.classList.remove("hidden");
+  elements.installCard.classList.add("hidden");
+}
+
+function showDisconnectedStatus(context: PopupContext): void {
+  const { elements, t } = context;
+  elements.connectedView.classList.add("hidden");
+  elements.statusDot.classList.remove("online", "suspended");
+  elements.disconnectedStatusCard.classList.remove("suspended");
+  elements.disconnectedStatusCard.classList.add("disconnected");
+  elements.disconnectedTitle.classList.remove("suspended");
+  elements.disconnectedTitle.classList.add("disconnected");
+  elements.disconnectedTitle.textContent = t("disconnected");
+  elements.suspendedHint.classList.add("hidden");
+  elements.installCard.classList.remove("hidden");
   elements.disconnectedView.classList.remove("hidden");
 }
 

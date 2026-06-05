@@ -20,6 +20,15 @@
 4. **开始对话**: 打开新对话，先输入您的实际需求，再在同一条消息末尾添加 `/webcode` 或 `@webcode`。当 webcode 询问是否添加初始化上下文时，点击 **添加** 或按 Enter。webcode 会把触发词替换为完整初始化上下文，确认消息内容后由您手动发送。若内容超过当前站点输入框限制，webcode 会优先把完整上下文作为 txt 附件添加到消息中。
 5. **排查故障**: 如果图标显示红色或灰色，请点击插件图标查看详细的故障排查指引。
 
+## Session 状态
+
+浏览器插件后台会按当前 tab 的 session 和 URL 安全性区分以下状态：
+
+- `active`: 当前 tab 有完整 session，且当前 URL 在安全范围内。回到绑定的 AI 站点，或打开同一 gateway 端口的 `/bridge` 页面时，工具调用可以继续。
+- `missing`: 当前 tab 没有存过 session。通常表示还没有从 VS Code 发起连接，或 session 已被清理，需要重新连接。
+- `invalid`: 存储里有 session，但缺少 `siteId`、`targetOrigin`、`targetUrl` 等必要字段。插件会删除这个坏 session，并提示从 VS Code 重新连接。
+- `suspended`: 当前 tab 有完整 session，但当前 URL 不安全或无法确认安全。比如跳到第三方登录页、任意 localhost dev server 页面或第三方回调页时，本页会禁用本地工具；回到绑定目标站点后会自动恢复。
+
 ## 获取 VS Code 插件
 请在 VS Code 扩展商店中搜索：`webcode gateway`
 

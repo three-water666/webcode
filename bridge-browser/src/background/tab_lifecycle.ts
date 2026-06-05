@@ -1,7 +1,7 @@
 import { BRANDING } from '@webcode/shared';
 
 import { updateBadge } from './badge';
-import { getCurrentProtocolSession, removeSession } from './sessions';
+import { getCurrentProtocolSession, removeSession, suspendSession } from './sessions';
 import { checkUrlSafety, isBridgePageUrl } from './url_safety';
 
 export async function handleTabUpdated(
@@ -14,15 +14,13 @@ export async function handleTabUpdated(
 
   if (!currentUrl) {return;}
 
-  const isBridgePage = isBridgePageUrl(currentUrl);
-
   if (changeInfo.url) {
     const session = await getCurrentProtocolSession(tabId);
-    const isSafe = checkUrlSafety(changeInfo.url, session, isBridgePage);
+    const isSafe = checkUrlSafety(changeInfo.url, session, isBridgePageUrl(changeInfo.url, session?.port));
     if (!isSafe) {
       if (session) {
-        console.log(`${BRANDING.logPrefix} Security Fuse: Url changed to ${changeInfo.url}, revoking session.`);
-        await removeSession(tabId);
+        console.log(`${BRANDING.logPrefix} Security Fuse: Url changed to ${changeInfo.url}, suspending session.`);
+        suspendSession(tabId);
         updateBadge(tabId, false);
         return;
       }
@@ -33,7 +31,7 @@ export async function handleTabUpdated(
     const session = await getCurrentProtocolSession(tabId);
     if (!session) {return;}
 
-    const isSafe = checkUrlSafety(currentUrl, session, isBridgePage);
+    const isSafe = checkUrlSafety(currentUrl, session, isBridgePageUrl(currentUrl, session.port));
 
     if (isSafe) {
       updateBadge(tabId, true);
@@ -50,7 +48,7 @@ export async function handleTabUpdated(
         void chrome.tabs.sendMessage(tabId, { type: "TOGGLE_LOG", show: true }).catch(ignoreRuntimeError);
       }
     } else {
-      await removeSession(tabId);
+      suspendSession(tabId);
       updateBadge(tabId, false);
     }
   }

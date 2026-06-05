@@ -4,7 +4,7 @@ import { handleHandshake } from './connection';
 import { getErrorMessage } from './errors';
 import { executeTool } from './gateway';
 import { showNotification, updateWindowAttention } from './notifications';
-import { getCurrentProtocolSession, updateSessionLog } from './sessions';
+import { getActiveProtocolSessionResult, updateSessionLog } from './sessions';
 
 type SendResponse = (response?: unknown) => void;
 
@@ -44,7 +44,7 @@ function dispatchRuntimeMessage(
       respondAsync(updateWindowAttention(sender, false), sendResponse);
       return true;
     case "EXECUTE_TOOL":
-      respondAsync(executeTool(request, currentTabId), sendResponse);
+      respondAsync(executeTool(request, currentTabId, sender.url), sendResponse);
       return true;
     case "SHOW_NOTIFICATION":
       respondAsync(showNotification(request, sender), sendResponse);
@@ -68,16 +68,40 @@ function handleGetStatus(
     return;
   }
 
-  respondAsync(
-    getCurrentProtocolSession(targetTabId).then((session) => ({
-      connected: Boolean(session),
-      port: session?.port,
-      showLog: session?.showLog ?? false,
-      workspaceId: session?.workspaceId ?? 'global',
-      siteId: session?.siteId,
-    })),
-    sendResponse
-  );
+  respondAsync(getStatusResponse(targetTabId), sendResponse);
+}
+
+async function getStatusResponse(targetTabId: number) {
+  const sessionResult = await getActiveProtocolSessionResult(targetTabId);
+  if (sessionResult.status === "missing") {
+    return {
+      connected: false,
+      suspended: false,
+      showLog: false,
+      workspaceId: 'global',
+    };
+  }
+
+  if (sessionResult.status === "invalid") {
+    return {
+      connected: false,
+      suspended: false,
+      showLog: false,
+      workspaceId: 'global',
+      error: "Session data is incomplete. Reconnect from VS Code to continue.",
+    };
+  }
+
+  const session = sessionResult.session;
+  const isActive = sessionResult.status === "active";
+  return {
+    connected: isActive,
+    suspended: !isActive,
+    port: isActive ? session.port : undefined,
+    showLog: session.showLog ?? false,
+    workspaceId: session.workspaceId ?? 'global',
+    siteId: session.siteId,
+  };
 }
 
 function handleSetLogVisible(

@@ -64,7 +64,7 @@ Each connected tab stores a browser session:
 }
 ```
 
-`targetOrigin` and `targetUrl` are written during the bridge handshake, before `/v1/init` completes. URL safety checks use these session fields.
+`targetOrigin` and `targetUrl` are written during the bridge handshake, before `/v1/init` completes. URL safety checks use these session fields to confirm whether the tab is still within the original AI site range; if the tab navigates to a sign-in provider or another non-matching URL, the session is kept but page capabilities are paused until the tab returns to a safe URL.
 
 ## Built-In Sites and User Overrides
 
@@ -176,7 +176,7 @@ Custom sites do not inherit defaults, so the selector set must be complete.
 8. The target page content script calls `GET_STATUS` to get `siteId`.
 9. The content script uses `siteId` to find selectors in `syncedAiSites`.
 
-This avoids URL guessing in the content script and avoids a race where URL safety depends on `/v1/init` finishing first.
+This avoids URL guessing in the content script and avoids a race where URL safety depends on `/v1/init` finishing first. It also prevents sessions from being removed just because config has not synced yet; if the current URL is unsafe, page capabilities are paused and resume after the tab returns to a safe URL.
 
 ## Existing-Page Attach Flow
 

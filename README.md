@@ -29,7 +29,7 @@ webcode 用来把 ChatGPT、Gemini、DeepSeek 等这类网页 AI 接到本地 VS
 4. 桥接页会自动与本地 Gateway 完成握手。
 5. 握手成功后，浏览器会自动跳转到对应的 AI 站点。
 
-首次使用时，需要在这个独立 Edge profile 中登录一次目标 AI 站点。登录完成后，请回到 VS Code，再从 webcode 启动菜单重新打开一次同一个目标站点；有些网站登录后会跳转或变更域名，导致第一次连接使用的 token 失效。重新跳转后，当 bridge 显示 `ON` 时，表示连接已经可以使用。
+首次使用时，需要在这个独立 Edge profile 中登录一次目标 AI 站点。登录过程中如果跳转到 Google、Microsoft 等第三方登录页，bridge 会暂时暂停当前页面能力并保留 session；登录完成并回到目标 AI 站点后会自动恢复。当 bridge 显示 `ON` 时，表示连接已经可以使用。
 
 如果 Gateway 已经在运行，点击状态栏里的 `webcode: <端口>` 可以重新打开同一个启动菜单。
 
