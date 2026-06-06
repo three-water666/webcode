@@ -4,7 +4,7 @@
 
 # 工具调用格式
 
-调用 {{PRODUCT_NAME}} 工具时，必须输出下方格式的JSON，并且一定要放在 **JSON 代码块**，不能使用普通文本或行内 JSON。
+调用 {{PRODUCT_NAME}} 工具时，必须输出下方格式的JSON，并且一定要放在 **JSON 代码块**，绝对不能使用普通文本或行内 JSON，否则 {{PRODUCT_NAME}} 将无法识别到工具调用导致调用失败。
 
 ```json
 {
@@ -22,12 +22,20 @@
 
 1. 顶层字段只能包含 `mcp_action`、`name`、`purpose`、`arguments`、`request_id`。
 2. `mcp_action` 必须是 `"call"`；`name` 和 `purpose` 必填；如果所选工具有入参，`arguments` 必须严格匹配该工具的 `inputSchema`。
-3. 每一次工具调用都必须使用一个此前在本会话中从未出现过的新 `request_id`。不要在后续回复中复用 `step_1`、`step_2` 或任何旧值。
+3. 每一次工具调用都必须使用一个此前在本会话中从未出现过的新 `request_id`。不要在后续回复中复用任何旧值。
 4. 工具 `name` 必须和 {{PRODUCT_NAME}} Available Tools 工具列表中展示的一致。
 
 ## 工具调用结果
 
-工具调用结果将会由 {{PRODUCT_NAME}} 自动放在用户的下次回复中。
+工具调用结果将会由 {{PRODUCT_NAME}} 自动放在用户的下次回复中。返回结果格式如下：
+
+```json
+{
+  "mcp_action": "result",
+  "request_id": "turn_ab12_step_x",
+  "output": "这里是文件内容或命令执行结果..."
+}
+```
 
 ## 核心规则
 
