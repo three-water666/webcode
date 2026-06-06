@@ -190,17 +190,19 @@ function disableEdgeSpawnNtp(profileDir: string): void {
     const preferencesPath = path.join(profileDir, 'Default', 'Preferences');
 
     try {
-        if (!fs.existsSync(preferencesPath)) {
-            return;
-        }
+        fs.mkdirSync(path.dirname(preferencesPath), { recursive: true });
 
-        const parsedPreferences: unknown = JSON.parse(fs.readFileSync(preferencesPath, 'utf8'));
-        if (!isRecord(parsedPreferences)) {
-            return;
+        let preferences: Record<string, unknown> = {};
+        if (fs.existsSync(preferencesPath)) {
+            const parsedPreferences: unknown = JSON.parse(fs.readFileSync(preferencesPath, 'utf8'));
+            if (!isRecord(parsedPreferences)) {
+                return;
+            }
+
+            preferences = parsedPreferences;
         }
 
         let didChange = false;
-        const preferences = parsedPreferences;
         const browser = ensurePreferenceSection(preferences, 'browser');
         if (browser.spawn_ntp_on_last_tab !== false) {
             browser.spawn_ntp_on_last_tab = false;
@@ -222,7 +224,8 @@ function disableEdgeSpawnNtp(profileDir: string): void {
 }
 
 function isBrowserProfileLikelyInUse(profileDir: string): boolean {
-    return fs.existsSync(path.join(profileDir, 'lockfile'));
+    return ['lockfile', 'SingletonLock', 'SingletonCookie', 'SingletonSocket']
+        .some(fileName => fs.existsSync(path.join(profileDir, fileName)));
 }
 
 function ensurePreferenceSection(preferences: Record<string, unknown>, key: string): Record<string, unknown> {
