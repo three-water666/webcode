@@ -118,7 +118,7 @@ function openIsolatedBrowser(url: string, browserFamily: BrowserFamily, context:
     }
 
     if (browserFamily === 'edge') {
-        disableEdgeSpawnNtp(profileDir);
+        clearIsolatedEdgeTabSession(profileDir);
     }
 
     const browserArgs = buildIsolatedBrowserArgs(url, profileDir, extensionPath);
@@ -182,65 +182,21 @@ function buildKeepaliveBrowserArgs(url: string): string[] {
     ];
 }
 
-function disableEdgeSpawnNtp(profileDir: string): void {
-    if (isBrowserProfileLikelyInUse(profileDir)) {
+function clearIsolatedEdgeTabSession(profileDir: string): void {
+    const sessionsDir = path.join(profileDir, 'Default', 'Sessions');
+    if (!fs.existsSync(sessionsDir)) {
         return;
     }
 
-    const preferencesPath = path.join(profileDir, 'Default', 'Preferences');
-
     try {
-        fs.mkdirSync(path.dirname(preferencesPath), { recursive: true });
-
-        let preferences: Record<string, unknown> = {};
-        if (fs.existsSync(preferencesPath)) {
-            const parsedPreferences: unknown = JSON.parse(fs.readFileSync(preferencesPath, 'utf8'));
-            if (!isRecord(parsedPreferences)) {
-                return;
+        for (const entry of fs.readdirSync(sessionsDir, { withFileTypes: true })) {
+            if (entry.isFile() && /^(Session|Tabs)_/.test(entry.name)) {
+                fs.rmSync(path.join(sessionsDir, entry.name), { force: true });
             }
-
-            preferences = parsedPreferences;
-        }
-
-        let didChange = false;
-        const browser = ensurePreferenceSection(preferences, 'browser');
-        if (browser.spawn_ntp_on_last_tab !== false) {
-            browser.spawn_ntp_on_last_tab = false;
-            didChange = true;
-        }
-
-        const spawnNtp = ensurePreferenceSection(preferences, 'spawn_ntp');
-        if (spawnNtp.is_user_enabled !== false) {
-            spawnNtp.is_user_enabled = false;
-            didChange = true;
-        }
-
-        if (didChange) {
-            fs.writeFileSync(preferencesPath, `${JSON.stringify(preferences)}\n`, 'utf8');
         }
     } catch {
-        // This is a best-effort Edge workaround; launch should continue if the profile is locked or malformed.
+        // This is a best-effort cleanup; launch should continue if Edge has the session files locked.
     }
-}
-
-function isBrowserProfileLikelyInUse(profileDir: string): boolean {
-    return ['lockfile', 'SingletonLock', 'SingletonCookie', 'SingletonSocket']
-        .some(fileName => fs.existsSync(path.join(profileDir, fileName)));
-}
-
-function ensurePreferenceSection(preferences: Record<string, unknown>, key: string): Record<string, unknown> {
-    const section = preferences[key];
-    if (isRecord(section)) {
-        return section;
-    }
-
-    const newSection: Record<string, unknown> = {};
-    preferences[key] = newSection;
-    return newSection;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function normalizeBrowserPath(filePath: string): string {
