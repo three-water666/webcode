@@ -16,6 +16,12 @@ If the page still does not trigger, refresh the current page, confirm the browse
 
 Refresh the current page. After the refresh, webcode scans the page again and reruns the tool-result delivery flow for tool calls that still need to be handled.
 
+## What if isolated Edge opens an extra new tab when opening an AI page?
+
+Some Microsoft Edge versions may open an extra new tab based on the isolated profile's New Tab settings. In the isolated Edge window opened by webcode, go to `edge://settings/startHomeNTP`, then turn off "Preload the new tab page for a faster experience" under "Start, home, and new tabs".
+
+If the extra new tab still appears, check whether "When Edge starts" is set to "Open the new tab page", and try switching it to "Open tabs from the previous session". After changing the setting, fully close all Edge processes, then open the AI page from VS Code again.
+
 ## How can I see which tools the AI called before?
 
 Click the browser extension popup and enable logs. The summary column records each tool call, so you can review which tools the AI called and in what order.
