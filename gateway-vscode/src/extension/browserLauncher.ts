@@ -22,11 +22,6 @@ interface LaunchBridgeOptions {
 type BrowserFamily = 'chrome' | 'edge';
 
 const ISOLATED_EDGE_PROFILE_HOME_URL = 'edge://newtab/';
-const KEEPALIVE_DISABLED_FEATURES = [
-    'CalculateNativeWinOcclusion',
-    'IntensiveWakeUpThrottling',
-    'msSpawnNtpOnLastTabClose'
-].join(',');
 
 export function launchBridge(options: LaunchBridgeOptions): void {
     const bridgeUrl = buildBridgeUrl(options.currentPort, options.currentToken, options.siteId, options.targetUrl);
@@ -117,10 +112,6 @@ function openIsolatedBrowser(url: string, browserFamily: BrowserFamily, context:
         return;
     }
 
-    if (browserFamily === 'edge') {
-        clearIsolatedEdgeTabSession(profileDir);
-    }
-
     const browserArgs = buildIsolatedBrowserArgs(url, profileDir, extensionPath);
     if (browserFamily === 'chrome') {
         const invalidConfiguredPath = getInvalidConfiguredChromeForTestingPath();
@@ -165,7 +156,7 @@ function buildIsolatedBrowserArgs(url: string, profileDir: string, extensionPath
         '--disable-background-timer-throttling',
         '--disable-renderer-backgrounding',
         '--disable-backgrounding-occluded-windows',
-        `--disable-features=${KEEPALIVE_DISABLED_FEATURES}`,
+        '--disable-features=CalculateNativeWinOcclusion,IntensiveWakeUpThrottling',
         url
     ];
 }
@@ -177,26 +168,9 @@ function buildKeepaliveBrowserArgs(url: string): string[] {
         '--disable-background-timer-throttling',
         '--disable-renderer-backgrounding',
         '--disable-backgrounding-occluded-windows',
-        `--disable-features=${KEEPALIVE_DISABLED_FEATURES}`,
+        '--disable-features=CalculateNativeWinOcclusion,IntensiveWakeUpThrottling',
         url
     ];
-}
-
-function clearIsolatedEdgeTabSession(profileDir: string): void {
-    const sessionsDir = path.join(profileDir, 'Default', 'Sessions');
-    if (!fs.existsSync(sessionsDir)) {
-        return;
-    }
-
-    try {
-        for (const entry of fs.readdirSync(sessionsDir, { withFileTypes: true })) {
-            if (entry.isFile() && /^(Session|Tabs)_/.test(entry.name)) {
-                fs.rmSync(path.join(sessionsDir, entry.name), { force: true });
-            }
-        }
-    } catch {
-        // This is a best-effort cleanup; launch should continue if Edge has the session files locked.
-    }
 }
 
 function normalizeBrowserPath(filePath: string): string {
