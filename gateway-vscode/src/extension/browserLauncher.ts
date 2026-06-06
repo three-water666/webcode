@@ -22,6 +22,11 @@ interface LaunchBridgeOptions {
 type BrowserFamily = 'chrome' | 'edge';
 
 const ISOLATED_EDGE_PROFILE_HOME_URL = 'edge://newtab/';
+const KEEPALIVE_DISABLED_FEATURES = [
+    'CalculateNativeWinOcclusion',
+    'IntensiveWakeUpThrottling',
+    'msSpawnNtpOnLastTabClose'
+].join(',');
 
 export function launchBridge(options: LaunchBridgeOptions): void {
     const bridgeUrl = buildBridgeUrl(options.currentPort, options.currentToken, options.siteId, options.targetUrl);
@@ -112,6 +117,10 @@ function openIsolatedBrowser(url: string, browserFamily: BrowserFamily, context:
         return;
     }
 
+    if (browserFamily === 'edge') {
+        disableEdgeSpawnNtp(profileDir);
+    }
+
     const browserArgs = buildIsolatedBrowserArgs(url, profileDir, extensionPath);
     if (browserFamily === 'chrome') {
         const invalidConfiguredPath = getInvalidConfiguredChromeForTestingPath();
@@ -156,7 +165,7 @@ function buildIsolatedBrowserArgs(url: string, profileDir: string, extensionPath
         '--disable-background-timer-throttling',
         '--disable-renderer-backgrounding',
         '--disable-backgrounding-occluded-windows',
-        '--disable-features=CalculateNativeWinOcclusion,IntensiveWakeUpThrottling',
+        `--disable-features=${KEEPALIVE_DISABLED_FEATURES}`,
         url
     ];
 }
@@ -168,9 +177,67 @@ function buildKeepaliveBrowserArgs(url: string): string[] {
         '--disable-background-timer-throttling',
         '--disable-renderer-backgrounding',
         '--disable-backgrounding-occluded-windows',
-        '--disable-features=CalculateNativeWinOcclusion,IntensiveWakeUpThrottling',
+        `--disable-features=${KEEPALIVE_DISABLED_FEATURES}`,
         url
     ];
+}
+
+function disableEdgeSpawnNtp(profileDir: string): void {
+    if (isBrowserProfileLikelyInUse(profileDir)) {
+        return;
+    }
+
+    const preferencesPath = path.join(profileDir, 'Default', 'Preferences');
+
+    try {
+        if (!fs.existsSync(preferencesPath)) {
+            return;
+        }
+
+        const parsedPreferences: unknown = JSON.parse(fs.readFileSync(preferencesPath, 'utf8'));
+        if (!isRecord(parsedPreferences)) {
+            return;
+        }
+
+        let didChange = false;
+        const preferences = parsedPreferences;
+        const browser = ensurePreferenceSection(preferences, 'browser');
+        if (browser.spawn_ntp_on_last_tab !== false) {
+            browser.spawn_ntp_on_last_tab = false;
+            didChange = true;
+        }
+
+        const spawnNtp = ensurePreferenceSection(preferences, 'spawn_ntp');
+        if (spawnNtp.is_user_enabled !== false) {
+            spawnNtp.is_user_enabled = false;
+            didChange = true;
+        }
+
+        if (didChange) {
+            fs.writeFileSync(preferencesPath, `${JSON.stringify(preferences)}\n`, 'utf8');
+        }
+    } catch {
+        // This is a best-effort Edge workaround; launch should continue if the profile is locked or malformed.
+    }
+}
+
+function isBrowserProfileLikelyInUse(profileDir: string): boolean {
+    return fs.existsSync(path.join(profileDir, 'lockfile'));
+}
+
+function ensurePreferenceSection(preferences: Record<string, unknown>, key: string): Record<string, unknown> {
+    const section = preferences[key];
+    if (isRecord(section)) {
+        return section;
+    }
+
+    const newSection: Record<string, unknown> = {};
+    preferences[key] = newSection;
+    return newSection;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function normalizeBrowserPath(filePath: string): string {
