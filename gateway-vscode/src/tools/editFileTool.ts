@@ -4,9 +4,9 @@ import { textResult } from './result';
 import {
     atomicWriteFile,
     createUnifiedDiff,
-    normalizeLineEndings,
-    resolveWorkspacePath
+    normalizeLineEndings
 } from './filesystemUtils';
+import { WORKSPACE_FILE_PATH_DESCRIPTION, resolveWorkspaceRelativePath } from './workspacePath';
 
 type FileEdit = {
     oldText: string;
@@ -49,7 +49,7 @@ export const editFileTool: LocalTool = {
                 {
                     type: 'object',
                     properties: {
-                        path: { type: 'string', description: 'Workspace-relative or absolute path to the file.' },
+                        path: { type: 'string', description: WORKSPACE_FILE_PATH_DESCRIPTION },
                         edits: {
                             type: 'array',
                             minItems: 1,
@@ -78,7 +78,7 @@ export const editFileTool: LocalTool = {
                 {
                     type: 'object',
                     properties: {
-                        path: { type: 'string', description: 'Workspace-relative or absolute path to the file.' },
+                        path: { type: 'string', description: WORKSPACE_FILE_PATH_DESCRIPTION },
                         patch: {
                             type: 'string',
                             minLength: 1,
@@ -94,7 +94,7 @@ export const editFileTool: LocalTool = {
         annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true }
     },
     async execute(args, context) {
-        const filePath = await resolveWorkspacePath(context.workspaceRoot, args.path);
+        const filePath = (await resolveWorkspaceRelativePath(context.workspaceRoot, args.path)).absolutePath;
         const dryRun = args.dryRun === true;
         const rawContent = await fs.readFile(filePath, 'utf8');
         const usesCRLF = rawContent.includes('\r\n');

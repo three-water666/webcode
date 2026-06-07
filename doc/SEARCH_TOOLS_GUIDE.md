@@ -48,7 +48,7 @@ webcode 早期的文件查找和代码查找采用了两套不同实现：
 
 | 参数 | 说明 |
 | --- | --- |
-| `path` | 搜索根目录，默认 `.`。必须是 workspace 内的单个目录。 |
+| `path` | 搜索根目录，默认 `.`。必须是 workspace 相对目录，使用 `/` 分隔。 |
 | `query` | 文件名或相对路径查询，默认 `*`，表示列出 `path` 下文件。 |
 | `match` | query 解释方式：`auto`、`substring`、`glob`，默认 `auto`。 |
 | `case_sensitive` | 是否区分大小写，默认 `false`。 |
@@ -73,10 +73,11 @@ webcode 早期的文件查找和代码查找采用了两套不同实现：
 
 - `.`：workspace 根目录。
 - `gateway-vscode/src/tools`：workspace 相对目录。
-- workspace 内的绝对路径。
 
 不支持：
 
+- 绝对路径或 `~` home 路径。
+- 反斜杠路径，例如 `gateway-vscode\src`。
 - 多个目录。
 - `|` 分隔目录。
 - glob 目录，例如 `src/**`。
@@ -155,7 +156,7 @@ webcode 早期的文件查找和代码查找采用了两套不同实现：
 
 | 参数 | 说明 |
 | --- | --- |
-| `path` | 搜索根目录，默认 `.`。必须是 workspace 内目录。 |
+| `path` | 搜索根目录，默认 `.`。必须是 workspace 相对目录，使用 `/` 分隔。 |
 | `query` | 要搜索的文本。 |
 | `match` | query 解释方式：`substring` 或 `regex`，默认 `substring`。 |
 | `include` | 可选 include glob，例如 `**/*.ts`。 |

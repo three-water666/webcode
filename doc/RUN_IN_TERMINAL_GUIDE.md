@@ -22,7 +22,7 @@ bash.exe -lc "<command>"
 
 ### execute_command
 
-`execute_command` 不在本次优化范围内。它仍然用于后台执行短生命周期 POSIX/bash 命令，并直接返回 stdout、stderr 和 exitCode。
+`execute_command` 用于后台执行短生命周期 POSIX/bash 命令，并直接返回 stdout、stderr 和 exitCode。它支持用 workspace 相对 `path` 指定执行目录，默认 `.`。
 
 适合：
 
@@ -34,7 +34,7 @@ bash.exe -lc "<command>"
 
 ### run_in_terminal
 
-`run_in_terminal` 用于在可见 VS Code 终端中运行命令，并立即返回 `session_id`。它适合长时间运行、需要用户看见过程，或者可能需要交互的命令。
+`run_in_terminal` 用于在可见 VS Code 终端中运行命令，并立即返回 `session_id`。它支持用 workspace 相对 `path` 指定执行目录，默认 `.`。它适合长时间运行、需要用户看见过程，或者可能需要交互的命令。
 
 适合：
 
@@ -55,6 +55,21 @@ bash.exe -lc "<command>"
 - `stop`：向终端发送 `Ctrl+C`，请求中断当前命令，保留终端窗口。
 - `close`：关闭终端标签页。
 
+### 执行目录参数
+
+`execute_command` 和 `run_in_terminal` 使用 `path` 表示命令执行目录。`path` 必须是 workspace 相对目录，默认 `.`，不接受绝对路径、`~` home 路径或反斜杠。
+
+`path` 由 webcode 在 shell 选择前解析，不是 shell 命令文本的一部分，因此所有 terminal profile 使用同一种格式。无论选择 `default`、`git-bash`、`pwsh` 还是 `powershell`，都优先使用 `/` 分隔的 workspace 相对路径，例如 `packages/app`。
+
+```json
+{
+  "command": "pnpm build",
+  "path": "gateway-vscode"
+}
+```
+
+扩展内部会把 `path` 解析为 VS Code 终端或子进程需要的真实目录，但工具入参和 `run_in_terminal`、`terminal_session` 返回的 session summary 只暴露 workspace 相对 `path`。
+
 ## 运行模型
 
 优化后，`run_in_terminal` 不再创建伪终端，而是使用 VS Code 真实集成终端：
@@ -62,7 +77,7 @@ bash.exe -lc "<command>"
 ```ts
 vscode.window.createTerminal({
   name,
-  cwd,
+  cwd: resolvedAbsoluteDirectory,
   env,
   shellPath,
   shellArgs
@@ -263,7 +278,7 @@ PowerShell profile 使用独立策略，包括：
 
 ## 与 execute_command 的边界
 
-本次优化没有扩大 `execute_command` 的 shell 范围。原因是 `execute_command` 是后台执行工具，确定性和可采集性要求更高。
+当前没有扩大 `execute_command` 的 shell 范围。原因是 `execute_command` 是后台执行工具，确定性和可采集性要求更高。
 
 当前边界：
 

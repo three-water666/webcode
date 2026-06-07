@@ -16,8 +16,8 @@ suite('Write File Tool', () => {
 
     test('creates missing parent directories before writing a file', async () => {
         await withTempWorkspace(async workspaceRoot => {
-            const relativePath = path.join('new-folder', 'nested', 'deep', 'sample.txt');
-            const targetPath = path.join(workspaceRoot, relativePath);
+            const relativePath = 'new-folder/nested/deep/sample.txt';
+            const targetPath = path.join(workspaceRoot, 'new-folder', 'nested', 'deep', 'sample.txt');
 
             await writeFileTool.execute(
                 {
@@ -34,7 +34,7 @@ suite('Write File Tool', () => {
     test('creates missing child directories under an existing parent', async () => {
         await withTempWorkspace(async workspaceRoot => {
             await fs.mkdir(path.join(workspaceRoot, 'existing-dir'));
-            const relativePath = path.join('existing-dir', 'new-subdir', 'sample.txt');
+            const relativePath = 'existing-dir/new-subdir/sample.txt';
 
             await writeFileTool.execute(
                 {
@@ -45,7 +45,7 @@ suite('Write File Tool', () => {
             );
 
             assert.strictEqual(
-                await fs.readFile(path.join(workspaceRoot, relativePath), 'utf8'),
+                await fs.readFile(path.join(workspaceRoot, 'existing-dir', 'new-subdir', 'sample.txt'), 'utf8'),
                 'partial\n'
             );
         });
@@ -73,7 +73,7 @@ suite('Write File Tool', () => {
         await withTempWorkspace(async workspaceRoot => {
             const result = writeFileTool.execute(
                 {
-                    path: path.join('..', 'outside', 'sample.txt'),
+                    path: '../outside/sample.txt',
                     content: 'nope\n'
                 },
                 { workspaceRoot } as ToolExecutionContext
@@ -81,7 +81,7 @@ suite('Write File Tool', () => {
 
             await assert.rejects(
                 result,
-                /Access denied/
+                /path must stay inside/
             );
         });
     });
@@ -90,10 +90,11 @@ suite('Write File Tool', () => {
         await withTempWorkspace(async workspaceRoot => {
             const outsideDir = await fs.mkdtemp(path.join(os.tmpdir(), 'write-file-tool-absolute-outside-'));
             const outsideFile = path.join(outsideDir, 'sample.txt');
+            const outsideFileArg = outsideFile.replace(/\\/g, '/');
             try {
                 const result = writeFileTool.execute(
                     {
-                        path: outsideFile,
+                        path: outsideFileArg,
                         content: 'nope\n'
                     },
                     { workspaceRoot } as ToolExecutionContext
@@ -101,7 +102,7 @@ suite('Write File Tool', () => {
 
                 await assert.rejects(
                     result,
-                    /Access denied/
+                    /workspace-relative; absolute paths are not allowed/
                 );
                 await assert.rejects(
                     fs.stat(outsideFile),
@@ -110,6 +111,23 @@ suite('Write File Tool', () => {
             } finally {
                 await fs.rm(outsideDir, { recursive: true, force: true });
             }
+        });
+    });
+
+    test('rejects backslashes in file paths', async () => {
+        await withTempWorkspace(async workspaceRoot => {
+            const result = writeFileTool.execute(
+                {
+                    path: 'nested\\sample.txt',
+                    content: 'nope\n'
+                },
+                { workspaceRoot } as ToolExecutionContext
+            );
+
+            await assert.rejects(
+                result,
+                /backslashes are not allowed/
+            );
         });
     });
 
@@ -125,7 +143,7 @@ suite('Write File Tool', () => {
 
                 const result = writeFileTool.execute(
                     {
-                        path: path.join('outside-link', 'nested', 'sample.txt'),
+                        path: 'outside-link/nested/sample.txt',
                         content: 'nope\n'
                     },
                     { workspaceRoot } as ToolExecutionContext
@@ -133,7 +151,7 @@ suite('Write File Tool', () => {
 
                 await assert.rejects(
                     result,
-                    /Access denied/
+                    /path must stay inside/
                 );
                 await assert.rejects(
                     fs.stat(path.join(outsideDir, 'nested')),

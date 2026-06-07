@@ -2,7 +2,7 @@ import { spawn } from 'child_process';
 import type * as vscode from 'vscode';
 import type { LocalTool } from './types';
 import { textResult } from './result';
-import { getNumberArg, resolveWorkspaceDirectory } from './filesystemUtils';
+import { getNumberArg } from './filesystemUtils';
 import { createSearchCodeFallbackNotice, searchCodeInProcess } from './searchCodeFallback';
 import { formatSearchCodeOutput, type SearchCodeResult } from './searchCodeOutput';
 import { appendRipgrepMatch } from './searchCodeRipgrepOutput';
@@ -16,6 +16,7 @@ import {
     MIN_MATCH_LINE_MAX_CHARS,
 } from './searchCodeUtils';
 import type { SearchCodeOptions } from './searchCodeTypes';
+import { WORKSPACE_SEARCH_PATH_DESCRIPTION, resolveWorkspaceRelativeDirectory } from './workspacePath';
 
 export const searchCodeTool: LocalTool = {
     serverId: 'internal',
@@ -40,7 +41,7 @@ export const searchCodeTool: LocalTool = {
                         'When using regex syntax such as |, .*, groups, character classes, or \\b, set match to "regex".'
                     ].join(' ')
                 },
-                path: { type: 'string', description: 'Optional workspace directory to search. Defaults to ".".' },
+                path: { type: 'string', description: WORKSPACE_SEARCH_PATH_DESCRIPTION },
                 include: { type: 'string', description: 'Optional glob for files to include, for example "**/*.ts".' },
                 case_sensitive: { type: 'boolean', description: 'Whether matching is case-sensitive. Default: false.', default: false },
                 match: {
@@ -77,7 +78,7 @@ export const searchCodeTool: LocalTool = {
         annotations: { readOnlyHint: true }
     },
     async execute(args, context) {
-        const searchRoot = await resolveWorkspaceDirectory(context.workspaceRoot, args.path ?? '.');
+        const searchRoot = (await resolveWorkspaceRelativeDirectory(context.workspaceRoot, args.path ?? '.')).absolutePath;
         const workspaceRoot = context.workspaceRoot ?? searchRoot;
         const query = String(args.query);
         const maxResults = getNumberArg(args.max_results, 100);
