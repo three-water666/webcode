@@ -78,4 +78,12 @@ suite('Command Risk', () => {
     assert.strictEqual(assessShellCommandRisk('rm -rf ./src/**/*.js', riskContext).level, 'allowed');
     assert.strictEqual(assessShellCommandRisk('echo hi 2>&1', riskContext).level, 'allowed');
   });
+
+  test('allows ordinary POSIX diagnostics with dev null redirection and printf labels', () => {
+    const command = "printf '\\nSTATUS\\n'; git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || true";
+
+    assert.strictEqual(assessShellCommandRisk(command, riskContext).level, 'allowed');
+    assert.strictEqual(assessShellCommandRisk("printf '\\nSTATUS\\n'", riskContext).level, 'allowed');
+    assert.strictEqual(assessShellCommandRisk('git diff --stat origin/main...HEAD 2>/dev/null || git diff --stat main...HEAD', riskContext).level, 'allowed');
+  });
 });

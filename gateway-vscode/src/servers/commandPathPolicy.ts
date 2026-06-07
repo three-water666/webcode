@@ -81,20 +81,24 @@ function assessSegmentPathPolicy(
     context: CommandRiskContext
 ): CommandRiskIssue[] {
     const issues: CommandRiskIssue[] = [];
-    issues.push(...assessCommandToken(segment, context));
-    issues.push(...assessRedirections(segment, context));
+    issues.push(...assessCommandToken(parsed, segment, context));
+    issues.push(...assessRedirections(parsed, segment, context));
     issues.push(...assessPathOptions(parsed, segment, context));
     issues.push(...assessPathCommandArguments(parsed, segment, context));
-    issues.push(...assessObviousPathEscapes(segment, context));
+    issues.push(...assessObviousPathEscapes(parsed, segment, context));
     return issues;
 }
 
-function assessCommandToken(segment: ParsedShellSegment, context: CommandRiskContext): CommandRiskIssue[] {
-    if (!segment.commandToken || !looksPathLike(segment.commandToken)) {
+function assessCommandToken(
+    parsed: ParsedShellCommand,
+    segment: ParsedShellSegment,
+    context: CommandRiskContext
+): CommandRiskIssue[] {
+    if (!segment.commandToken || !looksPathLike(segment.commandToken, parsed)) {
         return [];
     }
 
-    return assessPathToken(segment.commandToken, context, 'obvious');
+    return assessPathToken(segment.commandToken, parsed, context, 'obvious');
 }
 
 function assessPathCommandArguments(
@@ -107,17 +111,21 @@ function assessPathCommandArguments(
     }
 
     const args = collectCommandPathArgs(parsed, segment);
-    const issues = args.flatMap(arg => assessPathToken(arg, context, 'argument'));
+    const issues = args.flatMap(arg => assessPathToken(arg, parsed, context, 'argument'));
     return isRecursiveRemove(segment) ? issues.concat(assessRecursiveRemoveTargets(args)) : issues;
 }
 
-function assessObviousPathEscapes(segment: ParsedShellSegment, context: CommandRiskContext): CommandRiskIssue[] {
+function assessObviousPathEscapes(
+    parsed: ParsedShellCommand,
+    segment: ParsedShellSegment,
+    context: CommandRiskContext
+): CommandRiskIssue[] {
     return segment.args.flatMap(arg => {
-        if (!isObviousPathEscape(arg)) {
+        if (!isObviousPathEscape(arg, parsed)) {
             return [];
         }
 
-        return assessPathToken(arg, context, 'obvious');
+        return assessPathToken(arg, parsed, context, 'obvious');
     });
 }
 
@@ -126,11 +134,21 @@ function assessPathOptions(
     segment: ParsedShellSegment,
     context: CommandRiskContext
 ): CommandRiskIssue[] {
-    return collectPathOptionValues(parsed, segment).flatMap(value => assessPathToken(value, context, 'argument'));
+    return collectPathOptionValues(parsed, segment).flatMap(value => assessPathToken(value, parsed, context, 'argument'));
 }
 
-function assessRedirections(segment: ParsedShellSegment, context: CommandRiskContext): CommandRiskIssue[] {
-    return collectRedirectionTargets(segment.words).flatMap(target => assessPathToken(target, context, 'argument'));
+function assessRedirections(
+    parsed: ParsedShellCommand,
+    segment: ParsedShellSegment,
+    context: CommandRiskContext
+): CommandRiskIssue[] {
+    return collectRedirectionTargets(segment.words).flatMap(target => {
+        if (isSafeRedirectionTarget(target, parsed)) {
+            return [];
+        }
+
+        return assessPathToken(target, parsed, context, 'argument');
+    });
 }
 
 function collectCommandPathArgs(parsed: ParsedShellCommand, segment: ParsedShellSegment): string[] {
@@ -229,19 +247,24 @@ function inlineRedirectionTarget(word: string): string | null {
     return match[1];
 }
 
-function assessPathToken(token: string, context: CommandRiskContext, mode: PathCheckMode): CommandRiskIssue[] {
+function assessPathToken(
+    token: string,
+    parsed: ParsedShellCommand,
+    context: CommandRiskContext,
+    mode: PathCheckMode
+): CommandRiskIssue[] {
     const candidate = normalizePathCandidate(token);
-    if (!candidate || shouldSkipPathCandidate(candidate, mode)) {
+    if (!candidate || shouldSkipPathCandidate(candidate, parsed, mode)) {
         return [];
     }
     if (isDynamicPathReference(candidate)) {
         return [blocked(`Dynamic path argument "${candidate}" cannot be verified against the workspace.`)];
     }
-    if (!looksPathLike(candidate) && mode === 'obvious') {
+    if (!looksPathLike(candidate, parsed) && mode === 'obvious') {
         return [];
     }
 
-    return isPathInsideWorkspace(candidate, context)
+    return isPathInsideWorkspace(candidate, parsed, context)
         ? []
         : [blocked(`Path argument "${candidate}" resolves outside the VS Code workspace.`)];
 }
@@ -252,31 +275,39 @@ function assessRecursiveRemoveTargets(targets: string[]): CommandRiskIssue[] {
         .map(() => dangerous('Recursive removal of workspace root, parent paths, .git, variables, or broad wildcards is not allowed.'));
 }
 
-function isPathInsideWorkspace(candidate: string, context: CommandRiskContext): boolean {
+function isPathInsideWorkspace(
+    candidate: string,
+    parsed: ParsedShellCommand,
+    context: CommandRiskContext
+): boolean {
     if (!context.workspaceRoot || !context.cwd) {
-        return !isObviousPathEscape(candidate);
+        return !isObviousPathEscape(candidate, parsed);
+    }
+    if (parsed.shellKind === 'posix' && isAbsolutePath(candidate, parsed)) {
+        return false;
     }
 
-    const resolved = resolveCandidatePath(candidate, context.cwd);
+    const resolved = resolveCandidatePath(candidate, context.cwd, parsed);
     const workspaceRoot = path.resolve(path.normalize(context.workspaceRoot));
     return isInsideDirectory(resolved, workspaceRoot);
 }
 
-function resolveCandidatePath(candidate: string, cwd: string): string {
-    const withoutGlob = stripGlobTail(candidate);
+function resolveCandidatePath(candidate: string, cwd: string, parsed: ParsedShellCommand): string {
+    const withoutGlob = stripGlobTail(candidate, parsed);
     return path.isAbsolute(withoutGlob)
         ? path.resolve(path.normalize(withoutGlob))
         : path.resolve(cwd, path.normalize(withoutGlob));
 }
 
-function stripGlobTail(candidate: string): string {
+function stripGlobTail(candidate: string, parsed: ParsedShellCommand): string {
     const globIndex = candidate.search(/[*?]/);
     if (globIndex === -1) {
         return candidate;
     }
 
     const prefix = candidate.slice(0, globIndex);
-    return prefix.replace(/[\\/][^\\/]*$/, '') || '.';
+    const segmentPattern = parsed.shellKind === 'posix' ? /\/[^/]*$/ : /[\\/][^\\/]*$/;
+    return prefix.replace(segmentPattern, '') || '.';
 }
 
 function isPathCommand(parsed: ParsedShellCommand, commandName: string): boolean {
@@ -310,40 +341,44 @@ function normalizePathCandidate(token: string): string {
     return token.trim().replace(/^file:\/\//i, '');
 }
 
-function shouldSkipPathCandidate(candidate: string, mode: PathCheckMode): boolean {
+function shouldSkipPathCandidate(candidate: string, parsed: ParsedShellCommand, mode: PathCheckMode): boolean {
     return candidate === ''
         || candidate === '-'
         || candidate === '--'
         || isNonFileUrl(candidate)
-        || (mode === 'obvious' && !isObviousPathEscape(candidate));
+        || (mode === 'obvious' && !isObviousPathEscape(candidate, parsed));
 }
 
-function isObviousPathEscape(candidate: string): boolean {
-    return startsWithParentPath(candidate)
-        || startsWithHomePath(candidate)
-        || isAbsolutePath(candidate)
+function isObviousPathEscape(candidate: string, parsed: ParsedShellCommand): boolean {
+    return startsWithParentPath(candidate, parsed)
+        || startsWithHomePath(candidate, parsed)
+        || isAbsolutePath(candidate, parsed)
         || isHomeEnvironmentPath(candidate);
 }
 
-function looksPathLike(candidate: string): boolean {
+function looksPathLike(candidate: string, parsed: ParsedShellCommand): boolean {
     return candidate === '.'
         || candidate === '..'
         || candidate.includes('/')
-        || candidate.includes('\\')
+        || (parsed.shellKind === 'powershell' && candidate.includes('\\'))
         || candidate.startsWith('~')
         || /^[a-z]:/i.test(candidate);
 }
 
-function startsWithParentPath(candidate: string): boolean {
+function startsWithParentPath(candidate: string, parsed: ParsedShellCommand): boolean {
     return candidate === '..'
         || candidate.startsWith('../')
-        || candidate.startsWith('..\\')
         || candidate.includes('/../')
-        || candidate.includes('\\..\\');
+        || (parsed.shellKind === 'powershell' && (
+            candidate.startsWith('..\\') ||
+            candidate.includes('\\..\\')
+        ));
 }
 
-function startsWithHomePath(candidate: string): boolean {
-    return candidate === '~' || candidate.startsWith('~/') || candidate.startsWith('~\\');
+function startsWithHomePath(candidate: string, parsed: ParsedShellCommand): boolean {
+    return candidate === '~' ||
+        candidate.startsWith('~/') ||
+        (parsed.shellKind === 'powershell' && candidate.startsWith('~\\'));
 }
 
 function isHomeEnvironmentPath(candidate: string): boolean {
@@ -355,8 +390,10 @@ function isHomeEnvironmentPath(candidate: string): boolean {
         || lower.startsWith('%homepath%');
 }
 
-function isAbsolutePath(candidate: string): boolean {
-    return path.isAbsolute(candidate) || /^[a-z]:[\\/]/i.test(candidate);
+function isAbsolutePath(candidate: string, parsed: ParsedShellCommand): boolean {
+    return parsed.shellKind === 'posix'
+        ? candidate.startsWith('/') || /^[a-z]:[\\/]/i.test(candidate)
+        : path.isAbsolute(candidate) || /^[a-z]:[\\/]/i.test(candidate);
 }
 
 function isDynamicPathReference(candidate: string): boolean {
@@ -370,6 +407,9 @@ function isNonFileUrl(candidate: string): boolean {
 function isRedirectionOperator(word: string): boolean {
     return /^(?:\d*)>{1,2}$/.test(word) || /^(?:\d*)<$/.test(word);
 }
+
+const isSafeRedirectionTarget = (target: string, parsed: ParsedShellCommand): boolean =>
+    parsed.shellKind === 'posix' && normalizePathCandidate(target) === '/dev/null';
 
 function getPathOptionName(
     arg: string,
@@ -421,10 +461,5 @@ function isInsideDirectory(filePath: string, directory: string): boolean {
         || normalizedPath.startsWith(normalizedDirectory.endsWith(path.sep) ? normalizedDirectory : `${normalizedDirectory}${path.sep}`);
 }
 
-function blocked(reason: string): CommandRiskIssue {
-    return { level: 'blocked', reason };
-}
-
-function dangerous(reason: string): CommandRiskIssue {
-    return { level: 'dangerous', reason };
-}
+const blocked = (reason: string): CommandRiskIssue => ({ level: 'blocked', reason });
+const dangerous = (reason: string): CommandRiskIssue => ({ level: 'dangerous', reason });
