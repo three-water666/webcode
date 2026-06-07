@@ -128,11 +128,7 @@ function hasOversizedInitPromptNoticeMarker(normalizedText: string): boolean {
 function hasProtocolPromptScaffoldMarker(normalizedText: string): boolean {
   return normalizedText.includes("mcp_action") &&
     normalizedText.includes("request_id") &&
-    normalizedText.includes("available tools") &&
-    (
-      normalizedText.includes("# 通信协议 (protocol)") ||
-      normalizedText.includes("# protocol")
-    );
+    normalizedText.includes("available tools");
 }
 
 function normalizePromptMarkerText(text: string): string {
