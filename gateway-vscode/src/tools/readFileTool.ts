@@ -1,8 +1,9 @@
 import * as fs from 'fs/promises';
 import type { LocalTool } from './types';
-import { normalizeLineEndings, resolveWorkspacePath } from './filesystemUtils';
+import { normalizeLineEndings } from './filesystemUtils';
 import { readFilePrefix } from './readFilePrefix';
 import { readSelectedFileLines, type LineSelectionOptions, type SelectedFileLines } from './readFileLineStream';
+import { WORKSPACE_FILE_PATH_DESCRIPTION, resolveWorkspaceRelativePath } from './workspacePath';
 import {
     formatLimitedReadFileOutput,
     READ_FILE_OUTPUT_MAX_BYTES,
@@ -21,7 +22,7 @@ export const readFileTool: LocalTool = {
         inputSchema: {
             type: 'object',
             properties: {
-                path: { type: 'string', description: 'Workspace-relative or absolute path to the file.' },
+                path: { type: 'string', description: WORKSPACE_FILE_PATH_DESCRIPTION },
                 head: { type: 'integer', minimum: 1, description: 'Optional number of lines to read from the start of the file.' },
                 tail: { type: 'integer', minimum: 1, description: 'Optional number of lines to read from the end of the file.' },
                 start_line: { type: 'integer', minimum: 1, description: 'Optional 1-based first line to read. Must be used with end_line and without head or tail.' },
@@ -33,7 +34,7 @@ export const readFileTool: LocalTool = {
         annotations: { readOnlyHint: true }
     },
     async execute(args, context) {
-        const filePath = await resolveWorkspacePath(context.workspaceRoot, args.path);
+        const filePath = (await resolveWorkspaceRelativePath(context.workspaceRoot, args.path)).absolutePath;
         const fileStats = await fs.stat(filePath);
         const result = await readFileContent(filePath, fileStats.size, args);
         return {

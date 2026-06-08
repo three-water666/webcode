@@ -9,7 +9,6 @@ import {
     isExistingFile,
     matchesFileQuery,
     resolveFileQueryMatchMode,
-    resolveWorkspaceDirectory,
     toPosixPath,
     walkWorkspaceFiles
 } from './filesystemUtils';
@@ -18,6 +17,7 @@ import { listGitSearchFiles } from './searchCodeGitFiles';
 import { isGitMetadataPath } from './searchCodeUtils';
 import { createRipgrepFilesArgs } from './searchFilesRipgrepArgs';
 import { formatSearchResultsLimitedNotice } from './searchResultLimits';
+import { WORKSPACE_SEARCH_PATH_DESCRIPTION, resolveWorkspaceRelativeDirectory } from './workspacePath';
 
 export const searchFilesTool: LocalTool = {
     serverId: 'internal',
@@ -33,7 +33,7 @@ export const searchFilesTool: LocalTool = {
             type: 'object',
             properties: {
                 query: { type: 'string', minLength: 1, description: 'Filename/path substring or glob pattern. Default: "*", which lists files under path.' },
-                path: { type: 'string', description: 'Optional workspace directory to search. Defaults to ".".' },
+                path: { type: 'string', description: WORKSPACE_SEARCH_PATH_DESCRIPTION },
                 match: {
                     type: 'string',
                     enum: ['auto', 'substring', 'glob'],
@@ -53,7 +53,7 @@ export const searchFilesTool: LocalTool = {
         annotations: { readOnlyHint: true }
     },
     async execute(args, context) {
-        const searchRoot = await resolveWorkspaceDirectory(context.workspaceRoot, args.path ?? '.');
+        const searchRoot = (await resolveWorkspaceRelativeDirectory(context.workspaceRoot, args.path ?? '.')).absolutePath;
         const workspaceRoot = context.workspaceRoot ?? searchRoot;
         const options: SearchFilesOptions = {
             searchRoot,

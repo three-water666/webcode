@@ -1,7 +1,7 @@
 import { execFile } from 'child_process';
 import type { LocalTool } from './types';
 import { errorResult, jsonResult } from './result';
-import { resolveWorkspaceDirectory } from './filesystemUtils';
+import { WORKSPACE_COMMAND_PATH_DESCRIPTION, resolveWorkspaceRelativeDirectory } from './workspacePath';
 import {
     describeShellCommandPolicy,
     normalizeShellCommand,
@@ -22,7 +22,7 @@ export const executeCommandTool: LocalTool = {
             type: 'object',
             properties: {
                 command: { type: 'string', minLength: 1, description: 'POSIX/bash command to execute, for example "git status" or "pnpm test". Do not run grep, rg, find, cat, sed, awk, or nl just to inspect workspace files; use the dedicated file/search tools.' },
-                cwd: { type: 'string', description: 'Optional working directory inside the workspace. Defaults to the workspace root.' },
+                path: { type: 'string', description: WORKSPACE_COMMAND_PATH_DESCRIPTION },
                 timeout: { type: 'integer', minimum: 1000, maximum: 120000, description: 'Timeout in milliseconds. Default: 60000.', default: 60000 }
             },
             required: ['command']
@@ -41,11 +41,14 @@ export const executeCommandTool: LocalTool = {
         }
 
         try {
-            const cwdArg = typeof args.cwd === 'string' && args.cwd.trim() === '' ? '.' : args.cwd ?? '.';
-            const cwd = await resolveWorkspaceDirectory(context.workspaceRoot, cwdArg);
+            if ('cwd' in args) {
+                return errorResult('Parameter "cwd" has been removed. Use workspace-relative "path" instead.');
+            }
+
+            const directory = await resolveWorkspaceRelativeDirectory(context.workspaceRoot, args.path ?? '.');
             const risk = assessShellCommandRisk(commandLine, {
                 workspaceRoot: context.workspaceRoot,
-                cwd,
+                cwd: directory.absolutePath,
                 platform: process.platform
             });
             if (risk.level !== 'allowed') {
@@ -58,7 +61,7 @@ export const executeCommandTool: LocalTool = {
                 env: process.env,
                 configuredPath: context.commandShellPath
             });
-            const result = await runCommand(execution.file, execution.args, cwd, timeout);
+            const result = await runCommand(execution.file, execution.args, directory.absolutePath, timeout);
             const isError = result.exitCode !== 0;
 
             return jsonResult({

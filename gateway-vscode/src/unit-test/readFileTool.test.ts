@@ -2,9 +2,9 @@ import * as fs from 'fs/promises';
 import * as assert from 'assert';
 import * as os from 'os';
 import * as path from 'path';
-import { resolveWorkspacePath } from '../tools/filesystemUtils';
 import { readFileContent, readFilePrefix, selectReadFileContent, selectReadFileResult } from '../tools/readFileTool';
 import { READ_FILE_OUTPUT_MAX_BYTES, READ_FILE_OUTPUT_MAX_LINES } from '../tools/readFileOutputLimit';
+import { resolveWorkspaceRelativeDirectory, resolveWorkspaceRelativePath } from '../tools/workspacePath';
 
 suite('Read File Tool', () => {
     const content = ['alpha', 'bravo', 'charlie', 'delta'].join('\n');
@@ -251,11 +251,71 @@ suite('Read File Tool', () => {
             await fs.writeFile(skillFilePath, '# release-package\n', 'utf8');
 
             assert.strictEqual(
-                await resolveWorkspacePath(tempDir, '.codex/skills/release-package/SKILL.md'),
+                (await resolveWorkspaceRelativePath(tempDir, '.codex/skills/release-package/SKILL.md')).absolutePath,
                 await fs.realpath(skillFilePath)
             );
         } finally {
             await fs.rm(tempDir, { recursive: true, force: true });
+        }
+    });
+
+    test('resolves workspace-relative command directories', async () => {
+        const tempDir = await createTempDir();
+        try {
+            const commandDir = path.join(tempDir, 'packages', 'sample');
+            await fs.mkdir(commandDir, { recursive: true });
+
+            const result = await resolveWorkspaceRelativeDirectory(tempDir, 'packages/sample');
+
+            assert.strictEqual(result.absolutePath, await fs.realpath(commandDir));
+            assert.strictEqual(result.relativePath, 'packages/sample');
+        } finally {
+            await removeTempDir(tempDir);
+        }
+    });
+
+    test('rejects absolute command directories', async () => {
+        const tempDir = await createTempDir();
+        try {
+            const commandDir = path.join(tempDir, 'packages', 'sample');
+            await fs.mkdir(commandDir, { recursive: true });
+            const absoluteCommandDir = commandDir.replace(/\\/g, '/');
+
+            await assert.rejects(
+                resolveWorkspaceRelativeDirectory(tempDir, absoluteCommandDir),
+                /workspace-relative; absolute paths are not allowed/
+            );
+        } finally {
+            await removeTempDir(tempDir);
+        }
+    });
+
+    test('rejects backslashes in command directories', async () => {
+        const tempDir = await createTempDir();
+        try {
+            await assert.rejects(
+                resolveWorkspaceRelativeDirectory(tempDir, 'packages\\sample'),
+                /backslashes are not allowed/
+            );
+        } finally {
+            await removeTempDir(tempDir);
+        }
+    });
+
+    test('rejects command directory traversal without leaking the workspace path', async () => {
+        const tempDir = await createTempDir();
+        try {
+            try {
+                await resolveWorkspaceRelativeDirectory(tempDir, '../outside');
+                assert.fail('Expected path traversal to be rejected.');
+            } catch (error: unknown) {
+                const message = error instanceof Error ? error.message : String(error);
+
+                assert.match(message, /path must stay inside the VS Code workspace/);
+                assert.ok(!message.includes(tempDir));
+            }
+        } finally {
+            await removeTempDir(tempDir);
         }
     });
 });
@@ -273,6 +333,14 @@ async function withTempFileBytes<T>(content: Buffer, callback: (filePath: string
     } finally {
         await fs.rm(tempDir, { recursive: true, force: true });
     }
+}
+
+async function createTempDir(): Promise<string> {
+    return fs.mkdtemp(path.join(os.tmpdir(), 'workspace-dir-'));
+}
+
+async function removeTempDir(tempDir: string): Promise<void> {
+    await fs.rm(tempDir, { recursive: true, force: true });
 }
 
 type TestReadFileMetadata = {

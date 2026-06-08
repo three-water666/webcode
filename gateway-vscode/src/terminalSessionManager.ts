@@ -17,7 +17,7 @@ export interface TerminalSessionSummary {
   id: string;
   name: string;
   command: string;
-  cwd: string;
+  path: string;
   status: TerminalSessionStatus;
   pid: number | null;
   startedAt: string;
@@ -30,6 +30,7 @@ export interface TerminalSessionSummary {
 }
 
 interface TerminalSession extends TerminalSessionSummary {
+  cwd: string;
   terminal: vscode.Terminal;
   output: string;
   closeDisposable: vscode.Disposable | null;
@@ -51,6 +52,7 @@ export class TerminalSessionManager {
   createSession(params: {
     commandLine: string;
     cwd: string;
+    path: string;
     env: NodeJS.ProcessEnv;
     profile: WebcodeTerminalProfile;
     autoFocus?: boolean;
@@ -110,12 +112,13 @@ export class TerminalSessionManager {
     id: string,
     name: string,
     terminal: vscode.Terminal,
-    params: { commandLine: string; cwd: string; profile: WebcodeTerminalProfile }
+    params: { commandLine: string; cwd: string; path: string; profile: WebcodeTerminalProfile }
   ): TerminalSession {
     return {
       id,
       name,
       command: params.commandLine,
+      path: params.path,
       cwd: params.cwd,
       status: 'starting',
       pid: null,
@@ -320,7 +323,7 @@ export class TerminalSessionManager {
       id: session.id,
       name: session.name,
       command: session.command,
-      cwd: session.cwd,
+      path: session.path,
       status: session.status,
       pid: session.pid,
       startedAt: session.startedAt,

@@ -13,6 +13,8 @@ These tools are implemented directly in `gateway-vscode/src/tools/` and injected
 
 Bare tool names only belong to these local tools. Tools exposed by third-party MCP servers appear in the tool list as `serverId:toolName`.
 
+Local tool `path` arguments consistently use workspace-relative paths with `/` separators. Absolute paths, home paths, and backslashes are rejected.
+
 | Tool | Purpose |
 | --- | --- |
 | `read_file` | Reads UTF-8 text files inside the workspace. Supports `head`, `tail`, `start_line`, `end_line`, and `show_line_numbers` for ranged reads and line numbers. |
@@ -20,9 +22,9 @@ Bare tool names only belong to these local tools. Tools exposed by third-party M
 | `edit_file` | Applies exact text replacements or unified diff patches to text files inside the workspace. Use `dryRun` to return a diff preview. |
 | `search_files` | Searches files by filename or relative path using ripgrep file listing first, with substring and glob matching that is case-insensitive by default, and respects ignore files by default. |
 | `search_code` | Searches workspace text files with ripgrep and returns relative paths, line numbers, and matching lines; pass `match: "regex"` when using regex syntax. |
-| `execute_command` | Runs short-lived POSIX/bash commands in the background and returns stdout, stderr, and exitCode. It is intended for builds, tests, git, package managers, and project scripts. Prefer `read_file`, `search_files`, and `search_code` for reading or searching files. |
-| `run_in_terminal` | Starts a long-running POSIX shell command in a visible VS Code terminal session and immediately returns a `session_id`. It is intended for persistent tasks or output that should stay visible to the user. On Windows, Git Bash is required, and commands should use bash/POSIX syntax instead of cmd.exe or PowerShell syntax. Clearly destructive, privileged, or shell-escape commands are rejected before execution. |
-| `terminal_session` | Manages terminal sessions created by `run_in_terminal`: use `action=list` to inspect status, `action=read` to read output, and `action=stop` to stop a session. |
+| `execute_command` | Runs short-lived POSIX/bash commands in the background and returns stdout, stderr, and exitCode. It is intended for builds, tests, git, package managers, and project scripts; pass `path` to choose the command directory. Prefer `read_file`, `search_files`, and `search_code` for reading or searching files. |
+| `run_in_terminal` | Runs a command in a real visible VS Code integrated terminal and immediately returns a `session_id`; pass `path` to choose the command directory. Every terminal profile uses the same path format. It is intended for persistent tasks or output that should stay visible to the user. It supports dynamically detected terminal profiles such as `default`, `git-bash`, `pwsh`, and `powershell`. Clearly destructive, privileged, or shell-escape commands are rejected before execution. |
+| `terminal_session` | Manages terminal sessions created by `run_in_terminal`: use `action=list` to inspect status, `action=read` to read output, and `action=stop` to stop a session. Session summaries expose workspace-relative `path`. |
 
 ## 2. Bootstrap-only Tools
 

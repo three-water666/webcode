@@ -61,6 +61,11 @@ suite('Command Risk', () => {
     assert.strictEqual(assessShellCommandRisk('echo hi > ../out.txt', riskContext).level, 'blocked');
   });
 
+  test('blocks non-dev-null POSIX absolute paths', () => {
+    assert.strictEqual(assessShellCommandRisk('echo hi >/tmp/out.txt', riskContext).level, 'blocked');
+    assert.strictEqual(assessShellCommandRisk('cat /etc/passwd', riskContext).level, 'blocked');
+  });
+
   test('checks POSIX path command writes and option values', () => {
     assert.strictEqual(assessShellCommandRisk('pnpm --dir=../outside build', riskContext).level, 'blocked');
     assert.strictEqual(assessShellCommandRisk('git -C ../outside status', riskContext).level, 'blocked');
@@ -77,5 +82,13 @@ suite('Command Risk', () => {
   test('allows workspace glob paths and file descriptor redirection', () => {
     assert.strictEqual(assessShellCommandRisk('rm -rf ./src/**/*.js', riskContext).level, 'allowed');
     assert.strictEqual(assessShellCommandRisk('echo hi 2>&1', riskContext).level, 'allowed');
+  });
+
+  test('allows ordinary POSIX diagnostics with dev null redirection and printf labels', () => {
+    const command = "printf '\\nSTATUS\\n'; git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || true";
+
+    assert.strictEqual(assessShellCommandRisk(command, riskContext).level, 'allowed');
+    assert.strictEqual(assessShellCommandRisk("printf '\\nSTATUS\\n'", riskContext).level, 'allowed');
+    assert.strictEqual(assessShellCommandRisk('git diff --stat origin/main...HEAD 2>/dev/null || git diff --stat main...HEAD', riskContext).level, 'allowed');
   });
 });
