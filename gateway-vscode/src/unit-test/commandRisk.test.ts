@@ -61,6 +61,11 @@ suite('Command Risk', () => {
     assert.strictEqual(assessShellCommandRisk('echo hi > ../out.txt', riskContext).level, 'blocked');
   });
 
+  test('blocks non-dev-null POSIX absolute paths', () => {
+    assert.strictEqual(assessShellCommandRisk('echo hi >/tmp/out.txt', riskContext).level, 'blocked');
+    assert.strictEqual(assessShellCommandRisk('cat /etc/passwd', riskContext).level, 'blocked');
+  });
+
   test('checks POSIX path command writes and option values', () => {
     assert.strictEqual(assessShellCommandRisk('pnpm --dir=../outside build', riskContext).level, 'blocked');
     assert.strictEqual(assessShellCommandRisk('git -C ../outside status', riskContext).level, 'blocked');
