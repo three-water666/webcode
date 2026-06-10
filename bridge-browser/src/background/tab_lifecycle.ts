@@ -43,6 +43,7 @@ export async function handleTabUpdated(
           workspaceId: session.workspaceId,
           siteId: session.siteId,
           autoSend: session.autoSend,
+          autoApproveTools: session.autoApproveTools,
         })
         .catch(ignoreRuntimeError);
       if (session.showLog) {

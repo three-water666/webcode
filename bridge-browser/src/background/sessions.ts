@@ -92,6 +92,14 @@ export async function updateSessionAutoSend(tabId: number, autoSend: boolean) {
   }
 }
 
+export async function updateSessionAutoApproveTools(tabId: number, autoApproveTools: boolean) {
+  const session = await getSession(tabId);
+  if (session) {
+    session.autoApproveTools = autoApproveTools;
+    await saveSession(tabId, session);
+  }
+}
+
 export function suspendSession(tabId: number) {
   void chrome.tabs.sendMessage(tabId, { type: "STATUS_UPDATE", connected: false }).catch(ignoreRuntimeError);
 }

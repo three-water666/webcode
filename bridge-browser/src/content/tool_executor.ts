@@ -19,6 +19,7 @@ interface ToolExecutorOptions {
   getSiteId: () => string | null;
   getWorkspaceId: () => string;
   getApprovalState: () => ApprovalState;
+  getAutoApproveTools: () => boolean;
   requestRegistry: ToolRequestRegistry;
   scheduleMainLoop: (delayMs: number) => void;
 }
@@ -172,6 +173,7 @@ export class ToolExecutor {
 
   private needsApproval(payload: ToolExecutionPayload): boolean {
     if (payload.name === PROTOCOL.initToolName || isBootstrapOnlyToolName(payload.name)) {return false;}
+    if (this.options.getAutoApproveTools()) {return false;}
     return !isPayloadApproved(payload, this.options.getApprovalState());
   }
 

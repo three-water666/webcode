@@ -103,6 +103,7 @@ export interface Session {
   token: string;
   showLog: boolean;
   autoSend: boolean;
+  autoApproveTools: boolean;
   workspaceId: string;
   siteId?: string;
   targetOrigin?: string;

@@ -4,7 +4,12 @@ import { handleHandshake } from './connection';
 import { getErrorMessage } from './errors';
 import { executeTool } from './gateway';
 import { showNotification, updateWindowAttention } from './notifications';
-import { getActiveProtocolSessionResult, updateSessionAutoSend, updateSessionLog } from './sessions';
+import {
+  getActiveProtocolSessionResult,
+  updateSessionAutoApproveTools,
+  updateSessionAutoSend,
+  updateSessionLog,
+} from './sessions';
 
 type SendResponse = (response?: unknown) => void;
 
@@ -39,6 +44,9 @@ function dispatchRuntimeMessage(
       return true;
     case "SET_AUTO_SEND":
       handleSetAutoSend(request, currentTabId, sendResponse);
+      return true;
+    case "SET_AUTO_APPROVE_TOOLS":
+      handleSetAutoApproveTools(request, currentTabId, sendResponse);
       return true;
     case "REQUEST_USER_ATTENTION":
       respondAsync(requestUserAttention(request, sender), sendResponse);
@@ -82,6 +90,7 @@ async function getStatusResponse(targetTabId: number) {
       suspended: false,
       showLog: false,
       autoSend: true,
+      autoApproveTools: false,
       workspaceId: 'global',
     };
   }
@@ -92,6 +101,7 @@ async function getStatusResponse(targetTabId: number) {
       suspended: false,
       showLog: false,
       autoSend: true,
+      autoApproveTools: false,
       workspaceId: 'global',
       error: "Session data is incomplete. Reconnect from VS Code to continue.",
     };
@@ -105,6 +115,7 @@ async function getStatusResponse(targetTabId: number) {
     port: isActive ? session.port : undefined,
     showLog: session.showLog ?? false,
     autoSend: session.autoSend ?? true,
+    autoApproveTools: session.autoApproveTools ?? false,
     workspaceId: session.workspaceId ?? 'global',
     siteId: session.siteId,
   };
@@ -157,6 +168,40 @@ function handleSetAutoSend(
       chrome.runtime.sendMessage({ type: "AUTO_SEND_CHANGED", tabId: targetTabId, autoSend }, () => {
         void chrome.runtime.lastError;
       });
+      return { success: true };
+    }),
+    sendResponse
+  );
+}
+
+function handleSetAutoApproveTools(
+  request: MessageRequest,
+  currentTabId: number | null | undefined,
+  sendResponse: SendResponse
+): void {
+  const targetTabId = request.tabId ?? currentTabId;
+  if (!targetTabId) {
+    sendResponse({ success: false, error: "Missing Tab ID" });
+    return;
+  }
+
+  if (typeof request.autoApproveTools !== "boolean") {
+    sendResponse({ success: false, error: "Missing auto-approve value" });
+    return;
+  }
+
+  const autoApproveTools = request.autoApproveTools;
+  respondAsync(
+    updateSessionAutoApproveTools(targetTabId, autoApproveTools).then(() => {
+      void chrome.tabs
+        .sendMessage(targetTabId, { type: "SET_AUTO_APPROVE_TOOLS", autoApproveTools })
+        .catch(ignoreRuntimeError);
+      chrome.runtime.sendMessage(
+        { type: "AUTO_APPROVE_TOOLS_CHANGED", tabId: targetTabId, autoApproveTools },
+        () => {
+          void chrome.runtime.lastError;
+        }
+      );
       return { success: true };
     }),
     sendResponse

@@ -25,6 +25,7 @@ export interface MessageRequest {
   playSound?: boolean;
   connected?: boolean;
   autoSend?: boolean;
+  autoApproveTools?: boolean;
   payload?: ToolExecutionPayload;
 }
 
@@ -41,6 +42,7 @@ export interface StatusResponse {
   port?: number;
   showLog?: boolean;
   autoSend?: boolean;
+  autoApproveTools?: boolean;
   workspaceId?: string;
   siteId?: string;
 }
@@ -61,6 +63,7 @@ export interface StoredSession {
   token: string;
   showLog?: boolean;
   autoSend?: boolean;
+  autoApproveTools?: boolean;
   workspaceId?: string;
   siteId?: string;
   targetOrigin?: string;
@@ -93,6 +96,7 @@ export function isSession(value: unknown): value is Session {
   return isStoredSession(value) &&
     typeof value.showLog === "boolean" &&
     typeof value.autoSend === "boolean" &&
+    typeof value.autoApproveTools === "boolean" &&
     typeof value.workspaceId === "string";
 }
 
@@ -103,6 +107,7 @@ export function isStoredSession(value: unknown): value is StoredSession {
     typeof value.token === "string" &&
     isOptionalBoolean(value.showLog) &&
     isOptionalBoolean(value.autoSend) &&
+    isOptionalBoolean(value.autoApproveTools) &&
     isOptionalString(value.workspaceId) &&
     isOptionalString(value.siteId) &&
     isOptionalString(value.targetOrigin) &&
@@ -118,6 +123,7 @@ export function normalizeSession(value: unknown): Session | null {
     token: value.token,
     showLog: value.showLog ?? false,
     autoSend: value.autoSend ?? true,
+    autoApproveTools: value.autoApproveTools ?? false,
     workspaceId: value.workspaceId ?? "global",
     siteId: value.siteId,
     targetOrigin: value.targetOrigin ?? value.allowedOrigins?.[0],

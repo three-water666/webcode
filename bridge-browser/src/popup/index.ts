@@ -11,11 +11,13 @@ type PopupElements = {
   portDisplay: HTMLElement;
   manualInitBtn: HTMLButtonElement;
   autoSendInput: HTMLInputElement;
+  autoApproveToolsInput: HTMLInputElement;
   showLogInput: HTMLInputElement;
   title: HTMLElement;
   connectedText: HTMLElement;
   portLabel: HTMLElement;
   autoSendLabel: HTMLElement;
+  autoApproveToolsLabel: HTMLElement;
   showLogLabel: HTMLElement;
   disconnectedTitle: HTMLElement;
   installedTitle: HTMLElement;
@@ -47,6 +49,7 @@ const UI: Record<string, Record<string, string>> = {
     manual_init_failed: "Initialization failed",
     manual_init_unavailable: "Cannot initialize here",
     auto_send: "Auto Send Message",
+    auto_approve_tools: "Auto-Approve Tools",
     show_log: "Show Floating Log",
     disconnected: "🔴 Disconnected from VS Code",
     suspended: "⏸️ Connection paused on this page",
@@ -68,6 +71,7 @@ const UI: Record<string, Record<string, string>> = {
     manual_init_failed: "初始化失败",
     manual_init_unavailable: "当前页面无法初始化",
     auto_send: "自动发送消息",
+    auto_approve_tools: "所有工具无需审批",
     show_log: "显示悬浮日志",
     disconnected: "🔴 未连接到 VS Code",
     suspended: "⏸️ 当前页面连接已暂停",
@@ -120,11 +124,13 @@ function getPopupElements(): PopupElements {
     portDisplay: document.getElementById("portDisplay") as HTMLElement,
     manualInitBtn: document.getElementById("manualInitBtn") as HTMLButtonElement,
     autoSendInput: document.getElementById("autoSend") as HTMLInputElement,
+    autoApproveToolsInput: document.getElementById("autoApproveTools") as HTMLInputElement,
     showLogInput: document.getElementById("showLog") as HTMLInputElement,
     title: document.getElementById("title") as HTMLElement,
     connectedText: document.getElementById("connectedText") as HTMLElement,
     portLabel: document.getElementById("portLabel") as HTMLElement,
     autoSendLabel: document.getElementById("autoSendLabel") as HTMLElement,
+    autoApproveToolsLabel: document.getElementById("autoApproveToolsLabel") as HTMLElement,
     showLogLabel: document.getElementById("showLogLabel") as HTMLElement,
     disconnectedTitle: document.getElementById("disconnectedTitle") as HTMLElement,
     installedTitle: document.getElementById("installedTitle") as HTMLElement,
@@ -142,6 +148,7 @@ function initializeLabels(context: PopupContext): void {
   elements.manualInitBtn.textContent = t("manual_init");
   elements.manualInitBtn.title = t("manual_init_title");
   elements.autoSendLabel.textContent = t("auto_send");
+  elements.autoApproveToolsLabel.textContent = t("auto_approve_tools");
   elements.showLogLabel.textContent = t("show_log");
   elements.disconnectedTitle.textContent = t("disconnected");
   elements.suspendedHint.textContent = t("suspended_hint");
@@ -166,6 +173,13 @@ function listenForSessionSettingChanges(currentTabId: number, elements: PopupEle
     if (isMessageRequest(request) && request.type === "AUTO_SEND_CHANGED" && request.tabId === currentTabId) {
       elements.autoSendInput.checked = request.autoSend !== false;
     }
+    if (
+      isMessageRequest(request) &&
+      request.type === "AUTO_APPROVE_TOOLS_CHANGED" &&
+      request.tabId === currentTabId
+    ) {
+      elements.autoApproveToolsInput.checked = request.autoApproveTools === true;
+    }
   });
 }
 
@@ -184,13 +198,17 @@ function requestCurrentStatus(currentTabId: number, context: PopupContext): void
   );
 }
 
-function showConnectedStatus(response: { port?: number; showLog?: boolean; autoSend?: boolean }, elements: PopupElements): void {
+function showConnectedStatus(
+  response: { port?: number; showLog?: boolean; autoSend?: boolean; autoApproveTools?: boolean },
+  elements: PopupElements
+): void {
   elements.connectedView.classList.remove("hidden");
   elements.disconnectedView.classList.add("hidden");
   elements.statusDot.classList.add("online");
   elements.statusDot.classList.remove("suspended");
   elements.portDisplay.innerText = String(response.port ?? "");
   elements.autoSendInput.checked = response.autoSend !== false;
+  elements.autoApproveToolsInput.checked = response.autoApproveTools === true;
   elements.showLogInput.checked = response.showLog === true;
 }
 
@@ -226,6 +244,7 @@ function showDisconnectedStatus(context: PopupContext): void {
 function bindPopupControls(currentTabId: number, context: PopupContext): void {
   bindManualInitButton(currentTabId, context);
   bindAutoSendToggle(currentTabId, context.elements.autoSendInput);
+  bindAutoApproveToolsToggle(currentTabId, context.elements.autoApproveToolsInput);
   bindLogToggle(currentTabId, context.elements.showLogInput);
 }
 
@@ -309,6 +328,19 @@ function bindAutoSendToggle(currentTabId: number, autoSendInput: HTMLInputElemen
       type: "SET_AUTO_SEND",
       tabId: currentTabId,
       autoSend: autoSendInput.checked,
+    });
+  });
+}
+
+function bindAutoApproveToolsToggle(
+  currentTabId: number,
+  autoApproveToolsInput: HTMLInputElement
+): void {
+  autoApproveToolsInput.addEventListener("change", () => {
+    void chrome.runtime.sendMessage({
+      type: "SET_AUTO_APPROVE_TOOLS",
+      tabId: currentTabId,
+      autoApproveTools: autoApproveToolsInput.checked,
     });
   });
 }

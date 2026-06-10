@@ -17,30 +17,19 @@ import { type BufferedResultBatch, ToolRequestRegistry } from "./tool_request_re
 interface ConfigState {
   pollInterval: number;
   autoSend: boolean;
+  autoApproveTools: boolean;
 }
 
 const CONFIG: ConfigState = {
   pollInterval: 1000,
   autoSend: true,
+  autoApproveTools: false,
 };
 
 const OBSERVED_STATE_ATTRIBUTES = [
-  "aria-busy",
-  "aria-disabled",
-  "aria-hidden",
-  "aria-label",
-  "class",
-  "data-disabled",
-  "data-loading",
-  "data-state",
-  "data-test-id",
-  "data-testid",
-  "data-visible",
-  "disabled",
-  "hidden",
-  "inert",
-  "style",
-  "title",
+  "aria-busy", "aria-disabled", "aria-hidden", "aria-label", "class",
+  "data-disabled", "data-loading", "data-state", "data-test-id", "data-testid",
+  "data-visible", "disabled", "hidden", "inert", "style", "title",
 ];
 
 // [State] Connection Guard
@@ -96,6 +85,10 @@ function handleRuntimeMessage(request: unknown, sendResponse: RuntimeSendRespons
     }
     Logger.log(`Auto Send: ${CONFIG.autoSend}`, "info");
   }
+  if (request.type === "SET_AUTO_APPROVE_TOOLS") {
+    CONFIG.autoApproveTools = request.autoApproveTools === true;
+    Logger.log(`Auto-Approve Tools: ${CONFIG.autoApproveTools}`, "info");
+  }
   if (request.type === "STATUS_UPDATE") {
     handleStatusUpdate(request);
   }
@@ -106,16 +99,7 @@ function handleStatusUpdate(request: MessageRequest): void {
   const wasWorkspaceId = currentWorkspaceId;
   const wasSiteId = currentSiteId;
 
-  isClientConnected = request.connected === true;
-  if (typeof request.workspaceId === "string") {
-    currentWorkspaceId = request.workspaceId;
-  }
-  if (typeof request.siteId === "string") {
-    currentSiteId = request.siteId;
-  }
-  if (typeof request.autoSend === "boolean") {
-    CONFIG.autoSend = request.autoSend;
-  }
+  applyStatusUpdateFields(request);
 
   if (!isClientConnected) {
     resetCurrentSite();
@@ -132,6 +116,14 @@ function handleStatusUpdate(request: MessageRequest): void {
   if (isClientConnected && (isClientConnected !== wasConnected || currentWorkspaceId !== wasWorkspaceId)) {
     void refreshConnectedState();
   }
+}
+
+function applyStatusUpdateFields(request: MessageRequest): void {
+  isClientConnected = request.connected === true;
+  if (typeof request.workspaceId === "string") {currentWorkspaceId = request.workspaceId;}
+  if (typeof request.siteId === "string") {currentSiteId = request.siteId;}
+  if (typeof request.autoSend === "boolean") {CONFIG.autoSend = request.autoSend;}
+  if (typeof request.autoApproveTools === "boolean") {CONFIG.autoApproveTools = request.autoApproveTools;}
 }
 
 async function refreshConnectedState(): Promise<void> {
@@ -172,6 +164,7 @@ function initDOMConfig(): void {
 async function loadDOMConfig(): Promise<void> {
   const status = await getCurrentStatus();
   CONFIG.autoSend = status?.autoSend !== false;
+  CONFIG.autoApproveTools = status?.autoApproveTools === true;
 
   if (!status?.connected || typeof status.siteId !== "string") {
     resetCurrentSite();
@@ -270,6 +263,7 @@ const toolExecutor = new ToolExecutor({
   getSiteId: () => currentSiteId,
   getWorkspaceId: () => currentWorkspaceId,
   getApprovalState: () => approvalState,
+  getAutoApproveTools: () => CONFIG.autoApproveTools,
   requestRegistry,
   scheduleMainLoop,
 });

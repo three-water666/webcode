@@ -64,6 +64,7 @@ export async function bindSession(tabId: number, options: BindSessionOptions) {
     token: options.token,
     showLog: false,
     autoSend: true,
+    autoApproveTools: false,
     workspaceId: options.workspaceId,
     siteId: options.siteId,
     targetOrigin: options.targetOrigin,
@@ -79,6 +80,7 @@ export async function bindSession(tabId: number, options: BindSessionOptions) {
     workspaceId: options.workspaceId,
     siteId: options.siteId,
     autoSend: session.autoSend,
+    autoApproveTools: session.autoApproveTools,
   }).catch(ignoreRuntimeError);
   // 不再 await，避免网关初始化请求阻塞握手响应
   void fetchInitDataFromGateway(options.port, options.token);
