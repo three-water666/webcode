@@ -2,15 +2,15 @@ import { t } from "../modules/i18n";
 import { Logger } from "../modules/logger";
 import * as UI from "../modules/ui";
 import { type SiteSelectors } from "../modules/config";
-import { looksLikeToolCall, parseToolCall } from "../modules/toolCallProtocol";
 import { BRANDING, PROTOCOL } from "@webcode/shared";
 import { getSyncedAiSites, isMessageRequest, isSiteSelectors, isStatusResponse, type MessageRequest, type StatusResponse, type SyncedAiSite } from "../types";
 import { AutoInitPromptController } from "./auto_init_prompt";
 import { createApprovalState, parseStoredApprovalEntries, type ApprovalState } from "./approval_policy";
 import { CompletionNotifier } from "./completion_notifier";
+import { PageTurnStateMachine } from "./page_turn_state";
 import { hasPromptResourceChange, loadPromptsFromStorage } from "./prompt_resources";
-import { logToolSummary, ToolCallTracker } from "./tool_call_tracker";
-import { ToolExecutor } from "./tool_executor";
+import { SendIntentObserver } from "./send_intent_observer";
+import { ToolTurnCoordinator } from "./tool_turn_coordinator";
 import { type BufferedResultBatch, ToolRequestRegistry } from "./tool_request_registry";
 
 // === 配置与状态 ===
@@ -127,13 +127,11 @@ function handleStatusUpdate(request: MessageRequest): void {
 async function refreshConnectedState(): Promise<void> {
   // 连接状态或工作区发生变化时，页面 DOM 不一定会同步变化，因此不能只依赖 MutationObserver。
   // 这里先刷新当前工作区的放行规则和提示词资源，再主动触发自动初始化检查和主循环扫描。
-  // runMainLoop 直接执行一次，可以立刻捕获页面上已经存在、但在连接前还不能执行的工具调用。
+  // runMainLoop 仍会执行一次，但新工具调用必须属于状态机中的活跃轮次，避免连接恢复时执行历史消息。
   await loadWorkspaceData(currentWorkspaceId);
   await loadPromptsFromStorage();
   autoInitPrompt.scheduleCheck();
-  if (DOM) {
-    completionNotifier.observe(DOM);
-  }
+  observePageTurnState();
   runMainLoop();
 }
 
@@ -188,7 +186,9 @@ function applySyncedSiteConfig(siteId: string, sites: SyncedAiSite[]): void {
     DOM = matchedSite.selectors;
     currentSiteName = matchedSite.name ?? matchedSite.id;
     completionNotifier.reset();
+    pageTurnState.reset();
     autoInitPrompt.setupTrigger();
+    sendIntentObserver.start();
     void loadPromptsFromStorage();
     autoInitPrompt.scheduleCheck();
     startObserver();
@@ -204,6 +204,8 @@ function resetCurrentSite(): void {
   DOM = null;
   currentSiteName = null;
   currentSiteId = null;
+  pageTurnState.reset();
+  completionNotifier.reset();
 }
 
 function getCurrentStatus(): Promise<StatusResponse | null> {
@@ -249,29 +251,29 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 
 // 统一管理工具调用内部 requestKey 的生命周期：已发现、执行中、结果缓存、已回填，以及当前轮次去重。
 const requestRegistry = new ToolRequestRegistry();
-let lastProgressLogTime = 0;
-let lastProgressStatus = "";
 
 // === 性能优化: MutationObserver 取代 setInterval ===
 // 主循环调度锁。DOM 变化、工具完成、协议错误稳定性检查都可能频繁触发 runMainLoop；
 // 这个标记确保同一时间只挂起一个延迟检查，避免页面流式输出时排出大量重复 setTimeout。
 let isCheckScheduled = false;
 
-const toolCallTracker = new ToolCallTracker({
-  requestRegistry,
-  scheduleMainLoop,
+const completionNotifier = new CompletionNotifier();
+const pageTurnState = new PageTurnStateMachine();
+const sendIntentObserver = new SendIntentObserver({
+  getSelectors: () => DOM,
+  isClientConnected: () => isClientConnected,
+  onSubmit: () => markPageTurnSubmitted("user"),
 });
-
-const toolExecutor = new ToolExecutor({
+const toolTurnCoordinator = new ToolTurnCoordinator({
+  getApprovalState: () => approvalState,
   getSelectors: () => DOM,
   getSiteId: () => currentSiteId,
   getWorkspaceId: () => currentWorkspaceId,
-  getApprovalState: () => approvalState,
+  onResultBatch: handleResultDelivery,
+  pageTurnState,
   requestRegistry,
   scheduleMainLoop,
 });
-
-const completionNotifier = new CompletionNotifier();
 let isResultDeliveryRunning = false;
 let isResultDeliveryRerunNeeded = false;
 
@@ -291,6 +293,23 @@ function scheduleMainLoop(delayMs: number): void {
   setTimeout(runMainLoop, delayMs);
 }
 
+function observePageTurnState(): void {
+  if (!DOM || !isClientConnected) {return;}
+
+  const observation = pageTurnState.observe(DOM);
+  completionNotifier.notify(pageTurnState.consumeCompletionEvent());
+  if (observation.nextCheckDelayMs !== null) {
+    scheduleMainLoop(observation.nextCheckDelayMs);
+  }
+}
+
+function markPageTurnSubmitted(source: "user" | "auto-send"): void {
+  if (!DOM) {return;}
+
+  pageTurnState.markSubmitted(DOM, source);
+  scheduleMainLoop(50);
+}
+
 /**
  * 扫描当前页面最新一轮 AI 回复中的工具调用，并在本轮工具都结束后把结果回填给输入框。
  *
@@ -306,128 +325,11 @@ function scheduleMainLoop(delayMs: number): void {
  * 5. 如果 AI 还在输出、工具还没完成、或 JSON 还没稳定，则安排下一次检查。
  */
 function runMainLoop() {
-
   // 进入实际扫描后释放调度锁；本轮扫描期间如果还需要等待，会重新调用 scheduleMainLoop。
   isCheckScheduled = false;
   if (!DOM || !isClientConnected) { return; }
-
-  // UI 层统一按 VS Code 下发的选择器定位最新响应块和其中的 JSON 代码块。
-  const latestCodeBlocks = UI.getLatestResponseCodeBlocks(DOM);
-  if (!latestCodeBlocks) { return; }
-
-  const { messageIndex, codeElements } = latestCodeBlocks;
-
-  // 当前轮次对象只记录本次扫描看到的 requestKey；去重、排序和已回填过滤由 registry 统一处理。
-  const currentTurn = requestRegistry.createTurn();
-
-  codeElements.forEach((codeEl, codeBlockIndex) => {
-    const textContent = (codeEl.textContent ?? "").trim();
-    if (!looksLikeToolCall(textContent)) { return; }
-
-    try {
-      // parseToolCall 会做协议校验；解析失败的代码块会走 catch 中的稳定性和错误反馈流程。
-      const payload = parseToolCall(textContent);
-
-      // 同一个代码块可能先是不完整 JSON，后续流式输出补全；成功解析后清掉旧错误样式。
-      if ((codeEl as HTMLElement).dataset.mcpState === "error") {
-        UI.clearVisualState(codeEl as HTMLElement);
-      }
-
-      // requestKey 是跨扫描周期识别同一个工具调用的内部键。模型 request_id 只保留给 result 协议。
-      const requestIdentity = toolCallTracker.ensurePayloadRequestIdentity(
-        payload,
-        codeEl as HTMLElement,
-        messageIndex,
-        codeBlockIndex
-      );
-      toolCallTracker.clearProtocolErrorFeedbackState(requestIdentity.requestKey);
-      currentTurn.add(requestIdentity.requestKey);
-
-      const isProcessing = requestRegistry.isRunning(requestIdentity.requestKey);
-      const isKnown = requestRegistry.hasSeen(requestIdentity.requestKey);
-
-      if (!isKnown) {
-        // 新发现的工具调用只进入执行路径一次，后续扫描只会根据 registry 中的执行状态刷新视觉状态。
-        requestRegistry.markRunning(requestIdentity.requestKey);
-
-        // 页面上出现新工具调用时，先取消已有自动发送，避免还没写回工具结果就把输入框发出去。
-        UI.cancelAutoSend();
-
-        // 立即标记为处理中，让用户能看到该代码块已经被捕获并进入执行队列。
-        UI.markVisualProcessing(codeEl as HTMLElement);
-
-        Logger.log(`${t("captured")}: ${payload.name}`, "info");
-        logToolSummary(payload);
-        toolExecutor.execute(payload, requestIdentity);
-      } else {
-        // 已知调用不重复执行，只根据 registry 判断它还在处理中还是已经完成。
-        if (isProcessing) {
-          UI.markVisualProcessing(codeEl as HTMLElement);
-        } else {
-          UI.markVisualSuccess(codeEl as HTMLElement);
-        }
-      }
-    } catch (error) {
-      // 流式输出中 JSON 可能暂时不完整。tracker 会先等待文本稳定，确认失败后才回填协议错误。
-      const requestIdentity = toolCallTracker.handleProtocolErrorBlock(
-        codeEl as HTMLElement,
-        textContent,
-        messageIndex,
-        codeBlockIndex,
-        error
-      );
-      currentTurn.add(requestIdentity?.requestKey ?? null);
-    }
-  });
-
-  // 只处理当前轮次里还没有写回过的请求。已 flush 的 requestKey 不会再次写入输入框。
-  const unflushedBatch = currentTurn.getUnflushedBatch();
-
-  if (unflushedBatch.hasRequests) {
-    // 工具完成的判定由 registry 统一计算：已不在执行中，并且已经有结果可回填。
-    const completedCount = unflushedBatch.completedCount;
-    const totalCount = unflushedBatch.totalCount;
-
-    // 只有本轮所有待回填工具都完成后，才合并结果；否则继续等待，避免分批打断 AI 上下文。
-    if (unflushedBatch.isComplete) {
-      // 如果页面仍有 Stop 按钮，说明 AI 还在生成回复。推迟回填，避免和模型输出竞争输入区。
-      if (UI.isStopButtonVisible(DOM)) {
-        // AI 停止生成时不一定有 DOM 变化可监听，所以这里主动安排一次延迟检查。
-        scheduleMainLoop(1000);
-        return;
-      }
-
-      // 按当前页面顺序收集结果，保证多工具调用的回填顺序和 AI 原始请求顺序一致。
-      const resultBatch = requestRegistry.buildBufferedResultBatch(unflushedBatch.ids);
-
-      if (resultBatch.hasOutput && DOM) {
-        const selectors = DOM;
-        Logger.log(
-          `Batch finished: ${resultBatch.outputCount} tools. Writing...`,
-          "success"
-        );
-        handleResultDelivery(resultBatch, selectors);
-      } else {
-        // 某些路径可能没有文本输出；它们完成后也要标记为已处理。
-        if (resultBatch.hasAnyResult) {
-          requestRegistry.markFlushed(resultBatch.ids);
-        }
-      }
-      lastProgressStatus = "";
-    } else {
-      // 还有工具在执行或等待审批时，仅在进度变化或间隔超过阈值时写日志，避免刷屏。
-      const statusStr = `${completedCount}/${totalCount}`;
-      const now = Date.now();
-      if (
-        statusStr !== lastProgressStatus ||
-        now - lastProgressLogTime > 3000
-      ) {
-        Logger.log(`${t("waiting_tools")} (${statusStr})`, "warn");
-        lastProgressStatus = statusStr;
-        lastProgressLogTime = now;
-      }
-    }
-  }
+  observePageTurnState();
+  toolTurnCoordinator.scan();
 }
 
 function handleResultDelivery(resultBatch: BufferedResultBatch, selectors: SiteSelectors): void {
@@ -441,7 +343,7 @@ function handleResultDelivery(resultBatch: BufferedResultBatch, selectors: SiteS
   void UI.deliverResult(resultBatch.output, selectors)
     .then((delivery) => {
       if (!delivery.delivered) {
-        requestRegistry.markFlushed(resultBatch.ids);
+        toolTurnCoordinator.finalizeBatch(resultBatch.ids);
         batchFinalized = true;
         Logger.log(
           "Result delivery could not be verified. Marked batch flushed to avoid duplicate delivery; auto-send skipped.",
@@ -450,12 +352,15 @@ function handleResultDelivery(resultBatch: BufferedResultBatch, selectors: SiteS
         return;
       }
 
-      requestRegistry.markFlushed(resultBatch.ids);
+      toolTurnCoordinator.finalizeBatch(resultBatch.ids);
       batchFinalized = true;
+      if (CONFIG.autoSend) {
+        markPageTurnSubmitted("auto-send");
+      }
       UI.triggerAutoSend(CONFIG, selectors);
     })
     .catch((error) => {
-      requestRegistry.markFlushed(resultBatch.ids);
+      toolTurnCoordinator.finalizeBatch(resultBatch.ids);
       batchFinalized = true;
       Logger.log(`Result delivery failed: ${getErrorMessage(error)}`, "error");
     })
@@ -477,14 +382,10 @@ function handleResultDelivery(resultBatch: BufferedResultBatch, selectors: SiteS
  * 文本相对稳定后再发生，也避免重复解析同一批代码块。
  *
  * 很多站点通过 class/style/aria-* 切换发送和停止按钮的可见性，不一定增删 DOM 节点。因此也
- * 监听常见状态属性变化，让 CompletionNotifier 有机会重新执行可见性判断。
+ * 监听常见状态属性变化，让页面状态机有机会重新执行可见性和轮次判断。
  */
 const observer = new MutationObserver(() => {
   if (!isClientConnected) { return; }
-
-  if (DOM) {
-    completionNotifier.observe(DOM);
-  }
 
   // DOM 变化只说明页面可能出现了新内容；延迟扫描能等待流式文本继续补全。
   scheduleMainLoop(CONFIG.pollInterval);
@@ -525,9 +426,7 @@ function startObserver() {
       Logger.log(`${BRANDING.productName} activated for ${currentSiteName} (Connected)`, "info");
       // 连接恢复后先检查自动初始化触发词，再立刻扫描现有消息，避免等待下一次页面变化。
       autoInitPrompt.scheduleCheck();
-      if (DOM) {
-        completionNotifier.observe(DOM);
-      }
+      observePageTurnState();
       runMainLoop();
     } else {
       isClientConnected = false;

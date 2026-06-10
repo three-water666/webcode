@@ -2,8 +2,16 @@ import { type SiteSelectors } from "./config";
 import { isElementVisible } from "./dom_helpers";
 
 export interface LatestResponseCodeBlocks {
+  messageElement: Element;
   messageIndex: number;
   codeElements: Element[];
+}
+
+export interface LatestResponseSnapshot {
+  messageElement: Element;
+  messageIndex: number;
+  signature: string;
+  text: string;
 }
 
 export function getInputAreaBySelector(
@@ -72,7 +80,35 @@ export function getLatestResponseCodeBlocks(
   const codeElements = Array.from(lastMessage.querySelectorAll(domSelectors.codeBlocks));
 
   return {
+    messageElement: lastMessage,
     messageIndex,
     codeElements,
   };
+}
+
+export function getLatestResponseSnapshot(
+  domSelectors: SiteSelectors
+): LatestResponseSnapshot | null {
+  const messages = document.querySelectorAll(domSelectors.messageBlocks);
+  if (messages.length === 0) {return null;}
+
+  const messageIndex = messages.length - 1;
+  const messageElement = messages[messageIndex];
+  const text = (messageElement.textContent ?? "").trim();
+
+  return {
+    messageElement,
+    messageIndex,
+    signature: `${messageIndex}:${hashStableString(text)}`,
+    text,
+  };
+}
+
+function hashStableString(value: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
 }
