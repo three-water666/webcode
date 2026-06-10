@@ -63,17 +63,27 @@ export const executeCommandTool: LocalTool = {
             });
             const result = await runCommand(execution.file, execution.args, directory.absolutePath, timeout);
             const isError = result.exitCode !== 0;
+            const stdout = result.stdout.trim();
+            const stderr = result.stderr.trim();
+            const status = isError ? 'error' : (stderr ? 'completed_with_stderr' : 'success');
 
             return jsonResult({
-                stdout: result.stdout.trim(),
-                stderr: result.stderr.trim(),
+                summary: summarizeCommandResult({
+                    stdout,
+                    stderr,
+                    exitCode: result.exitCode,
+                    signal: result.signal,
+                    status
+                }),
+                stdout,
+                stderr,
                 exitCode: result.exitCode,
                 signal: result.signal,
                 shell: {
                     id: execution.shell.id,
                     path: execution.shell.path
                 },
-                status: isError ? 'error' : (result.stderr ? 'completed_with_stderr' : 'success')
+                status
             }, isError);
         } catch (error: unknown) {
             return errorResult(`Execution System Error: ${getErrorMessage(error)}\nPolicy: ${describeShellCommandPolicy(process.platform)}`);
@@ -81,6 +91,31 @@ export const executeCommandTool: LocalTool = {
     }
 };
 
+function summarizeCommandResult(result: {
+    stdout: string;
+    stderr: string;
+    exitCode: number;
+    signal: NodeJS.Signals | null;
+    status: 'success' | 'completed_with_stderr' | 'error';
+}): string {
+    if (result.status === 'success') {
+        return result.stdout
+            ? 'Command completed successfully.'
+            : 'Command completed successfully with no stdout or stderr output.';
+    }
+
+    if (result.status === 'completed_with_stderr') {
+        return 'Command completed successfully with stderr output.';
+    }
+
+    if (result.signal) {
+        return `Command failed with exit code ${result.exitCode} and signal ${result.signal}.`;
+    }
+
+    return result.stdout || result.stderr
+        ? `Command failed with exit code ${result.exitCode}.`
+        : `Command failed with exit code ${result.exitCode} and no stdout or stderr output.`;
+}
 
 async function runCommand(
     file: string,
