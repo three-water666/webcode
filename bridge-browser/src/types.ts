@@ -24,6 +24,7 @@ export interface MessageRequest {
   onlyWhenWindowInBackground?: boolean;
   playSound?: boolean;
   connected?: boolean;
+  autoSend?: boolean;
   payload?: ToolExecutionPayload;
 }
 
@@ -39,6 +40,7 @@ export interface StatusResponse {
   error?: string;
   port?: number;
   showLog?: boolean;
+  autoSend?: boolean;
   workspaceId?: string;
   siteId?: string;
 }
@@ -58,6 +60,7 @@ export interface StoredSession {
   port: number;
   token: string;
   showLog?: boolean;
+  autoSend?: boolean;
   workspaceId?: string;
   siteId?: string;
   targetOrigin?: string;
@@ -89,6 +92,7 @@ export function isStatusResponse(value: unknown): value is StatusResponse {
 export function isSession(value: unknown): value is Session {
   return isStoredSession(value) &&
     typeof value.showLog === "boolean" &&
+    typeof value.autoSend === "boolean" &&
     typeof value.workspaceId === "string";
 }
 
@@ -98,6 +102,7 @@ export function isStoredSession(value: unknown): value is StoredSession {
   return typeof value.port === "number" &&
     typeof value.token === "string" &&
     isOptionalBoolean(value.showLog) &&
+    isOptionalBoolean(value.autoSend) &&
     isOptionalString(value.workspaceId) &&
     isOptionalString(value.siteId) &&
     isOptionalString(value.targetOrigin) &&
@@ -112,6 +117,7 @@ export function normalizeSession(value: unknown): Session | null {
     port: value.port,
     token: value.token,
     showLog: value.showLog ?? false,
+    autoSend: value.autoSend ?? true,
     workspaceId: value.workspaceId ?? "global",
     siteId: value.siteId,
     targetOrigin: value.targetOrigin ?? value.allowedOrigins?.[0],

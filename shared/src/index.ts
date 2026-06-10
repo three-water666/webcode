@@ -102,6 +102,7 @@ export interface Session {
   port: number;
   token: string;
   showLog: boolean;
+  autoSend: boolean;
   workspaceId: string;
   siteId?: string;
   targetOrigin?: string;

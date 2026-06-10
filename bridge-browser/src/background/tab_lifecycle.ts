@@ -42,6 +42,7 @@ export async function handleTabUpdated(
           connected: true,
           workspaceId: session.workspaceId,
           siteId: session.siteId,
+          autoSend: session.autoSend,
         })
         .catch(ignoreRuntimeError);
       if (session.showLog) {

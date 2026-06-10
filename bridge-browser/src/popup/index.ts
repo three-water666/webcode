@@ -94,7 +94,7 @@ async function initializePopup(): Promise<void> {
     return;
   }
 
-  listenForLogVisibilityChanges(currentTabId, context.elements);
+  listenForSessionSettingChanges(currentTabId, context.elements);
   requestCurrentStatus(currentTabId, context);
   bindPopupControls(currentTabId, context);
 }
@@ -158,10 +158,13 @@ function renderInstalledDescription(t: PopupContext["t"]): string {
   );
 }
 
-function listenForLogVisibilityChanges(currentTabId: number, elements: PopupElements): void {
+function listenForSessionSettingChanges(currentTabId: number, elements: PopupElements): void {
   chrome.runtime.onMessage.addListener((request: unknown) => {
     if (isMessageRequest(request) && request.type === "LOG_VISIBLE_CHANGED" && request.tabId === currentTabId) {
       elements.showLogInput.checked = request.show === true;
+    }
+    if (isMessageRequest(request) && request.type === "AUTO_SEND_CHANGED" && request.tabId === currentTabId) {
+      elements.autoSendInput.checked = request.autoSend !== false;
     }
   });
 }
@@ -181,12 +184,13 @@ function requestCurrentStatus(currentTabId: number, context: PopupContext): void
   );
 }
 
-function showConnectedStatus(response: { port?: number; showLog?: boolean }, elements: PopupElements): void {
+function showConnectedStatus(response: { port?: number; showLog?: boolean; autoSend?: boolean }, elements: PopupElements): void {
   elements.connectedView.classList.remove("hidden");
   elements.disconnectedView.classList.add("hidden");
   elements.statusDot.classList.add("online");
   elements.statusDot.classList.remove("suspended");
   elements.portDisplay.innerText = String(response.port ?? "");
+  elements.autoSendInput.checked = response.autoSend !== false;
   elements.showLogInput.checked = response.showLog === true;
 }
 
@@ -221,7 +225,7 @@ function showDisconnectedStatus(context: PopupContext): void {
 
 function bindPopupControls(currentTabId: number, context: PopupContext): void {
   bindManualInitButton(currentTabId, context);
-  bindAutoSendToggle(context.elements.autoSendInput);
+  bindAutoSendToggle(currentTabId, context.elements.autoSendInput);
   bindLogToggle(currentTabId, context.elements.showLogInput);
 }
 
@@ -299,12 +303,13 @@ function clearManualInitStatusTimer(state: ManualInitStatusState): void {
   state.resetTimer = null;
 }
 
-function bindAutoSendToggle(autoSendInput: HTMLInputElement): void {
-  chrome.storage.sync.get(["autoSend"], (items: Record<string, unknown>) => {
-    autoSendInput.checked = typeof items.autoSend === "boolean" ? items.autoSend : true;
-  });
+function bindAutoSendToggle(currentTabId: number, autoSendInput: HTMLInputElement): void {
   autoSendInput.addEventListener("change", () => {
-    void chrome.storage.sync.set({ autoSend: autoSendInput.checked });
+    void chrome.runtime.sendMessage({
+      type: "SET_AUTO_SEND",
+      tabId: currentTabId,
+      autoSend: autoSendInput.checked,
+    });
   });
 }
 

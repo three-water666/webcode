@@ -84,6 +84,14 @@ export async function updateSessionLog(tabId: number, showLog: boolean) {
   }
 }
 
+export async function updateSessionAutoSend(tabId: number, autoSend: boolean) {
+  const session = await getSession(tabId);
+  if (session) {
+    session.autoSend = autoSend;
+    await saveSession(tabId, session);
+  }
+}
+
 export function suspendSession(tabId: number) {
   void chrome.tabs.sendMessage(tabId, { type: "STATUS_UPDATE", connected: false }).catch(ignoreRuntimeError);
 }

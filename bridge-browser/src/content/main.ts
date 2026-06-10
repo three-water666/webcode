@@ -89,6 +89,13 @@ function handleRuntimeMessage(request: unknown, sendResponse: RuntimeSendRespons
     Logger.toggle(show);
     Logger.log("Logger Visible: " + show, "info");
   }
+  if (request.type === "SET_AUTO_SEND") {
+    CONFIG.autoSend = request.autoSend !== false;
+    if (!CONFIG.autoSend) {
+      UI.cancelAutoSend();
+    }
+    Logger.log(`Auto Send: ${CONFIG.autoSend}`, "info");
+  }
   if (request.type === "STATUS_UPDATE") {
     handleStatusUpdate(request);
   }
@@ -105,6 +112,9 @@ function handleStatusUpdate(request: MessageRequest): void {
   }
   if (typeof request.siteId === "string") {
     currentSiteId = request.siteId;
+  }
+  if (typeof request.autoSend === "boolean") {
+    CONFIG.autoSend = request.autoSend;
   }
 
   if (!isClientConnected) {
@@ -160,10 +170,9 @@ function initDOMConfig(): void {
 }
 
 async function loadDOMConfig(): Promise<void> {
-  const syncItems = await getStorage(chrome.storage.sync, ["autoSend"]);
-  CONFIG.autoSend = typeof syncItems.autoSend === "boolean" ? syncItems.autoSend : true;
-
   const status = await getCurrentStatus();
+  CONFIG.autoSend = status?.autoSend !== false;
+
   if (!status?.connected || typeof status.siteId !== "string") {
     resetCurrentSite();
     console.log(`${BRANDING.productName}: Current tab is not connected to a configured site. Idle.`);
@@ -221,12 +230,6 @@ function getStorage(area: chrome.storage.StorageArea, keys: string[]): Promise<R
 }
 
 chrome.storage.onChanged.addListener((changes, namespace) => {
-  if (namespace === "sync") {
-    if (changes.autoSend) {
-      const nextAutoSend = changes.autoSend.newValue as unknown;
-      CONFIG.autoSend = typeof nextAutoSend === "boolean" ? nextAutoSend : true;
-    }
-  }
   if (namespace === "local") {
     const approvalStorageKey = `allowed_tools_${currentWorkspaceId}`;
     if (changes[approvalStorageKey]) {

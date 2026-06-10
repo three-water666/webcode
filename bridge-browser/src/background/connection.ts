@@ -59,15 +59,17 @@ interface BindSessionOptions {
 }
 
 export async function bindSession(tabId: number, options: BindSessionOptions) {
-  await saveSession(tabId, {
+  const session = {
     port: options.port,
     token: options.token,
     showLog: false,
+    autoSend: true,
     workspaceId: options.workspaceId,
     siteId: options.siteId,
     targetOrigin: options.targetOrigin,
     targetUrl: options.targetUrl,
-  });
+  };
+  await saveSession(tabId, session);
   console.log(`${BRANDING.logPrefix} Tab ${tabId} bound to Port ${options.port} [Workspace: ${options.workspaceId}]`);
   updateBadge(tabId, true);
   // [Sync] Notify Content Script
@@ -76,6 +78,7 @@ export async function bindSession(tabId: number, options: BindSessionOptions) {
     connected: true,
     workspaceId: options.workspaceId,
     siteId: options.siteId,
+    autoSend: session.autoSend,
   }).catch(ignoreRuntimeError);
   // 不再 await，避免网关初始化请求阻塞握手响应
   void fetchInitDataFromGateway(options.port, options.token);

@@ -4,7 +4,7 @@ import { handleHandshake } from './connection';
 import { getErrorMessage } from './errors';
 import { executeTool } from './gateway';
 import { showNotification, updateWindowAttention } from './notifications';
-import { getActiveProtocolSessionResult, updateSessionLog } from './sessions';
+import { getActiveProtocolSessionResult, updateSessionAutoSend, updateSessionLog } from './sessions';
 
 type SendResponse = (response?: unknown) => void;
 
@@ -36,6 +36,9 @@ function dispatchRuntimeMessage(
       return true;
     case "SET_LOG_VISIBLE":
       handleSetLogVisible(request, currentTabId, sendResponse);
+      return true;
+    case "SET_AUTO_SEND":
+      handleSetAutoSend(request, currentTabId, sendResponse);
       return true;
     case "REQUEST_USER_ATTENTION":
       respondAsync(requestUserAttention(request, sender), sendResponse);
@@ -78,6 +81,7 @@ async function getStatusResponse(targetTabId: number) {
       connected: false,
       suspended: false,
       showLog: false,
+      autoSend: true,
       workspaceId: 'global',
     };
   }
@@ -87,6 +91,7 @@ async function getStatusResponse(targetTabId: number) {
       connected: false,
       suspended: false,
       showLog: false,
+      autoSend: true,
       workspaceId: 'global',
       error: "Session data is incomplete. Reconnect from VS Code to continue.",
     };
@@ -99,6 +104,7 @@ async function getStatusResponse(targetTabId: number) {
     suspended: !isActive,
     port: isActive ? session.port : undefined,
     showLog: session.showLog ?? false,
+    autoSend: session.autoSend ?? true,
     workspaceId: session.workspaceId ?? 'global',
     siteId: session.siteId,
   };
@@ -120,6 +126,35 @@ function handleSetLogVisible(
     updateSessionLog(targetTabId, show).then(() => {
       void chrome.tabs.sendMessage(targetTabId, { type: "TOGGLE_LOG", show }).catch(ignoreRuntimeError);
       chrome.runtime.sendMessage({ type: "LOG_VISIBLE_CHANGED", tabId: targetTabId, show }, () => {
+        void chrome.runtime.lastError;
+      });
+      return { success: true };
+    }),
+    sendResponse
+  );
+}
+
+function handleSetAutoSend(
+  request: MessageRequest,
+  currentTabId: number | null | undefined,
+  sendResponse: SendResponse
+): void {
+  const targetTabId = request.tabId ?? currentTabId;
+  if (!targetTabId) {
+    sendResponse({ success: false, error: "Missing Tab ID" });
+    return;
+  }
+
+  if (typeof request.autoSend !== "boolean") {
+    sendResponse({ success: false, error: "Missing auto-send value" });
+    return;
+  }
+
+  const autoSend = request.autoSend;
+  respondAsync(
+    updateSessionAutoSend(targetTabId, autoSend).then(() => {
+      void chrome.tabs.sendMessage(targetTabId, { type: "SET_AUTO_SEND", autoSend }).catch(ignoreRuntimeError);
+      chrome.runtime.sendMessage({ type: "AUTO_SEND_CHANGED", tabId: targetTabId, autoSend }, () => {
         void chrome.runtime.lastError;
       });
       return { success: true };
