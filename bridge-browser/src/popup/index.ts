@@ -49,7 +49,7 @@ const UI: Record<string, Record<string, string>> = {
     manual_init_failed: "Initialization failed",
     manual_init_unavailable: "Cannot initialize here",
     auto_send: "Auto Send Message",
-    auto_approve_tools: "Auto-Approve Tools",
+    auto_approve_tools: "Auto-Approve All Tools",
     show_log: "Show Floating Log",
     disconnected: "🔴 Disconnected from VS Code",
     suspended: "⏸️ Connection paused on this page",
