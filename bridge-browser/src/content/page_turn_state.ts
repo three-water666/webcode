@@ -119,6 +119,9 @@ export class PageTurnStateMachine {
       this.lockLatestResponseIfEligible(latestSnapshot);
     } else {
       this.lockLatestResponseIfEligible(latestSnapshot);
+      if (!this.activeTurn.activeResponseElement) {
+        return this.getObservation();
+      }
       this.updateSettlingState(now);
     }
 
