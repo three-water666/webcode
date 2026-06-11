@@ -5,6 +5,7 @@ export interface SiteSelectors {
   sendButton: string;
   stopButton: string;
   maxInlineChars?: number;
+  virtualizedMessages?: boolean;
 }
 
 // 移除所有硬编码的默认选择器，使其变为空对象。
