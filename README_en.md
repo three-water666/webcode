@@ -31,6 +31,8 @@ When the status bar shows a port number, the local gateway is running. The AI la
 
 On first use, sign in to the target AI site once in the isolated Edge profile. If sign-in redirects to a third-party provider such as Google or Microsoft, the bridge temporarily pauses page capabilities and keeps the session; it resumes automatically after the browser returns to the target AI site. When the bridge extension shows `ON`, the connection is ready to use.
 
+The isolated profile is stored in the OS app data directory, so uninstalling the VS Code extension does not automatically delete sign-in data or cache. See the [browser mode guide](doc/BROWSER_MODE_GUIDE_en.md) for cleanup details.
+
 If the gateway is already running, click `webcode: <port>` in the status bar to open the same launch menu again.
 
 ### 4. Use It in Chat
