@@ -8,14 +8,14 @@ export interface LatestResponseCodeBlocks {
 
 interface ScrollMetrics {
   distanceToBottom: number;
-  progress: number;
   range: number;
   thumbRatio: number;
 }
 
+// History detection relies on large scroll range, small scrollbar thumb, and absolute distance from the live bottom.
+// Scroll percentage is intentionally avoided: long virtualized chats can be past 80% while still far from the bottom.
 const HISTORY_SCROLL_MIN_RANGE_PX = 800;
 const HISTORY_SCROLL_MIN_DISTANCE_TO_BOTTOM_PX = 600;
-const HISTORY_SCROLL_MAX_PROGRESS = 0.8;
 const HISTORY_SCROLL_MAX_THUMB_RATIO = 0.65;
 const MIN_SCROLL_CONTAINER_HEIGHT_PX = 300;
 
@@ -101,7 +101,6 @@ export function isLikelyViewingVirtualizedHistory(domSelectors: SiteSelectors): 
 
   return metrics.range > HISTORY_SCROLL_MIN_RANGE_PX &&
     metrics.thumbRatio < HISTORY_SCROLL_MAX_THUMB_RATIO &&
-    metrics.progress < HISTORY_SCROLL_MAX_PROGRESS &&
     metrics.distanceToBottom > HISTORY_SCROLL_MIN_DISTANCE_TO_BOTTOM_PX;
 }
 
@@ -114,6 +113,7 @@ function getPrimaryScrollElement(domSelectors: SiteSelectors): HTMLElement | nul
     const metrics = getScrollMetrics(candidate);
     if (!metrics || !isUsableScrollContainer(candidate, metrics)) {return;}
 
+    // Prefer containers that both own the main scroll range and occupy a substantial viewport area.
     const score = metrics.range + candidate.clientHeight;
     if (score > bestScore) {
       best = candidate;
@@ -162,7 +162,12 @@ function isScrollStyleCandidate(element: HTMLElement): boolean {
   }
 
   const style = window.getComputedStyle(element);
-  return /auto|scroll|overlay/i.test(`${style.overflowY} ${style.overflow}`);
+  return isScrollableOverflow(style.overflowY) || isScrollableOverflow(style.overflow);
+}
+
+function isScrollableOverflow(value: string): boolean {
+  const normalized = value.toLowerCase();
+  return normalized === "auto" || normalized === "scroll" || normalized === "overlay";
 }
 
 function isUsableScrollContainer(element: HTMLElement, metrics: ScrollMetrics): boolean {
@@ -183,7 +188,6 @@ function getScrollMetrics(element: HTMLElement): ScrollMetrics | null {
 
   return {
     distanceToBottom,
-    progress: range > 0 ? element.scrollTop / range : 1,
     range,
     thumbRatio: clientHeight / scrollHeight,
   };

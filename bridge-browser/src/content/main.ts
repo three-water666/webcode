@@ -303,7 +303,7 @@ function scheduleMainLoop(delayMs: number): void {
  * 4. 当前轮次所有工具都有结果后，按页面顺序合并结果并写回输入框。
  * 5. 如果 AI 还在输出、工具还没完成、或 JSON 还没稳定，则安排下一次检查。
  */
-// eslint-disable-next-line max-lines-per-function
+// eslint-disable-next-line max-lines-per-function, complexity
 function runMainLoop() {
 
   // 进入实际扫描后释放调度锁；本轮扫描期间如果还需要等待，会重新调用 scheduleMainLoop。
@@ -320,23 +320,24 @@ function runMainLoop() {
   // 当前轮次对象只记录本次扫描看到的 requestKey；去重、排序和已回填过滤由 registry 统一处理。
   const currentTurn = requestRegistry.createTurn();
 
-  codeElements.forEach((codeEl, codeBlockIndex) => {
-    const textContent = (codeEl.textContent ?? "").trim();
-    if (!looksLikeToolCall(textContent)) { return; }
+  for (const [codeBlockIndex, codeEl] of codeElements.entries()) {
+    const codeElement = codeEl as HTMLElement;
+    const textContent = (codeElement.textContent ?? "").trim();
+    if (!looksLikeToolCall(textContent)) { continue; }
 
     try {
       // parseToolCall 会做协议校验；解析失败的代码块会走 catch 中的稳定性和错误反馈流程。
       const payload = parseToolCall(textContent);
 
       // 同一个代码块可能先是不完整 JSON，后续流式输出补全；成功解析后清掉旧错误样式。
-      if ((codeEl as HTMLElement).dataset.mcpState === "error") {
-        UI.clearVisualState(codeEl as HTMLElement);
+      if (codeElement.dataset.mcpState === "error") {
+        UI.clearVisualState(codeElement);
       }
 
       // requestKey 是跨扫描周期识别同一个工具调用的内部键。模型 request_id 只保留给 result 协议。
       const requestIdentity = toolCallTracker.ensurePayloadRequestIdentity(
         payload,
-        codeEl as HTMLElement,
+        codeElement,
         messageIndex,
         codeBlockIndex
       );
@@ -347,7 +348,7 @@ function runMainLoop() {
 
       if (!isKnown && skipNewCapturesForVirtualizedHistory) {
         logVirtualizedHistorySkip(payload.name);
-        return;
+        continue;
       }
       currentTurn.add(requestIdentity.requestKey);
 
@@ -359,7 +360,7 @@ function runMainLoop() {
         UI.cancelAutoSend();
 
         // 立即标记为处理中，让用户能看到该代码块已经被捕获并进入执行队列。
-        UI.markVisualProcessing(codeEl as HTMLElement);
+        UI.markVisualProcessing(codeElement);
 
         Logger.log(`${t("captured")}: ${payload.name}`, "info");
         logToolSummary(payload);
@@ -367,28 +368,24 @@ function runMainLoop() {
       } else {
         // 已知调用不重复执行，只根据 registry 判断它还在处理中还是已经完成。
         if (isProcessing) {
-          UI.markVisualProcessing(codeEl as HTMLElement);
+          UI.markVisualProcessing(codeElement);
         } else {
-          UI.markVisualSuccess(codeEl as HTMLElement);
+          UI.markVisualSuccess(codeElement);
         }
       }
     } catch (error) {
-      if (skipNewCapturesForVirtualizedHistory) {
+      const isKnown = Boolean(codeElement.dataset.mcpRequestKey && requestRegistry.hasSeen(codeElement.dataset.mcpRequestKey));
+
+      if (!isKnown && skipNewCapturesForVirtualizedHistory) {
         logVirtualizedHistorySkip();
-        return;
+        continue;
       }
 
       // 流式输出中 JSON 可能暂时不完整。tracker 会先等待文本稳定，确认失败后才回填协议错误。
-      const requestIdentity = toolCallTracker.handleProtocolErrorBlock(
-        codeEl as HTMLElement,
-        textContent,
-        messageIndex,
-        codeBlockIndex,
-        error
-      );
+      const requestIdentity = toolCallTracker.handleProtocolErrorBlock(codeElement, textContent, messageIndex, codeBlockIndex, error);
       currentTurn.add(requestIdentity?.requestKey ?? null);
     }
-  });
+  }
 
   // 只处理当前轮次里还没有写回过的请求。已 flush 的 requestKey 不会再次写入输入框。
   const unflushedBatch = currentTurn.getUnflushedBatch();
