@@ -22,11 +22,23 @@ export async function isBrowserProfileInUse(browserFamily: BrowserFamily, profil
     const platform = os.platform();
     try {
         const commandLines = await listBrowserProcessCommandLines(browserFamily, platform);
-        const normalizedProfileDir = normalizeProcessPath(profileDir, platform);
-        return commandLines.some(commandLine => commandLineContainsProfile(commandLine, normalizedProfileDir, platform));
+        return commandLines.some(commandLine => browserCommandLineUsesProfile(commandLine, profileDir, platform));
     } catch {
         return isBrowserProcessRunning(browserFamily);
     }
+}
+
+export function browserCommandLineUsesProfile(
+    commandLine: string,
+    profileDir: string,
+    platform: NodeJS.Platform = os.platform()
+): boolean {
+    const profileArg = readUserDataDirArgument(commandLine);
+    if (!profileArg) {
+        return false;
+    }
+
+    return normalizeProcessPath(profileArg, platform) === normalizeProcessPath(profileDir, platform);
 }
 
 function getBrowserProcessNames(browserFamily: BrowserFamily, platform: NodeJS.Platform): string[] {
@@ -94,23 +106,59 @@ async function listPosixBrowserProcessCommandLines(
         .filter(line => processNames.some(name => line.toLowerCase().includes(name)));
 }
 
-function commandLineContainsProfile(
-    commandLine: string,
-    normalizedProfileDir: string,
-    platform: NodeJS.Platform
-): boolean {
-    const normalizedCommandLine = normalizeCommandLine(commandLine, platform);
-    return normalizedCommandLine.includes('--user-data-dir') &&
-        normalizedCommandLine.includes(normalizedProfileDir);
+function readUserDataDirArgument(commandLine: string): string | null {
+    const tokens = tokenizeCommandLine(commandLine);
+    for (let index = 0; index < tokens.length; index += 1) {
+        const token = tokens[index];
+        if (token === '--user-data-dir') {
+            return tokens[index + 1] ?? null;
+        }
+
+        if (token.startsWith('--user-data-dir=')) {
+            return token.slice('--user-data-dir='.length);
+        }
+    }
+
+    return null;
 }
 
-function normalizeCommandLine(commandLine: string, platform: NodeJS.Platform): string {
-    const normalized = commandLine.replace(/\\/g, '/');
-    return isCaseInsensitivePlatform(platform) ? normalized.toLowerCase() : normalized;
+function tokenizeCommandLine(commandLine: string): string[] {
+    const tokens: string[] = [];
+    let current = '';
+    let quote: '"' | "'" | null = null;
+    for (const char of commandLine) {
+        if (quote) {
+            if (char === quote) {
+                quote = null;
+            } else {
+                current += char;
+            }
+            continue;
+        }
+
+        if (char === '"' || char === "'") {
+            quote = char;
+        } else if (/\s/.test(char)) {
+            pushToken(tokens, current);
+            current = '';
+        } else {
+            current += char;
+        }
+    }
+
+    pushToken(tokens, current);
+    return tokens;
+}
+
+function pushToken(tokens: string[], token: string): void {
+    if (token) {
+        tokens.push(token);
+    }
 }
 
 function normalizeProcessPath(filePath: string, platform: NodeJS.Platform): string {
-    const normalized = path.resolve(filePath).replace(/\\/g, '/').replace(/\/+$/g, '');
+    const platformPath = platform === 'win32' ? path.win32 : path.posix;
+    const normalized = platformPath.resolve(filePath).replace(/\\/g, '/').replace(/\/+$/g, '');
     return isCaseInsensitivePlatform(platform) ? normalized.toLowerCase() : normalized;
 }
 
