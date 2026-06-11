@@ -6,6 +6,8 @@ import * as path from 'path';
 import {
     clearIsolatedBrowserProfiles,
     ensureCurrentIsolatedBrowserProfile,
+    expandHomePath,
+    hasCurrentIsolatedBrowserProfiles,
     hasLegacyIsolatedBrowserProfiles,
     resolveDefaultIsolatedBrowserProfileRoot,
     resolveIsolatedBrowserProfilePaths,
@@ -44,6 +46,25 @@ suite('Isolated browser profiles', () => {
         });
     });
 
+    test('expands home paths for both slash styles', () => {
+        const homeDir = path.join('/home', 'me');
+
+        assert.strictEqual(expandHomePath('~', homeDir), homeDir);
+        assert.strictEqual(expandHomePath('~/profiles', homeDir), path.join(homeDir, 'profiles'));
+        assert.strictEqual(expandHomePath('~\\profiles', homeDir), path.join(homeDir, 'profiles'));
+    });
+
+    test('rejects relative configured profile roots', () => {
+        const result = resolveIsolatedBrowserProfilePaths({
+            browserFamily: 'edge',
+            legacyStorageRoot: path.resolve('legacy-storage'),
+            configuredProfileRoot: './profiles'
+        });
+
+        assert.strictEqual(result.status, 'invalid-profile-root');
+        assert.strictEqual(result.configuredProfileRoot, './profiles');
+    });
+
     test('detects legacy profiles without creating or migrating current profiles', async () => {
         await withTempProfilePaths(async paths => {
             assert.strictEqual(await hasLegacyIsolatedBrowserProfiles([paths]), false);
@@ -52,6 +73,16 @@ suite('Isolated browser profiles', () => {
 
             assert.strictEqual(await hasLegacyIsolatedBrowserProfiles([paths]), true);
             assert.strictEqual(await pathExists(paths.profileDir), false);
+        });
+    });
+
+    test('detects current profiles', async () => {
+        await withTempProfilePaths(async paths => {
+            assert.strictEqual(await hasCurrentIsolatedBrowserProfiles([paths]), false);
+
+            await fs.mkdir(paths.profileDir, { recursive: true });
+
+            assert.strictEqual(await hasCurrentIsolatedBrowserProfiles([paths]), true);
         });
     });
 
@@ -76,6 +107,22 @@ suite('Isolated browser profiles', () => {
         await withTempProfilePaths(async paths => {
             await fs.mkdir(paths.profileDir, { recursive: true });
             await fs.mkdir(paths.legacyProfileDir, { recursive: true });
+
+            const result = await clearIsolatedBrowserProfiles({
+                pathsByFamily: [paths],
+                target: 'legacy',
+                isProfileInUse: neverInUse
+            });
+
+            assert.strictEqual(result.status, 'cleared');
+            assert.strictEqual(await pathExists(paths.profileDir), true);
+            assert.strictEqual(await pathExists(paths.legacyProfileDir), false);
+        });
+    });
+
+    test('succeeds when clearing legacy profiles that do not exist', async () => {
+        await withTempProfilePaths(async paths => {
+            await fs.mkdir(paths.profileDir, { recursive: true });
 
             const result = await clearIsolatedBrowserProfiles({
                 pathsByFamily: [paths],

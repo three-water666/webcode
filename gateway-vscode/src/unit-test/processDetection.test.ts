@@ -57,4 +57,32 @@ suite('Browser process detection', () => {
             true
         );
     });
+
+    test('returns false when no user data dir is present', () => {
+        const profileDir = path.posix.join('/root', 'isolated-browser-profiles', 'edge');
+
+        assert.strictEqual(
+            browserCommandLineUsesProfile('msedge --no-first-run https://example.test', profileDir, 'linux'),
+            false
+        );
+    });
+
+    test('matches Windows profile paths with backslash equals syntax', () => {
+        const profileDir = path.win32.join('C:\\', 'Users', 'me', 'AppData', 'Local', 'webcode', 'edge');
+
+        assert.strictEqual(
+            browserCommandLineUsesProfile(`msedge.exe --user-data-dir=${profileDir}`, profileDir, 'win32'),
+            true
+        );
+    });
+
+    test('keeps escaped quotes inside quoted user data dirs', () => {
+        const profileDir = path.win32.join('C:\\', 'Users', 'me', 'webcode', 'edge "quoted"');
+        const escapedProfileDir = profileDir.replace(/"/g, '\\"');
+
+        assert.strictEqual(
+            browserCommandLineUsesProfile(`msedge.exe --user-data-dir="${escapedProfileDir}"`, profileDir, 'win32'),
+            true
+        );
+    });
 });

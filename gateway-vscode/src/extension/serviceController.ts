@@ -4,6 +4,7 @@ import type { GatewayManager } from '../gateway';
 import { t } from '../i18n';
 import { getConfiguredAiSites } from '../platforms';
 import { filterCustomServers, type BuiltinServerConfig } from './customServers';
+import { getErrorMessage } from './errorUtils';
 import { updateGatewayStatusBar } from './statusBar';
 import type { AISiteConfig, ResolvedAiSiteConfig } from './types';
 
@@ -156,10 +157,3 @@ function buildAllowedOrigins(aiSites: ResolvedAiSiteConfig[]): string[] {
     }).filter(origin => origin !== '');
 }
 
-function getErrorMessage(error: unknown): string {
-    if (error instanceof Error) {
-        return error.message;
-    }
-
-    return String(error);
-}

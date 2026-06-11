@@ -126,9 +126,14 @@ function tokenizeCommandLine(commandLine: string): string[] {
     const tokens: string[] = [];
     let current = '';
     let quote: '"' | "'" | null = null;
-    for (const char of commandLine) {
+    for (let index = 0; index < commandLine.length; index += 1) {
+        const char = commandLine[index];
         if (quote) {
-            if (char === quote) {
+            const nextChar = commandLine[index + 1];
+            if (char === '\\' && (nextChar === quote || nextChar === '\\')) {
+                current += nextChar;
+                index += 1;
+            } else if (char === quote) {
                 quote = null;
             } else {
                 current += char;

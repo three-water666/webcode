@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import { t } from '../i18n';
 import { getConfiguredAiSites } from '../platforms';
 import { launchFirstAvailableBrowser, type BrowserLaunchCommand } from './browserProcessLauncher';
+import { getErrorMessage } from './errorUtils';
 import { prepareIsolatedProfileDirForLaunch } from './isolatedProfileLaunch';
 import { expandHomePath, type BrowserFamily } from './isolatedBrowserProfiles';
 import { isBrowserProcessRunning } from './processDetection';
@@ -396,10 +397,3 @@ function buildLinuxBrowserCommand(url: string, browserType: string): string {
     return `xdg-open "${url}"`;
 }
 
-function getErrorMessage(error: unknown): string {
-    if (error instanceof Error) {
-        return error.message;
-    }
-
-    return String(error);
-}

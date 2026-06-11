@@ -6,6 +6,7 @@ import {
     resolveIsolatedBrowserProfilePaths,
     type BrowserFamily
 } from './isolatedBrowserProfiles';
+import { getErrorMessage } from './errorUtils';
 
 export async function prepareIsolatedProfileDirForLaunch(
     browserFamily: BrowserFamily,
@@ -38,12 +39,4 @@ function getConfiguredProfileRoot(): string | undefined {
     return vscode.workspace
         .getConfiguration('webcodeGateway')
         .get<string>('isolatedBrowser.profileRoot');
-}
-
-function getErrorMessage(error: unknown): string {
-    if (error instanceof Error) {
-        return error.message;
-    }
-
-    return String(error);
 }

@@ -2,10 +2,15 @@ import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 
+import { getErrorMessage } from './errorUtils';
+
 export type BrowserFamily = 'chrome' | 'edge';
+
+export const BROWSER_FAMILIES: readonly BrowserFamily[] = ['edge', 'chrome'];
 
 export interface IsolatedBrowserProfilePaths {
     browserFamily: BrowserFamily;
+    platform: NodeJS.Platform;
     profileRoot: string;
     profileDir: string;
     legacyProfileRoot: string;
@@ -33,6 +38,9 @@ export interface ClearIsolatedBrowserProfilesOptions {
 
 export type ClearIsolatedBrowserProfilesResult =
     | { status: 'cleared' }
+    | ClearIsolatedBrowserProfilesFailure;
+
+export type ClearIsolatedBrowserProfilesFailure =
     | { status: 'blocked-in-use'; browserFamily: BrowserFamily; profileDir: string }
     | { status: 'failed'; message: string };
 
@@ -51,25 +59,27 @@ export function resolveIsolatedBrowserProfilePaths(
     const platform = options.platform ?? os.platform();
     const env = options.env ?? process.env;
     const configuredProfileRoot = options.configuredProfileRoot?.trim();
+    const platformPath = getPathModule(platform);
     const profileRoot = configuredProfileRoot
         ? expandHomePath(configuredProfileRoot, homeDir)
         : resolveDefaultIsolatedBrowserProfileRoot(platform, env, homeDir);
 
-    if (configuredProfileRoot && !path.isAbsolute(profileRoot)) {
+    if (configuredProfileRoot && !platformPath.isAbsolute(profileRoot)) {
         return { status: 'invalid-profile-root', configuredProfileRoot };
     }
 
-    const resolvedProfileRoot = path.resolve(profileRoot);
-    const legacyProfileRoot = path.join(options.legacyStorageRoot, PROFILE_ROOT_DIR_NAME);
+    const resolvedProfileRoot = platformPath.resolve(profileRoot);
+    const legacyProfileRoot = platformPath.join(options.legacyStorageRoot, PROFILE_ROOT_DIR_NAME);
 
     return {
         status: 'ready',
         paths: {
             browserFamily: options.browserFamily,
+            platform,
             profileRoot: resolvedProfileRoot,
-            profileDir: path.join(resolvedProfileRoot, options.browserFamily),
+            profileDir: platformPath.join(resolvedProfileRoot, options.browserFamily),
             legacyProfileRoot,
-            legacyProfileDir: path.join(legacyProfileRoot, options.browserFamily)
+            legacyProfileDir: platformPath.join(legacyProfileRoot, options.browserFamily)
         }
     };
 }
@@ -102,7 +112,7 @@ export function expandHomePath(filePath: string, homeDir: string = os.homedir())
         return homeDir;
     }
 
-    if (filePath.startsWith(`~${path.sep}`) || filePath.startsWith('~/')) {
+    if (filePath.startsWith('~/') || filePath.startsWith('~\\')) {
         return path.join(homeDir, filePath.slice(2));
     }
 
@@ -117,6 +127,11 @@ export async function ensureCurrentIsolatedBrowserProfile(paths: IsolatedBrowser
 export async function hasLegacyIsolatedBrowserProfiles(pathsByFamily: IsolatedBrowserProfilePaths[]): Promise<boolean> {
     const legacyDirs = pathsByFamily.map(paths => paths.legacyProfileDir);
     return pathListIncludesExistingPath(legacyDirs);
+}
+
+export async function hasCurrentIsolatedBrowserProfiles(pathsByFamily: IsolatedBrowserProfilePaths[]): Promise<boolean> {
+    const profileDirs = pathsByFamily.map(paths => paths.profileDir);
+    return pathListIncludesExistingPath(profileDirs);
 }
 
 export async function clearIsolatedBrowserProfiles(
@@ -143,7 +158,7 @@ export async function clearIsolatedBrowserProfiles(
 
 async function findInUseProfile(
     options: ClearIsolatedBrowserProfilesOptions,
-    targetDirs: Array<{ browserFamily: BrowserFamily; profileDir: string }>
+    targetDirs: ProfileDirectoryTarget[]
 ): Promise<{ browserFamily: BrowserFamily; profileDir: string } | null> {
     for (const target of targetDirs) {
         if (await pathExists(target.profileDir) &&
@@ -158,15 +173,22 @@ async function findInUseProfile(
 function getTargetProfileDirs(
     pathsByFamily: IsolatedBrowserProfilePaths[],
     target: 'current' | 'legacy'
-): Array<{ browserFamily: BrowserFamily; profileDir: string }> {
+): ProfileDirectoryTarget[] {
     return pathsByFamily.map(paths => ({
         browserFamily: paths.browserFamily,
+        platform: paths.platform,
         profileDir: target === 'current' ? paths.profileDir : paths.legacyProfileDir
     }));
 }
 
-async function removeProfileDirs(targetDirs: Array<{ profileDir: string }>): Promise<void> {
-    for (const profileDir of uniquePaths(targetDirs.map(target => target.profileDir))) {
+interface ProfileDirectoryTarget {
+    browserFamily: BrowserFamily;
+    platform: NodeJS.Platform;
+    profileDir: string;
+}
+
+async function removeProfileDirs(targetDirs: ProfileDirectoryTarget[]): Promise<void> {
+    for (const profileDir of uniqueProfileDirectoryTargets(targetDirs)) {
         await fs.rm(profileDir, { recursive: true, force: true });
     }
 }
@@ -176,7 +198,7 @@ async function removeEmptyRoots(
     target: 'current' | 'legacy'
 ): Promise<void> {
     const roots = pathsByFamily.map(paths => target === 'current' ? paths.profileRoot : paths.legacyProfileRoot);
-    for (const root of uniquePaths(roots)) {
+    for (const root of uniquePaths(roots, getProfilePathsPlatform(pathsByFamily))) {
         await removeDirectoryIfEmpty(root);
     }
 }
@@ -197,12 +219,24 @@ async function pathListIncludesExistingPath(pathsToCheck: string[]): Promise<boo
     return results.some(Boolean);
 }
 
-function uniquePaths(pathsToDeduplicate: string[]): string[] {
+function uniqueProfileDirectoryTargets(targetDirs: ProfileDirectoryTarget[]): string[] {
     const pathsByKey = new Map<string, string>();
-    for (const candidate of pathsToDeduplicate) {
-        pathsByKey.set(normalizeComparablePath(candidate), candidate);
+    for (const target of targetDirs) {
+        pathsByKey.set(normalizeComparablePath(target.profileDir, target.platform), target.profileDir);
     }
     return [...pathsByKey.values()];
+}
+
+function uniquePaths(pathsToDeduplicate: string[], platform: NodeJS.Platform): string[] {
+    const pathsByKey = new Map<string, string>();
+    for (const candidate of pathsToDeduplicate) {
+        pathsByKey.set(normalizeComparablePath(candidate, platform), candidate);
+    }
+    return [...pathsByKey.values()];
+}
+
+function getProfilePathsPlatform(pathsByFamily: IsolatedBrowserProfilePaths[]): NodeJS.Platform {
+    return pathsByFamily[0]?.platform ?? os.platform();
 }
 
 async function pathExists(filePath: string): Promise<boolean> {
@@ -217,9 +251,10 @@ async function pathExists(filePath: string): Promise<boolean> {
     }
 }
 
-function normalizeComparablePath(filePath: string): string {
-    const normalized = path.resolve(filePath).replace(/\\/g, '/').replace(/\/+$/g, '');
-    if (process.platform === 'win32' || process.platform === 'darwin') {
+function normalizeComparablePath(filePath: string, platform: NodeJS.Platform): string {
+    const platformPath = getPathModule(platform);
+    const normalized = platformPath.resolve(filePath).replace(/\\/g, '/').replace(/\/+$/g, '');
+    if (platform === 'win32' || platform === 'darwin') {
         return normalized.toLowerCase();
     }
 
@@ -231,14 +266,6 @@ function hasErrorCode(error: unknown, code: string): boolean {
         error !== null &&
         'code' in error &&
         error.code === code;
-}
-
-function getErrorMessage(error: unknown): string {
-    if (error instanceof Error) {
-        return error.message;
-    }
-
-    return String(error);
 }
 
 function getPathModule(platform: NodeJS.Platform): path.PlatformPath {

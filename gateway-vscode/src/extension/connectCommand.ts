@@ -5,6 +5,7 @@ import { getConfiguredAiSites } from '../platforms';
 import { launchBridge, launchIsolatedEdgeProfile } from './browserLauncher';
 import {
     CLEAN_LEGACY_ISOLATED_BROWSER_PROFILES_COMMAND,
+    hasCurrentIsolatedBrowserProfileData,
     hasLegacyIsolatedBrowserProfileData,
     RESET_ISOLATED_BROWSER_PROFILES_COMMAND
 } from './isolatedProfileCleanupCommand';
@@ -297,7 +298,11 @@ function createResetIsolatedProfilesItem(): CustomActionItem {
 }
 
 async function buildIsolatedProfileCleanupItems(context: vscode.ExtensionContext): Promise<CustomActionItem[]> {
-    const items = [createResetIsolatedProfilesItem()];
+    const items: CustomActionItem[] = [];
+    if (await hasCurrentIsolatedBrowserProfileData(context)) {
+        items.push(createResetIsolatedProfilesItem());
+    }
+
     if (await hasLegacyIsolatedBrowserProfileData(context)) {
         items.push(createCleanLegacyIsolatedProfilesItem());
     }
