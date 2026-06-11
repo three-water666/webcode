@@ -26,6 +26,7 @@ export interface MessageRequest {
   connected?: boolean;
   autoSend?: boolean;
   autoApproveTools?: boolean;
+  defaultAutoApproveTools?: boolean;
   payload?: ToolExecutionPayload;
 }
 
@@ -43,6 +44,7 @@ export interface StatusResponse {
   showLog?: boolean;
   autoSend?: boolean;
   autoApproveTools?: boolean;
+  defaultAutoApproveTools?: boolean;
   workspaceId?: string;
   siteId?: string;
 }

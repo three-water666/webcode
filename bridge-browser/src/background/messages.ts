@@ -4,6 +4,7 @@ import { handleHandshake } from './connection';
 import { getErrorMessage } from './errors';
 import { executeTool } from './gateway';
 import { showNotification, updateWindowAttention } from './notifications';
+import { getSessionPresetSettings, updateDefaultAutoApproveTools } from './presets';
 import {
   getActiveProtocolSessionResult,
   updateSessionAutoApproveTools,
@@ -32,21 +33,16 @@ function dispatchRuntimeMessage(
 ): boolean {
   const currentTabId = sender.tab ? sender.tab.id : null;
 
+  if (dispatchSettingsRuntimeMessage(request, currentTabId, sendResponse)) {
+    return true;
+  }
+
   switch (request.type) {
     case "HANDSHAKE":
       respondAsync(handleHandshake(request, currentTabId), sendResponse);
       return true;
     case "GET_STATUS":
       handleGetStatus(request, sender, sendResponse);
-      return true;
-    case "SET_LOG_VISIBLE":
-      handleSetLogVisible(request, currentTabId, sendResponse);
-      return true;
-    case "SET_AUTO_SEND":
-      handleSetAutoSend(request, currentTabId, sendResponse);
-      return true;
-    case "SET_AUTO_APPROVE_TOOLS":
-      handleSetAutoApproveTools(request, currentTabId, sendResponse);
       return true;
     case "REQUEST_USER_ATTENTION":
       respondAsync(requestUserAttention(request, sender), sendResponse);
@@ -68,6 +64,29 @@ function dispatchRuntimeMessage(
   }
 }
 
+function dispatchSettingsRuntimeMessage(
+  request: MessageRequest,
+  currentTabId: number | null | undefined,
+  sendResponse: SendResponse
+): boolean {
+  switch (request.type) {
+    case "SET_LOG_VISIBLE":
+      handleSetLogVisible(request, currentTabId, sendResponse);
+      return true;
+    case "SET_AUTO_SEND":
+      handleSetAutoSend(request, currentTabId, sendResponse);
+      return true;
+    case "SET_AUTO_APPROVE_TOOLS":
+      handleSetAutoApproveTools(request, currentTabId, sendResponse);
+      return true;
+    case "SET_DEFAULT_AUTO_APPROVE_TOOLS":
+      handleSetDefaultAutoApproveTools(request, sendResponse);
+      return true;
+    default:
+      return false;
+  }
+}
+
 function handleGetStatus(
   request: MessageRequest,
   sender: chrome.runtime.MessageSender,
@@ -83,7 +102,10 @@ function handleGetStatus(
 }
 
 async function getStatusResponse(targetTabId: number) {
-  const sessionResult = await getActiveProtocolSessionResult(targetTabId);
+  const [sessionResult, presetSettings] = await Promise.all([
+    getActiveProtocolSessionResult(targetTabId),
+    getSessionPresetSettings(),
+  ]);
   if (sessionResult.status === "missing") {
     return {
       connected: false,
@@ -91,6 +113,7 @@ async function getStatusResponse(targetTabId: number) {
       showLog: false,
       autoSend: true,
       autoApproveTools: false,
+      defaultAutoApproveTools: presetSettings.defaultAutoApproveTools,
       workspaceId: 'global',
     };
   }
@@ -102,6 +125,7 @@ async function getStatusResponse(targetTabId: number) {
       showLog: false,
       autoSend: true,
       autoApproveTools: false,
+      defaultAutoApproveTools: presetSettings.defaultAutoApproveTools,
       workspaceId: 'global',
       error: "Session data is incomplete. Reconnect from VS Code to continue.",
     };
@@ -116,6 +140,7 @@ async function getStatusResponse(targetTabId: number) {
     showLog: session.showLog ?? false,
     autoSend: session.autoSend ?? true,
     autoApproveTools: session.autoApproveTools ?? false,
+    defaultAutoApproveTools: presetSettings.defaultAutoApproveTools,
     workspaceId: session.workspaceId ?? 'global',
     siteId: session.siteId,
   };
@@ -198,6 +223,33 @@ function handleSetAutoApproveTools(
         .catch(ignoreRuntimeError);
       chrome.runtime.sendMessage(
         { type: "AUTO_APPROVE_TOOLS_CHANGED", tabId: targetTabId, autoApproveTools },
+        () => {
+          void chrome.runtime.lastError;
+        }
+      );
+      return { success: true };
+    }),
+    sendResponse
+  );
+}
+
+function handleSetDefaultAutoApproveTools(
+  request: MessageRequest,
+  sendResponse: SendResponse
+): void {
+  if (typeof request.defaultAutoApproveTools !== "boolean") {
+    sendResponse({ success: false, error: "Missing default auto-approve value" });
+    return;
+  }
+
+  const defaultAutoApproveTools = request.defaultAutoApproveTools;
+  respondAsync(
+    updateDefaultAutoApproveTools(defaultAutoApproveTools).then((presetSettings) => {
+      chrome.runtime.sendMessage(
+        {
+          type: "DEFAULT_AUTO_APPROVE_TOOLS_CHANGED",
+          defaultAutoApproveTools: presetSettings.defaultAutoApproveTools,
+        },
         () => {
           void chrome.runtime.lastError;
         }

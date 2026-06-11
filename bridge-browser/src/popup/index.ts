@@ -13,12 +13,18 @@ type PopupElements = {
   autoSendInput: HTMLInputElement;
   autoApproveToolsInput: HTMLInputElement;
   showLogInput: HTMLInputElement;
+  sessionPresetToggle: HTMLButtonElement;
+  sessionPresetPanel: HTMLElement;
+  defaultAutoApproveToolsInput: HTMLInputElement;
   title: HTMLElement;
   connectedText: HTMLElement;
   portLabel: HTMLElement;
   autoSendLabel: HTMLElement;
   autoApproveToolsLabel: HTMLElement;
   showLogLabel: HTMLElement;
+  sessionPresetToggleLabel: HTMLElement;
+  defaultAutoApproveToolsLabel: HTMLElement;
+  sessionPresetHint: HTMLElement;
   disconnectedTitle: HTMLElement;
   installedTitle: HTMLElement;
   installedDesc: HTMLElement;
@@ -51,6 +57,10 @@ const UI: Record<string, Record<string, string>> = {
     auto_send: "Auto Send Message",
     auto_approve_tools: "Auto-Approve All Tools",
     show_log: "Show Floating Log",
+    session_preset: "New Session Preset",
+    session_preset_title: "Show settings used when a new browser session is created",
+    session_preset_hint: "Applies only to new sessions. The current session setting stays unchanged.",
+    default_auto_approve_tools: "Auto-Approve All Tools",
     disconnected: "🔴 Disconnected from VS Code",
     suspended: "⏸️ Connection paused on this page",
     suspended_hint: "Return to the connected site to resume automatically. Local tools stay disabled here.",
@@ -73,6 +83,10 @@ const UI: Record<string, Record<string, string>> = {
     auto_send: "自动发送消息",
     auto_approve_tools: "所有工具无需审批",
     show_log: "显示悬浮日志",
+    session_preset: "新会话预设",
+    session_preset_title: "显示新建浏览器会话时使用的设置",
+    session_preset_hint: "只影响之后新开的会话，不改变当前会话。",
+    default_auto_approve_tools: "所有工具无需审批",
     disconnected: "🔴 未连接到 VS Code",
     suspended: "⏸️ 当前页面连接已暂停",
     suspended_hint: "回到已连接的网站后会自动恢复；本页面无法调用本地工具。",
@@ -126,12 +140,18 @@ function getPopupElements(): PopupElements {
     autoSendInput: document.getElementById("autoSend") as HTMLInputElement,
     autoApproveToolsInput: document.getElementById("autoApproveTools") as HTMLInputElement,
     showLogInput: document.getElementById("showLog") as HTMLInputElement,
+    sessionPresetToggle: document.getElementById("sessionPresetToggle") as HTMLButtonElement,
+    sessionPresetPanel: document.getElementById("sessionPresetPanel") as HTMLElement,
+    defaultAutoApproveToolsInput: document.getElementById("defaultAutoApproveTools") as HTMLInputElement,
     title: document.getElementById("title") as HTMLElement,
     connectedText: document.getElementById("connectedText") as HTMLElement,
     portLabel: document.getElementById("portLabel") as HTMLElement,
     autoSendLabel: document.getElementById("autoSendLabel") as HTMLElement,
     autoApproveToolsLabel: document.getElementById("autoApproveToolsLabel") as HTMLElement,
     showLogLabel: document.getElementById("showLogLabel") as HTMLElement,
+    sessionPresetToggleLabel: document.getElementById("sessionPresetToggleLabel") as HTMLElement,
+    defaultAutoApproveToolsLabel: document.getElementById("defaultAutoApproveToolsLabel") as HTMLElement,
+    sessionPresetHint: document.getElementById("sessionPresetHint") as HTMLElement,
     disconnectedTitle: document.getElementById("disconnectedTitle") as HTMLElement,
     installedTitle: document.getElementById("installedTitle") as HTMLElement,
     installedDesc: document.getElementById("installedDesc") as HTMLElement,
@@ -150,6 +170,10 @@ function initializeLabels(context: PopupContext): void {
   elements.autoSendLabel.textContent = t("auto_send");
   elements.autoApproveToolsLabel.textContent = t("auto_approve_tools");
   elements.showLogLabel.textContent = t("show_log");
+  elements.sessionPresetToggleLabel.textContent = t("session_preset");
+  elements.sessionPresetToggle.title = t("session_preset_title");
+  elements.sessionPresetHint.textContent = t("session_preset_hint");
+  elements.defaultAutoApproveToolsLabel.textContent = t("default_auto_approve_tools");
   elements.disconnectedTitle.textContent = t("disconnected");
   elements.suspendedHint.textContent = t("suspended_hint");
   elements.installedTitle.textContent = t("installed_title");
@@ -180,6 +204,9 @@ function listenForSessionSettingChanges(currentTabId: number, elements: PopupEle
     ) {
       elements.autoApproveToolsInput.checked = request.autoApproveTools === true;
     }
+    if (isMessageRequest(request) && request.type === "DEFAULT_AUTO_APPROVE_TOOLS_CHANGED") {
+      elements.defaultAutoApproveToolsInput.checked = request.defaultAutoApproveTools === true;
+    }
   });
 }
 
@@ -199,7 +226,13 @@ function requestCurrentStatus(currentTabId: number, context: PopupContext): void
 }
 
 function showConnectedStatus(
-  response: { port?: number; showLog?: boolean; autoSend?: boolean; autoApproveTools?: boolean },
+  response: {
+    port?: number;
+    showLog?: boolean;
+    autoSend?: boolean;
+    autoApproveTools?: boolean;
+    defaultAutoApproveTools?: boolean;
+  },
   elements: PopupElements
 ): void {
   elements.connectedView.classList.remove("hidden");
@@ -209,6 +242,7 @@ function showConnectedStatus(
   elements.portDisplay.innerText = String(response.port ?? "");
   elements.autoSendInput.checked = response.autoSend !== false;
   elements.autoApproveToolsInput.checked = response.autoApproveTools === true;
+  elements.defaultAutoApproveToolsInput.checked = response.defaultAutoApproveTools === true;
   elements.showLogInput.checked = response.showLog === true;
 }
 
@@ -243,9 +277,23 @@ function showDisconnectedStatus(context: PopupContext): void {
 
 function bindPopupControls(currentTabId: number, context: PopupContext): void {
   bindManualInitButton(currentTabId, context);
+  bindSessionPresetToggle(context.elements);
   bindAutoSendToggle(currentTabId, context.elements.autoSendInput);
   bindAutoApproveToolsToggle(currentTabId, context.elements.autoApproveToolsInput);
+  bindDefaultAutoApproveToolsToggle(context.elements.defaultAutoApproveToolsInput);
   bindLogToggle(currentTabId, context.elements.showLogInput);
+}
+
+function bindSessionPresetToggle(elements: PopupElements): void {
+  elements.sessionPresetToggle.addEventListener("click", () => {
+    const nextExpanded = elements.sessionPresetToggle.getAttribute("aria-expanded") !== "true";
+    setSessionPresetPanelExpanded(elements, nextExpanded);
+  });
+}
+
+function setSessionPresetPanelExpanded(elements: PopupElements, expanded: boolean): void {
+  elements.sessionPresetToggle.setAttribute("aria-expanded", String(expanded));
+  elements.sessionPresetPanel.classList.toggle("hidden", !expanded);
 }
 
 function bindManualInitButton(currentTabId: number, context: PopupContext): void {
@@ -341,6 +389,15 @@ function bindAutoApproveToolsToggle(
       type: "SET_AUTO_APPROVE_TOOLS",
       tabId: currentTabId,
       autoApproveTools: autoApproveToolsInput.checked,
+    });
+  });
+}
+
+function bindDefaultAutoApproveToolsToggle(defaultAutoApproveToolsInput: HTMLInputElement): void {
+  defaultAutoApproveToolsInput.addEventListener("change", () => {
+    void chrome.runtime.sendMessage({
+      type: "SET_DEFAULT_AUTO_APPROVE_TOOLS",
+      defaultAutoApproveTools: defaultAutoApproveToolsInput.checked,
     });
   });
 }

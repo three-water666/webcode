@@ -186,6 +186,57 @@
       .checkbox-row:last-child {
         border-bottom: none;
       }
+      .session-setting-last {
+        border-bottom: none;
+      }
+      .disclosure-button {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        width: 100%;
+        min-height: 34px;
+        padding: 0;
+        border: none;
+        border-top: 1px solid #333;
+        background: transparent;
+        color: #d6d6d6;
+        cursor: pointer;
+        font: inherit;
+        font-size: 12px;
+        text-align: left;
+      }
+      .disclosure-button:hover {
+        color: #fff;
+      }
+      .disclosure-caret {
+        flex: none;
+        width: 6px;
+        height: 6px;
+        margin-right: 3px;
+        border-right: 1.5px solid #aaa;
+        border-bottom: 1.5px solid #aaa;
+        transform: rotate(45deg);
+        transition: transform 0.12s ease;
+      }
+      .disclosure-button[aria-expanded="true"] .disclosure-caret {
+        margin-top: 5px;
+        transform: rotate(225deg);
+      }
+      .preset-panel {
+        border-top: 1px solid #333;
+      }
+      .preset-hint {
+        margin: 8px 0 2px;
+        color: #969696;
+        font-size: 10px;
+        line-height: 1.35;
+      }
+      .preset-row {
+        min-height: 46px;
+        padding: 7px 0;
+        border-bottom: none;
+      }
       input[type="checkbox"] {
         flex: none;
         cursor: pointer;
@@ -223,10 +274,29 @@
             <span id="autoApproveToolsLabel">Auto-Approve All Tools</span>
             <input type="checkbox" id="autoApproveTools" />
           </label>
-          <label class="checkbox-row">
+          <label class="checkbox-row session-setting-last">
             <span id="showLogLabel">Show Floating Log</span>
             <input type="checkbox" id="showLog" />
           </label>
+          <button
+            type="button"
+            id="sessionPresetToggle"
+            class="disclosure-button"
+            aria-expanded="false"
+            aria-controls="sessionPresetPanel"
+          >
+            <span id="sessionPresetToggleLabel">New Session Preset</span>
+            <span class="disclosure-caret" aria-hidden="true"></span>
+          </button>
+          <div id="sessionPresetPanel" class="preset-panel hidden">
+            <p id="sessionPresetHint" class="preset-hint">
+              Applies only to new sessions. The current session setting stays unchanged.
+            </p>
+            <label class="checkbox-row preset-row">
+              <span id="defaultAutoApproveToolsLabel">Auto-Approve All Tools</span>
+              <input type="checkbox" id="defaultAutoApproveTools" />
+            </label>
+          </div>
         </div>
       </div>
     </div>

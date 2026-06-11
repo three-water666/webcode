@@ -3,6 +3,7 @@ import { BRANDING } from '@webcode/shared';
 import { type HandshakeResponse, isStoredSession, type MessageRequest } from '../types';
 import { updateBadge } from './badge';
 import { fetchInitDataFromGateway } from './init_sync';
+import { getSessionPresetSettings } from './presets';
 import { removeSession, saveSession } from './sessions';
 
 interface HandshakeParams {
@@ -59,12 +60,13 @@ interface BindSessionOptions {
 }
 
 export async function bindSession(tabId: number, options: BindSessionOptions) {
+  const presetSettings = await getSessionPresetSettings();
   const session = {
     port: options.port,
     token: options.token,
     showLog: false,
     autoSend: true,
-    autoApproveTools: false,
+    autoApproveTools: presetSettings.defaultAutoApproveTools,
     workspaceId: options.workspaceId,
     siteId: options.siteId,
     targetOrigin: options.targetOrigin,
