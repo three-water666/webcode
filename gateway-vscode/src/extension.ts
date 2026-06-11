@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { registerGatewayConfigurationWatcher } from './extension/configurationWatcher';
 import { registerGatewayConnectCommand } from './extension/connectCommand';
 import { registerCopyContextCommand } from './extension/copyContextCommand';
+import { registerIsolatedProfileCleanupCommand } from './extension/isolatedProfileCleanupCommand';
 import {
     createGatewayServiceController,
     type GatewayServiceController
@@ -83,6 +84,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // 注册编辑器右键菜单命令：复制当前选中文本，并在剪贴板里附带相对文件路径。
     // 该命令和网关服务本身没有运行依赖，所以激活时直接注册。
     registerCopyContextCommand(context);
+    registerIsolatedProfileCleanupCommand(context);
 
     // 注册状态栏点击后的主菜单命令。菜单会根据 serviceController 当前状态切换：
     // starting 时显示日志，offline 时提供启动/日志/设置，online 时提供打开站点、

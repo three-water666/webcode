@@ -38,6 +38,14 @@
       {
         "command": "webcode-gateway.copyContext",
         "title": "webcode: Copy Context"
+      },
+      {
+        "command": "webcode-gateway.resetIsolatedBrowserProfiles",
+        "title": "webcode: Reset Isolated Browser Profiles"
+      },
+      {
+        "command": "webcode-gateway.cleanLegacyIsolatedBrowserProfiles",
+        "title": "webcode: Clean Legacy Isolated Browser Profiles"
       }
     ],
     "configuration": {
@@ -132,6 +140,11 @@
           "type": "string",
           "default": "",
           "description": "Optional path to a Chrome for Testing or Chromium executable for isolated-chrome mode. Google Chrome 137+ no longer supports automatic unpacked extension loading."
+        },
+        "webcodeGateway.isolatedBrowser.profileRoot": {
+          "type": "string",
+          "default": "",
+          "description": "Optional absolute directory, or a path starting with ~, where isolated browser profiles are stored. Leave empty to use the OS app data directory. webcode creates edge and chrome subdirectories."
         },
         "webcodeGateway.commandShell.path": {
           "type": "string",

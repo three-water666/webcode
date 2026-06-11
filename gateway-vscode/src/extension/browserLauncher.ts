@@ -7,6 +7,8 @@ import * as vscode from 'vscode';
 import { t } from '../i18n';
 import { getConfiguredAiSites } from '../platforms';
 import { launchFirstAvailableBrowser, type BrowserLaunchCommand } from './browserProcessLauncher';
+import { prepareIsolatedProfileDirForLaunch } from './isolatedProfileLaunch';
+import { expandHomePath, type BrowserFamily } from './isolatedBrowserProfiles';
 import { isBrowserProcessRunning } from './processDetection';
 import type { AISiteConfig } from './types';
 
@@ -19,8 +21,6 @@ interface LaunchBridgeOptions {
     currentToken: string;
 }
 
-type BrowserFamily = 'chrome' | 'edge';
-
 const ISOLATED_EDGE_PROFILE_HOME_URL = 'edge://newtab/';
 
 export function launchBridge(options: LaunchBridgeOptions): void {
@@ -31,7 +31,9 @@ export function launchBridge(options: LaunchBridgeOptions): void {
 }
 
 export function launchIsolatedEdgeProfile(context: vscode.ExtensionContext): void {
-    openIsolatedBrowser(ISOLATED_EDGE_PROFILE_HOME_URL, 'edge', context);
+    void openIsolatedBrowser(ISOLATED_EDGE_PROFILE_HOME_URL, 'edge', context).catch(error => {
+        void vscode.window.showErrorMessage(t('open_browser_failed', { message: getErrorMessage(error) }));
+    });
 }
 
 function buildBridgeUrl(currentPort: number, currentToken: string, siteId: string, targetUrl: string): string {
@@ -74,7 +76,7 @@ async function openBrowserAsync(url: string, browserType: string, context: vscod
     }
 
     if (browserType === 'isolated-chrome' || browserType === 'isolated-edge') {
-        openIsolatedBrowser(url, browserType === 'isolated-edge' ? 'edge' : 'chrome', context);
+        await openIsolatedBrowser(url, browserType === 'isolated-edge' ? 'edge' : 'chrome', context);
         return;
     }
 
@@ -97,18 +99,15 @@ async function openBrowserAsync(url: string, browserType: string, context: vscod
     void vscode.env.openExternal(vscode.Uri.parse(url));
 }
 
-function openIsolatedBrowser(url: string, browserFamily: BrowserFamily, context: vscode.ExtensionContext): void {
+async function openIsolatedBrowser(url: string, browserFamily: BrowserFamily, context: vscode.ExtensionContext): Promise<void> {
     const extensionPath = resolveBundledBrowserExtensionPath(context);
     if (!extensionPath) {
         void vscode.window.showErrorMessage(t('browser_extension_missing'));
         return;
     }
 
-    const profileDir = path.join(context.globalStorageUri.fsPath, 'isolated-browser-profiles', browserFamily);
-    try {
-        fs.mkdirSync(profileDir, { recursive: true });
-    } catch (error) {
-        void vscode.window.showErrorMessage(t('open_browser_failed', { message: getErrorMessage(error) }));
+    const profileDir = await prepareIsolatedProfileDirForLaunch(browserFamily, context);
+    if (!profileDir) {
         return;
     }
 
@@ -351,18 +350,6 @@ function getInvalidConfiguredChromeForTestingPath(): string | null {
     }
 
     return null;
-}
-
-function expandHomePath(filePath: string): string {
-    if (filePath === '~') {
-        return os.homedir();
-    }
-
-    if (filePath.startsWith(`~${path.sep}`) || filePath.startsWith('~/')) {
-        return path.join(os.homedir(), filePath.slice(2));
-    }
-
-    return filePath;
 }
 
 function buildBrowserCommand(url: string, browserType: string, platform: NodeJS.Platform): string {

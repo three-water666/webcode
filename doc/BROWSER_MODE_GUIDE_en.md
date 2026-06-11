@@ -59,6 +59,18 @@ Notes:
 
 - No manual browser-extension installation is needed.
 - Sign-in state is separate from your everyday Edge profile, so you need to sign in to the target AI site once inside this isolated profile.
+- The isolated profile is stored in the OS app data directory by default, so uninstalling the VS Code extension does not remove it:
+  - Windows: `%LOCALAPPDATA%\webcode\isolated-browser-profiles\edge`
+  - macOS: `~/Library/Application Support/webcode/isolated-browser-profiles/edge`
+  - Linux: `${XDG_DATA_HOME:-~/.local/share}/webcode/isolated-browser-profiles/edge`
+- To customize the storage location, set `webcodeGateway.isolatedBrowser.profileRoot`. webcode creates `edge` and `chrome` subdirectories under that root.
+- `webcodeGateway.isolatedBrowser.profileRoot` only selects the profile root for new launches; it does not migrate existing profiles. For a clean setup, configure it before the first isolated Edge/Chrome launch so webcode creates only one profile set.
+- If you change `webcodeGateway.isolatedBrowser.profileRoot` after using isolated mode, webcode creates another isolated profile at the new location and keeps the old one. If you switch back, the old sign-in state is available as long as that profile still exists.
+- If you end up with multiple profile sets, use `Reset Current Isolated Profiles` from the webcode menu to delete the directory used by the current configuration. Use `Clean Legacy Isolated Profiles` for the old VS Code extension storage directory.
+- After upgrading from an older version, webcode does not copy the old VS Code extension storage profile. It creates a new isolated profile, so you need to sign in to the target AI site once in the new profile.
+- If a legacy isolated profile is detected, the webcode menu shows `Clean Legacy Isolated Profiles` to delete old data from VS Code extension storage.
+- `Reset Current Isolated Profiles` deletes the new profile currently used by webcode. Both delete confirmations include `Open Folder`, and failed deletes also let you jump to the folder for manual cleanup.
+- If you stop using webcode completely, clean the current and legacy isolated profiles from the menu before uninstalling the VS Code extension.
 - If sign-in redirects to a third-party provider such as Google or Microsoft, the bridge pauses page capabilities and keeps the session; it resumes automatically after the browser returns to the target AI site.
 - You can choose `Open Edge Isolated Profile` from the webcode menu to open the dedicated profile directly for sign-in or extension management.
 - After a VS Code extension upgrade, an already-running isolated Edge process may keep using the old bundled bridge. The bridge page will show a version mismatch; close all isolated Edge windows and launch from VS Code again to load the new bridge.
@@ -94,5 +106,6 @@ Notes:
 - Chrome for Testing or Chromium must be installed.
 - If webcode cannot find the browser, configure `webcodeGateway.isolatedChrome.executablePath`.
 - Regular Google Chrome is not suitable for this isolated auto-loaded-extension mode because newer Chrome versions no longer support this unpacked-extension loading path.
+- The Chrome isolated profile uses the `chrome` subdirectory under the same isolated profile root.
 - After a VS Code extension upgrade, an already-running isolated Chrome/Chromium process may keep using the old bundled bridge. Close all isolated browser windows and launch from VS Code again.
 - If you are not sure which mode to use, prefer `Edge Isolated Keepalive`.
