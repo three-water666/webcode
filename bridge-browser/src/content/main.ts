@@ -12,6 +12,7 @@ import { hasPromptResourceChange, loadPromptsFromStorage } from "./prompt_resour
 import { logToolSummary, ToolCallTracker } from "./tool_call_tracker";
 import { ToolExecutor } from "./tool_executor";
 import { type BufferedResultBatch, ToolRequestRegistry } from "./tool_request_registry";
+import { logVirtualizedHistorySkip } from "./virtualized_history_skip";
 
 // === 配置与状态 ===
 interface ConfigState {
@@ -302,6 +303,7 @@ function scheduleMainLoop(delayMs: number): void {
  * 4. 当前轮次所有工具都有结果后，按页面顺序合并结果并写回输入框。
  * 5. 如果 AI 还在输出、工具还没完成、或 JSON 还没稳定，则安排下一次检查。
  */
+// eslint-disable-next-line max-lines-per-function
 function runMainLoop() {
 
   // 进入实际扫描后释放调度锁；本轮扫描期间如果还需要等待，会重新调用 scheduleMainLoop。
@@ -343,7 +345,10 @@ function runMainLoop() {
       const isProcessing = requestRegistry.isRunning(requestIdentity.requestKey);
       const isKnown = requestRegistry.hasSeen(requestIdentity.requestKey);
 
-      if (!isKnown && skipNewCapturesForVirtualizedHistory) {return;}
+      if (!isKnown && skipNewCapturesForVirtualizedHistory) {
+        logVirtualizedHistorySkip(payload.name);
+        return;
+      }
       currentTurn.add(requestIdentity.requestKey);
 
       if (!isKnown) {
@@ -368,7 +373,10 @@ function runMainLoop() {
         }
       }
     } catch (error) {
-      if (skipNewCapturesForVirtualizedHistory) {return;}
+      if (skipNewCapturesForVirtualizedHistory) {
+        logVirtualizedHistorySkip();
+        return;
+      }
 
       // 流式输出中 JSON 可能暂时不完整。tracker 会先等待文本稳定，确认失败后才回填协议错误。
       const requestIdentity = toolCallTracker.handleProtocolErrorBlock(
