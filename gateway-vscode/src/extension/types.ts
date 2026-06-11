@@ -8,4 +8,5 @@ export interface CustomActionItem extends vscode.QuickPickItem {
     target?: string;
     action?: string;
     value?: string;
+    profileCleanupTarget?: 'current' | 'legacy';
 }

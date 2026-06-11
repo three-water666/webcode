@@ -7,6 +7,7 @@ import {
     CLEAN_LEGACY_ISOLATED_BROWSER_PROFILES_COMMAND,
     hasCurrentIsolatedBrowserProfileData,
     hasLegacyIsolatedBrowserProfileData,
+    openIsolatedProfileLocation,
     RESET_ISOLATED_BROWSER_PROFILES_COMMAND
 } from './isolatedProfileCleanupCommand';
 import type { GatewayServiceController } from './serviceController';
@@ -25,6 +26,11 @@ interface OnlineMenuContext {
     outputChannel: vscode.OutputChannel;
     serviceController: GatewayServiceController;
 }
+
+const OPEN_PROFILE_FOLDER_BUTTON: vscode.QuickInputButton = {
+    iconPath: new vscode.ThemeIcon('folder-opened'),
+    tooltip: t('isolated_profiles_open_folder_button')
+};
 
 export function registerGatewayConnectCommand(options: RegisterGatewayConnectCommandOptions): void {
     options.context.subscriptions.push(vscode.commands.registerCommand('webcode-gateway.connect', async () => {
@@ -81,7 +87,7 @@ async function showOfflineMenu(
         { label: t('configure_label'), description: t('configure_desc'), action: 'settings' }
     ];
 
-    const selection = await vscode.window.showQuickPick(items, {
+    const selection = await showGatewayQuickPick(extensionContext, items, {
         placeHolder: t('offline_placeholder'),
         title: t('manager_title')
     });
@@ -121,7 +127,7 @@ async function showOnlineMenu(context: OnlineMenuContext): Promise<void> {
     const aiSites = getConfiguredAiSites(config.get<AISiteConfig[]>('aiSites'));
     const items = await buildOnlineMenuItems(aiSites, context.extensionContext);
 
-    const selection = await vscode.window.showQuickPick<CustomActionItem>(items, {
+    const selection = await showGatewayQuickPick(context.extensionContext, items, {
         placeHolder: t('online_placeholder'),
         title: t('online_title', { port: context.currentPort })
     });
@@ -131,6 +137,47 @@ async function showOnlineMenu(context: OnlineMenuContext): Promise<void> {
     }
 
     await handleOnlineSelection(selection, aiSites, context);
+}
+
+function showGatewayQuickPick(
+    extensionContext: vscode.ExtensionContext,
+    items: CustomActionItem[],
+    options: vscode.QuickPickOptions
+): Promise<CustomActionItem | undefined> {
+    return new Promise(resolve => {
+        const quickPick = vscode.window.createQuickPick<CustomActionItem>();
+        let settled = false;
+
+        quickPick.items = items;
+        quickPick.title = options.title;
+        quickPick.placeholder = options.placeHolder;
+
+        quickPick.onDidAccept(() => {
+            settle(quickPick.selectedItems[0]);
+        });
+        quickPick.onDidHide(() => {
+            settle(undefined);
+        });
+        quickPick.onDidTriggerItemButton(event => {
+            if (!event.item.profileCleanupTarget) {
+                return;
+            }
+
+            void openIsolatedProfileLocation(extensionContext, event.item.profileCleanupTarget);
+        });
+
+        quickPick.show();
+
+        function settle(selection: CustomActionItem | undefined): void {
+            if (settled) {
+                return;
+            }
+
+            settled = true;
+            quickPick.dispose();
+            resolve(selection);
+        }
+    });
 }
 
 async function buildOnlineMenuItems(
@@ -293,7 +340,9 @@ function createResetIsolatedProfilesItem(): CustomActionItem {
     return {
         label: t('reset_isolated_profiles_label'),
         description: t('reset_isolated_profiles_desc'),
-        action: 'resetIsolatedProfiles'
+        action: 'resetIsolatedProfiles',
+        profileCleanupTarget: 'current',
+        buttons: [OPEN_PROFILE_FOLDER_BUTTON]
     };
 }
 
@@ -314,6 +363,8 @@ function createCleanLegacyIsolatedProfilesItem(): CustomActionItem {
     return {
         label: t('clean_legacy_isolated_profiles_label'),
         description: t('clean_legacy_isolated_profiles_desc'),
-        action: 'cleanLegacyIsolatedProfiles'
+        action: 'cleanLegacyIsolatedProfiles',
+        profileCleanupTarget: 'legacy',
+        buttons: [OPEN_PROFILE_FOLDER_BUTTON]
     };
 }

@@ -69,7 +69,7 @@ Notes:
 - If you end up with multiple profile sets, use `Reset Current Isolated Profiles` from the webcode menu to delete the directory used by the current configuration. Use `Clean Legacy Isolated Profiles` for the old VS Code extension storage directory.
 - After upgrading from an older version, webcode does not copy the old VS Code extension storage profile. It creates a new isolated profile, so you need to sign in to the target AI site once in the new profile.
 - If a legacy isolated profile is detected, the webcode menu shows `Clean Legacy Isolated Profiles` to delete old data from VS Code extension storage.
-- `Reset Current Isolated Profiles` deletes the new profile currently used by webcode. Both delete confirmations include `Open Folder`, and failed deletes also let you jump to the folder for manual cleanup.
+- `Reset Current Isolated Profiles` deletes the new profile currently used by webcode. The reset and cleanup menu items include an open-folder icon, and failed deletes also let you jump to the folder for manual cleanup.
 - If you stop using webcode completely, clean the current and legacy isolated profiles from the menu before uninstalling the VS Code extension.
 - If sign-in redirects to a third-party provider such as Google or Microsoft, the bridge pauses page capabilities and keeps the session; it resumes automatically after the browser returns to the target AI site.
 - You can choose `Open Edge Isolated Profile` from the webcode menu to open the dedicated profile directly for sign-in or extension management.

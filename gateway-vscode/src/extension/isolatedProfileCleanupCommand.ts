@@ -17,7 +17,7 @@ import { isBrowserProfileInUse } from './processDetection';
 export const RESET_ISOLATED_BROWSER_PROFILES_COMMAND = 'webcode-gateway.resetIsolatedBrowserProfiles';
 export const CLEAN_LEGACY_ISOLATED_BROWSER_PROFILES_COMMAND = 'webcode-gateway.cleanLegacyIsolatedBrowserProfiles';
 
-type CleanupTarget = 'current' | 'legacy';
+export type IsolatedProfileCleanupTarget = 'current' | 'legacy';
 
 export function registerIsolatedProfileCleanupCommand(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
@@ -38,7 +38,10 @@ export async function hasCurrentIsolatedBrowserProfileData(context: vscode.Exten
     return hasIsolatedBrowserProfileData(context, 'current');
 }
 
-async function hasIsolatedBrowserProfileData(context: vscode.ExtensionContext, target: CleanupTarget): Promise<boolean> {
+async function hasIsolatedBrowserProfileData(
+    context: vscode.ExtensionContext,
+    target: IsolatedProfileCleanupTarget
+): Promise<boolean> {
     const pathsResult = resolveCleanupProfilePaths(context);
     if (pathsResult.status !== 'ready') {
         return false;
@@ -53,9 +56,24 @@ async function hasIsolatedBrowserProfileData(context: vscode.ExtensionContext, t
     }
 }
 
+export async function openIsolatedProfileLocation(
+    context: vscode.ExtensionContext,
+    target: IsolatedProfileCleanupTarget
+): Promise<void> {
+    const pathsResult = resolveCleanupProfilePaths(context);
+    if (pathsResult.status === 'invalid-profile-root') {
+        void vscode.window.showErrorMessage(t('isolated_profile_root_invalid', {
+            path: pathsResult.configuredProfileRoot
+        }));
+        return;
+    }
+
+    await openProfileLocation(pathsResult.pathsByFamily, target);
+}
+
 async function handleClearIsolatedBrowserProfiles(
     context: vscode.ExtensionContext,
-    target: CleanupTarget
+    target: IsolatedProfileCleanupTarget
 ): Promise<void> {
     const pathsResult = resolveCleanupProfilePaths(context);
     if (pathsResult.status === 'invalid-profile-root') {
@@ -78,7 +96,7 @@ async function handleClearIsolatedBrowserProfiles(
 
 async function clearProfilesWithProgress(
     pathsByFamily: IsolatedBrowserProfilePaths[],
-    target: CleanupTarget
+    target: IsolatedProfileCleanupTarget
 ): Promise<void> {
     const result = await vscode.window.withProgress(
         {
@@ -105,7 +123,7 @@ async function clearProfilesWithProgress(
 
 async function showClearFailure(
     pathsByFamily: IsolatedBrowserProfilePaths[],
-    target: CleanupTarget,
+    target: IsolatedProfileCleanupTarget,
     result: ClearIsolatedBrowserProfilesFailure
 ): Promise<void> {
     const openFolderLabel = t('isolated_profiles_open_folder_button');
@@ -149,28 +167,24 @@ function resolveCleanupProfilePaths(context: vscode.ExtensionContext): ResolveCl
 
 async function confirmClear(
     pathsByFamily: IsolatedBrowserProfilePaths[],
-    target: CleanupTarget
+    target: IsolatedProfileCleanupTarget
 ): Promise<boolean> {
     const deleteLabel = t(target === 'current'
         ? 'isolated_profiles_reset_confirm_button'
         : 'isolated_profiles_clean_legacy_confirm_button');
-    const openFolderLabel = t('isolated_profiles_open_folder_button');
     const selection = await vscode.window.showWarningMessage(
         buildConfirmMessage(pathsByFamily, target),
         { modal: true },
-        deleteLabel,
-        openFolderLabel
+        deleteLabel
     );
-
-    if (selection === openFolderLabel) {
-        await openProfileLocation(pathsByFamily, target);
-        return false;
-    }
 
     return selection === deleteLabel;
 }
 
-async function hasProfileData(pathsByFamily: IsolatedBrowserProfilePaths[], target: CleanupTarget): Promise<boolean> {
+async function hasProfileData(
+    pathsByFamily: IsolatedBrowserProfilePaths[],
+    target: IsolatedProfileCleanupTarget
+): Promise<boolean> {
     return target === 'current'
         ? await hasCurrentIsolatedBrowserProfiles(pathsByFamily)
         : await hasLegacyIsolatedBrowserProfiles(pathsByFamily);
@@ -178,7 +192,7 @@ async function hasProfileData(pathsByFamily: IsolatedBrowserProfilePaths[], targ
 
 async function showNoProfilesFound(
     pathsByFamily: IsolatedBrowserProfilePaths[],
-    target: CleanupTarget
+    target: IsolatedProfileCleanupTarget
 ): Promise<void> {
     const openFolderLabel = t('isolated_profiles_open_folder_button');
     const selection = await vscode.window.showInformationMessage(
@@ -190,7 +204,10 @@ async function showNoProfilesFound(
     }
 }
 
-function buildConfirmMessage(pathsByFamily: IsolatedBrowserProfilePaths[], target: CleanupTarget): string {
+function buildConfirmMessage(
+    pathsByFamily: IsolatedBrowserProfilePaths[],
+    target: IsolatedProfileCleanupTarget
+): string {
     const paths = getProfileRoots(pathsByFamily, target).join('\n');
     return t(target === 'current' ? 'isolated_profiles_reset_confirm' : 'isolated_profiles_clean_legacy_confirm', {
         paths
@@ -199,7 +216,7 @@ function buildConfirmMessage(pathsByFamily: IsolatedBrowserProfilePaths[], targe
 
 async function openProfileLocation(
     pathsByFamily: IsolatedBrowserProfilePaths[],
-    target: CleanupTarget
+    target: IsolatedProfileCleanupTarget
 ): Promise<void> {
     const folderPath = getProfileRoots(pathsByFamily, target)[0];
     if (!folderPath) {
@@ -220,7 +237,7 @@ async function openProfileLocation(
     }
 }
 
-function getProfileRoots(pathsByFamily: IsolatedBrowserProfilePaths[], target: CleanupTarget): string[] {
+function getProfileRoots(pathsByFamily: IsolatedBrowserProfilePaths[], target: IsolatedProfileCleanupTarget): string[] {
     return [...new Set(pathsByFamily.map(paths => target === 'current' ? paths.profileRoot : paths.legacyProfileRoot))];
 }
 
