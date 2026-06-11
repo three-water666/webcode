@@ -16,6 +16,7 @@ export {
   getInputAreaCandidates,
   getLatestResponseCodeBlocks,
   hasStopButton,
+  isLikelyViewingVirtualizedHistory,
   isStopButtonVisible,
 } from "./page_selectors";
 export {

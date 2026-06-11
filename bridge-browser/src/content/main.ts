@@ -313,6 +313,7 @@ function runMainLoop() {
   if (!latestCodeBlocks) { return; }
 
   const { messageIndex, codeElements } = latestCodeBlocks;
+  const skipNewCapturesForVirtualizedHistory = UI.isLikelyViewingVirtualizedHistory(DOM);
 
   // 当前轮次对象只记录本次扫描看到的 requestKey；去重、排序和已回填过滤由 registry 统一处理。
   const currentTurn = requestRegistry.createTurn();
@@ -338,10 +339,12 @@ function runMainLoop() {
         codeBlockIndex
       );
       toolCallTracker.clearProtocolErrorFeedbackState(requestIdentity.requestKey);
-      currentTurn.add(requestIdentity.requestKey);
 
       const isProcessing = requestRegistry.isRunning(requestIdentity.requestKey);
       const isKnown = requestRegistry.hasSeen(requestIdentity.requestKey);
+
+      if (!isKnown && skipNewCapturesForVirtualizedHistory) {return;}
+      currentTurn.add(requestIdentity.requestKey);
 
       if (!isKnown) {
         // 新发现的工具调用只进入执行路径一次，后续扫描只会根据 registry 中的执行状态刷新视觉状态。
@@ -365,6 +368,8 @@ function runMainLoop() {
         }
       }
     } catch (error) {
+      if (skipNewCapturesForVirtualizedHistory) {return;}
+
       // 流式输出中 JSON 可能暂时不完整。tracker 会先等待文本稳定，确认失败后才回填协议错误。
       const requestIdentity = toolCallTracker.handleProtocolErrorBlock(
         codeEl as HTMLElement,

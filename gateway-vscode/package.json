@@ -111,6 +111,10 @@
                   "maxInlineChars": {
                     "type": "number",
                     "minimum": 1
+                  },
+                  "virtualizedMessages": {
+                    "type": "boolean",
+                    "description": "Enable conservative history-scroll protection for virtualized chat lists."
                   }
                 }
               }

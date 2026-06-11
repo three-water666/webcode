@@ -142,6 +142,10 @@ export function isSiteSelectors(value: unknown): value is SiteSelectors {
     (
       value.maxInlineChars === undefined ||
       typeof value.maxInlineChars === "number"
+    ) &&
+    (
+      value.virtualizedMessages === undefined ||
+      typeof value.virtualizedMessages === "boolean"
     );
 }
 

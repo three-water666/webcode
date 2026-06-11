@@ -25,6 +25,7 @@ export interface SiteSelectors {
     sendButton: string;
     stopButton: string;
     maxInlineChars?: number;
+    virtualizedMessages?: boolean;
 }
 
 const BUILTIN_AI_SITES: ResolvedAiSiteConfig[] = [
@@ -79,6 +80,7 @@ const BUILTIN_AI_SITES: ResolvedAiSiteConfig[] = [
             inputArea: 'textarea.ds-scroll-area',
             sendButton: "div[role='button']:has(path[d^='M8.3125'])",
             stopButton: "div[role='button']:has(path[d^='M2 4.88'])",
+            virtualizedMessages: true,
         }
     },
     {
@@ -256,6 +258,10 @@ function isCompleteSelectors(selectors: Partial<SiteSelectors> | undefined): sel
         (
             selectors.maxInlineChars === undefined ||
             typeof selectors.maxInlineChars === 'number'
+        ) &&
+        (
+            selectors.virtualizedMessages === undefined ||
+            typeof selectors.virtualizedMessages === 'boolean'
         )
     );
 }
