@@ -46,8 +46,8 @@ async function hasIsolatedBrowserProfileData(context: vscode.ExtensionContext, t
 
     try {
         return target === 'current'
-            ? hasCurrentIsolatedBrowserProfiles(pathsResult.pathsByFamily)
-            : hasLegacyIsolatedBrowserProfiles(pathsResult.pathsByFamily);
+            ? await hasCurrentIsolatedBrowserProfiles(pathsResult.pathsByFamily)
+            : await hasLegacyIsolatedBrowserProfiles(pathsResult.pathsByFamily);
     } catch {
         return false;
     }
@@ -172,8 +172,8 @@ async function confirmClear(
 
 async function hasProfileData(pathsByFamily: IsolatedBrowserProfilePaths[], target: CleanupTarget): Promise<boolean> {
     return target === 'current'
-        ? hasCurrentIsolatedBrowserProfiles(pathsByFamily)
-        : hasLegacyIsolatedBrowserProfiles(pathsByFamily);
+        ? await hasCurrentIsolatedBrowserProfiles(pathsByFamily)
+        : await hasLegacyIsolatedBrowserProfiles(pathsByFamily);
 }
 
 async function showNoProfilesFound(
