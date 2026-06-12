@@ -1,4 +1,5 @@
-import { normalizeSession, type Session } from '../types';
+import { normalizeSession, type Session, type SessionDisconnectReason } from '../types';
+import { updateBadge } from './badge';
 import { checkUrlSafety, isBridgePageUrl } from './url_safety';
 
 export type CurrentProtocolSession = Session & {
@@ -19,6 +20,21 @@ export async function getSession(tabId: number): Promise<Session | undefined> {
   return normalizeSession(result[key]) ?? undefined;
 }
 
+export async function getStoredSessionTabIds(): Promise<number[]> {
+  const result = await chrome.storage.local.get(null) as Record<string, unknown>;
+  return Object.keys(result)
+    .map(getSessionTabIdFromKey)
+    .filter((tabId): tabId is number => typeof tabId === "number");
+}
+
+export async function getSessionDisconnectReason(
+  tabId: number
+): Promise<SessionDisconnectReason | undefined> {
+  const key = getDisconnectReasonKey(tabId);
+  const result = await chrome.storage.local.get([key]) as Record<string, unknown>;
+  return normalizeDisconnectReason(result[key]);
+}
+
 export async function getCurrentProtocolSession(tabId: number): Promise<CurrentProtocolSession | undefined> {
   const session = await getSession(tabId);
   if (!session) {
@@ -29,7 +45,7 @@ export async function getCurrentProtocolSession(tabId: number): Promise<CurrentP
     return session;
   }
 
-  await removeSession(tabId);
+  await removeSession(tabId, "invalid_session");
   return undefined;
 }
 
@@ -51,7 +67,7 @@ export async function getActiveProtocolSessionResult(
   }
 
   if (!isCurrentProtocolSession(session)) {
-    await removeSession(tabId);
+    await removeSession(tabId, "invalid_session");
     return { status: "invalid" };
   }
 
@@ -74,6 +90,21 @@ export function isCurrentProtocolSession(session: Session): session is CurrentPr
 export async function saveSession(tabId: number, data: Session) {
   const key = `session_${tabId}`;
   await chrome.storage.local.set({ [key]: data });
+  await chrome.storage.local.remove(getDisconnectReasonKey(tabId));
+}
+
+export async function updateSessionGatewayActivity(
+  tabId: number,
+  timestamp = Date.now()
+): Promise<Session | undefined> {
+  const session = await getSession(tabId);
+  if (!session) {
+    return undefined;
+  }
+
+  session.lastGatewayActivityAt = timestamp;
+  await saveSession(tabId, session);
+  return session;
 }
 
 export async function updateSessionLog(tabId: number, showLog: boolean) {
@@ -104,9 +135,15 @@ export function suspendSession(tabId: number) {
   void chrome.tabs.sendMessage(tabId, { type: "STATUS_UPDATE", connected: false }).catch(ignoreRuntimeError);
 }
 
-export async function removeSession(tabId: number) {
+export async function removeSession(tabId: number, reason?: SessionDisconnectReason) {
   const key = `session_${tabId}`;
+  if (reason) {
+    await chrome.storage.local.set({ [getDisconnectReasonKey(tabId)]: reason });
+  } else {
+    await chrome.storage.local.remove(getDisconnectReasonKey(tabId));
+  }
   await chrome.storage.local.remove(key);
+  updateBadge(tabId, false);
   // [Sync] Notify Content Script
   suspendSession(tabId);
 }
@@ -125,4 +162,29 @@ function ignoreRuntimeError(_error: unknown): void {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function getSessionTabIdFromKey(key: string): number | null {
+  if (!key.startsWith("session_")) {
+    return null;
+  }
+
+  const tabId = Number(key.slice("session_".length));
+  return Number.isInteger(tabId) && tabId > 0 ? tabId : null;
+}
+
+function getDisconnectReasonKey(tabId: number): string {
+  return `disconnect_${tabId}`;
+}
+
+function normalizeDisconnectReason(value: unknown): SessionDisconnectReason | undefined {
+  if (
+    value === "gateway_unavailable" ||
+    value === "invalid_token" ||
+    value === "invalid_session"
+  ) {
+    return value;
+  }
+
+  return undefined;
 }

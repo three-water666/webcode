@@ -1,12 +1,14 @@
-import { BRANDING } from '@webcode/shared';
 import { isMessageRequest, isStatusResponse, isSuccessResponse } from '../types';
+import { createPopupTranslator, renderInstalledDescription, type PopupTranslator } from './i18n';
 
 type PopupElements = {
+  loadingView: HTMLElement;
   connectedView: HTMLElement;
   disconnectedView: HTMLElement;
   disconnectedStatusCard: HTMLElement;
   installCard: HTMLElement;
   suspendedHint: HTMLElement;
+  expiredCard: HTMLElement;
   statusDot: HTMLElement;
   portDisplay: HTMLElement;
   manualInitBtn: HTMLButtonElement;
@@ -25,7 +27,10 @@ type PopupElements = {
   sessionPresetToggleLabel: HTMLElement;
   defaultAutoApproveToolsLabel: HTMLElement;
   sessionPresetHint: HTMLElement;
+  checkingTitle: HTMLElement;
   disconnectedTitle: HTMLElement;
+  expiredActionTitle: HTMLElement;
+  expiredActionDesc: HTMLElement;
   installedTitle: HTMLElement;
   installedDesc: HTMLElement;
   notInstalledTitle: HTMLElement;
@@ -34,67 +39,12 @@ type PopupElements = {
 
 type PopupContext = {
   elements: PopupElements;
-  t: (key: string) => string;
+  t: PopupTranslator;
 };
 
 type ManualInitStatusState = {
   resetTimer: ReturnType<typeof setTimeout> | null;
   token: number;
-};
-
-const UI: Record<string, Record<string, string>> = {
-  en: {
-    title: BRANDING.bridgeName,
-    connected_text: "✅ Connected to VS Code",
-    port_label: "Port",
-    manual_init: "Manual Initialization",
-    manual_init_title: "Add initialization context to the current input",
-    manual_init_running: "Initializing...",
-    manual_init_done: "Initialization added",
-    manual_init_attached: "Initialization attached",
-    manual_init_failed: "Initialization failed",
-    manual_init_unavailable: "Cannot initialize here",
-    auto_send: "Auto Send Message",
-    auto_approve_tools: "Auto-Approve All Tools",
-    show_log: "Show Floating Log",
-    session_preset: "New Session Preset",
-    session_preset_title: "Show settings used when a new browser session is created",
-    session_preset_hint: "Applies only to new sessions. The current session setting stays unchanged.",
-    default_auto_approve_tools: "Auto-Approve All Tools",
-    disconnected: "🔴 Disconnected from VS Code",
-    suspended: "⏸️ Connection paused on this page",
-    suspended_hint: "Return to the connected site to resume automatically. Local tools stay disabled here.",
-    installed_title: "VS Code extension installed?",
-    installed_desc: `Click ${BRANDING.productName} in the VS Code status bar (bottom right) and follow the steps to launch.`,
-    not_installed_title: "VS Code extension not installed?",
-    marketplace_hint: "Search in VS Code Marketplace:",
-  },
-  zh: {
-    title: BRANDING.bridgeName,
-    connected_text: "✅ 已连接到 VS Code",
-    port_label: "端口",
-    manual_init: "手动初始化",
-    manual_init_title: "将初始化上下文追加到当前输入框",
-    manual_init_running: "初始化中...",
-    manual_init_done: "初始化上下文已添加",
-    manual_init_attached: "初始化上下文已作为 txt 附件添加",
-    manual_init_failed: "初始化失败",
-    manual_init_unavailable: "当前页面无法初始化",
-    auto_send: "自动发送消息",
-    auto_approve_tools: "所有工具无需审批",
-    show_log: "显示悬浮日志",
-    session_preset: "新会话预设",
-    session_preset_title: "显示新建浏览器会话时使用的设置",
-    session_preset_hint: "只影响之后新开的会话，不改变当前会话。",
-    default_auto_approve_tools: "所有工具无需审批",
-    disconnected: "🔴 未连接到 VS Code",
-    suspended: "⏸️ 当前页面连接已暂停",
-    suspended_hint: "回到已连接的网站后会自动恢复；本页面无法调用本地工具。",
-    installed_title: "VS Code 插件已安装？",
-    installed_desc: `点击 VS Code 右下角状态栏中的 ${BRANDING.productName}，并按提示启动服务。`,
-    not_installed_title: "VS Code 插件未安装？",
-    marketplace_hint: "在 VS Code 扩展市场中搜索：",
-  },
 };
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -109,6 +59,7 @@ async function initializePopup(): Promise<void> {
   const currentTab = tabs[0];
   const currentTabId = currentTab?.id;
   if (!currentTabId) {
+    showDisconnectedStatus(context);
     return;
   }
 
@@ -118,22 +69,21 @@ async function initializePopup(): Promise<void> {
 }
 
 function createPopupContext(): PopupContext {
-  const lang = navigator.language.startsWith("zh") ? "zh" : "en";
-  const t = (key: string) => UI[lang][key] || UI.en[key];
-
   return {
     elements: getPopupElements(),
-    t,
+    t: createPopupTranslator(),
   };
 }
 
 function getPopupElements(): PopupElements {
   return {
+    loadingView: document.getElementById("loadingView") as HTMLElement,
     connectedView: document.getElementById("connectedView") as HTMLElement,
     disconnectedView: document.getElementById("disconnectedView") as HTMLElement,
     disconnectedStatusCard: document.getElementById("disconnectedStatusCard") as HTMLElement,
     installCard: document.getElementById("installCard") as HTMLElement,
     suspendedHint: document.getElementById("suspendedHint") as HTMLElement,
+    expiredCard: document.getElementById("expiredCard") as HTMLElement,
     statusDot: document.getElementById("statusDot") as HTMLElement,
     portDisplay: document.getElementById("portDisplay") as HTMLElement,
     manualInitBtn: document.getElementById("manualInitBtn") as HTMLButtonElement,
@@ -152,7 +102,10 @@ function getPopupElements(): PopupElements {
     sessionPresetToggleLabel: document.getElementById("sessionPresetToggleLabel") as HTMLElement,
     defaultAutoApproveToolsLabel: document.getElementById("defaultAutoApproveToolsLabel") as HTMLElement,
     sessionPresetHint: document.getElementById("sessionPresetHint") as HTMLElement,
+    checkingTitle: document.getElementById("checkingTitle") as HTMLElement,
     disconnectedTitle: document.getElementById("disconnectedTitle") as HTMLElement,
+    expiredActionTitle: document.getElementById("expiredActionTitle") as HTMLElement,
+    expiredActionDesc: document.getElementById("expiredActionDesc") as HTMLElement,
     installedTitle: document.getElementById("installedTitle") as HTMLElement,
     installedDesc: document.getElementById("installedDesc") as HTMLElement,
     notInstalledTitle: document.getElementById("notInstalledTitle") as HTMLElement,
@@ -174,19 +127,15 @@ function initializeLabels(context: PopupContext): void {
   elements.sessionPresetToggle.title = t("session_preset_title");
   elements.sessionPresetHint.textContent = t("session_preset_hint");
   elements.defaultAutoApproveToolsLabel.textContent = t("default_auto_approve_tools");
+  elements.checkingTitle.textContent = t("checking_connection");
   elements.disconnectedTitle.textContent = t("disconnected");
   elements.suspendedHint.textContent = t("suspended_hint");
+  elements.expiredActionTitle.textContent = t("expired_action_title");
+  elements.expiredActionDesc.textContent = t("expired_action_desc");
   elements.installedTitle.textContent = t("installed_title");
   elements.installedDesc.innerHTML = renderInstalledDescription(t);
   elements.notInstalledTitle.textContent = t("not_installed_title");
   elements.marketplaceHint.textContent = t("marketplace_hint");
-}
-
-function renderInstalledDescription(t: PopupContext["t"]): string {
-  return t("installed_desc").replace(
-    BRANDING.productName,
-    `<span style="color: #3498db; font-weight: bold">${BRANDING.productName}</span>`
-  );
 }
 
 function listenForSessionSettingChanges(currentTabId: number, elements: PopupElements): void {
@@ -216,6 +165,8 @@ function requestCurrentStatus(currentTabId: number, context: PopupContext): void
     (response: unknown) => {
       if (isStatusResponse(response) && response.connected) {
         showConnectedStatus(response, context.elements);
+      } else if (isStatusResponse(response) && isExpiredDisconnectReason(response.disconnectReason)) {
+        showExpiredStatus(context);
       } else if (isStatusResponse(response) && response.suspended === true) {
         showSuspendedStatus(context);
       } else {
@@ -235,10 +186,11 @@ function showConnectedStatus(
   },
   elements: PopupElements
 ): void {
+  elements.loadingView.classList.add("hidden");
   elements.connectedView.classList.remove("hidden");
   elements.disconnectedView.classList.add("hidden");
   elements.statusDot.classList.add("online");
-  elements.statusDot.classList.remove("suspended");
+  elements.statusDot.classList.remove("suspended", "expired");
   elements.portDisplay.innerText = String(response.port ?? "");
   elements.autoSendInput.checked = response.autoSend !== false;
   elements.autoApproveToolsInput.checked = response.autoApproveTools === true;
@@ -248,31 +200,58 @@ function showConnectedStatus(
 
 function showSuspendedStatus(context: PopupContext): void {
   const { elements, t } = context;
+  elements.loadingView.classList.add("hidden");
   elements.connectedView.classList.add("hidden");
   elements.disconnectedView.classList.remove("hidden");
-  elements.statusDot.classList.remove("online");
+  elements.statusDot.classList.remove("online", "expired");
   elements.statusDot.classList.add("suspended");
-  elements.disconnectedStatusCard.classList.remove("disconnected");
+  elements.disconnectedStatusCard.classList.remove("disconnected", "expired");
   elements.disconnectedStatusCard.classList.add("suspended");
-  elements.disconnectedTitle.classList.remove("disconnected");
+  elements.disconnectedTitle.classList.remove("disconnected", "expired");
   elements.disconnectedTitle.classList.add("suspended");
   elements.disconnectedTitle.textContent = t("suspended");
   elements.suspendedHint.classList.remove("hidden");
+  elements.expiredCard.classList.add("hidden");
+  elements.installCard.classList.add("hidden");
+}
+
+function showExpiredStatus(context: PopupContext): void {
+  const { elements, t } = context;
+  elements.loadingView.classList.add("hidden");
+  elements.connectedView.classList.add("hidden");
+  elements.disconnectedView.classList.remove("hidden");
+  elements.statusDot.classList.remove("online", "suspended");
+  elements.statusDot.classList.add("expired");
+  elements.disconnectedStatusCard.classList.remove("disconnected", "suspended");
+  elements.disconnectedStatusCard.classList.add("expired");
+  elements.disconnectedTitle.classList.remove("disconnected", "suspended");
+  elements.disconnectedTitle.classList.add("expired");
+  elements.disconnectedTitle.textContent = t("connection_expired");
+  elements.suspendedHint.classList.add("hidden");
+  elements.expiredCard.classList.remove("hidden");
   elements.installCard.classList.add("hidden");
 }
 
 function showDisconnectedStatus(context: PopupContext): void {
   const { elements, t } = context;
+  elements.loadingView.classList.add("hidden");
   elements.connectedView.classList.add("hidden");
-  elements.statusDot.classList.remove("online", "suspended");
-  elements.disconnectedStatusCard.classList.remove("suspended");
+  elements.statusDot.classList.remove("online", "suspended", "expired");
+  elements.disconnectedStatusCard.classList.remove("suspended", "expired");
   elements.disconnectedStatusCard.classList.add("disconnected");
-  elements.disconnectedTitle.classList.remove("suspended");
+  elements.disconnectedTitle.classList.remove("suspended", "expired");
   elements.disconnectedTitle.classList.add("disconnected");
   elements.disconnectedTitle.textContent = t("disconnected");
   elements.suspendedHint.classList.add("hidden");
+  elements.expiredCard.classList.add("hidden");
   elements.installCard.classList.remove("hidden");
   elements.disconnectedView.classList.remove("hidden");
+}
+
+function isExpiredDisconnectReason(reason: unknown): boolean {
+  return reason === "gateway_unavailable" ||
+    reason === "invalid_token" ||
+    reason === "invalid_session";
 }
 
 function bindPopupControls(currentTabId: number, context: PopupContext): void {

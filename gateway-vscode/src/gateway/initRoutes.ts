@@ -9,6 +9,10 @@ export function registerConfigRoutes(
     config: GatewayConfig,
     log: GatewayLogger
 ): void {
+    app.get('/v1/status', (_req, res) => {
+        res.json({ ok: true });
+    });
+
     app.get('/v1/init', (req, res) => {
         log('📥 Init Sync: Browser requested default rules and prompts');
 

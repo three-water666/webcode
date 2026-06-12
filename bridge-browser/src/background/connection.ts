@@ -4,6 +4,7 @@ import { type HandshakeResponse, isStoredSession, type MessageRequest } from '..
 import { updateBadge } from './badge';
 import { fetchInitDataFromGateway } from './init_sync';
 import { getSessionPresetSettings } from './presets';
+import { clearSessionExpiryCheck, scheduleSessionExpiryCheck } from './session_health';
 import { removeSession, saveSession } from './sessions';
 
 interface HandshakeParams {
@@ -35,7 +36,9 @@ export async function handleHandshake(request: MessageRequest, tabId: number | n
           return { success: false, error: "BUSY", conflictTabId };
         }
       } catch {
-        await removeSession(parseInt(conflictTabId, 10));
+        const staleTabId = parseInt(conflictTabId, 10);
+        await removeSession(staleTabId);
+        await clearSessionExpiryCheck(staleTabId);
       }
     }
   }
@@ -61,6 +64,7 @@ interface BindSessionOptions {
 
 export async function bindSession(tabId: number, options: BindSessionOptions) {
   const presetSettings = await getSessionPresetSettings();
+  const lastGatewayActivityAt = Date.now();
   const session = {
     port: options.port,
     token: options.token,
@@ -68,11 +72,13 @@ export async function bindSession(tabId: number, options: BindSessionOptions) {
     autoSend: true,
     autoApproveTools: presetSettings.defaultAutoApproveTools,
     workspaceId: options.workspaceId,
+    lastGatewayActivityAt,
     siteId: options.siteId,
     targetOrigin: options.targetOrigin,
     targetUrl: options.targetUrl,
   };
   await saveSession(tabId, session);
+  scheduleSessionExpiryCheck(tabId, lastGatewayActivityAt);
   console.log(`${BRANDING.logPrefix} Tab ${tabId} bound to Port ${options.port} [Workspace: ${options.workspaceId}]`);
   updateBadge(tabId, true);
   // [Sync] Notify Content Script

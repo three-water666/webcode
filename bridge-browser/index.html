@@ -32,6 +32,10 @@
         background: #ffb74d;
         box-shadow: 0 0 8px rgba(255, 183, 77, 0.35);
       }
+      .status-dot.expired {
+        background: #ef5350;
+        box-shadow: 0 0 8px rgba(239, 83, 80, 0.35);
+      }
 
       .card {
         background: #252526;
@@ -62,6 +66,14 @@
         border-color: #5a482a;
         background: #2e2a20;
       }
+      .status-card.expired {
+        border-color: #61413a;
+        background: #2b2421;
+      }
+      .status-card.checking {
+        border-color: #3a4654;
+        background: #232a32;
+      }
       .connection-label {
         color: #fff;
         font-weight: 600;
@@ -72,6 +84,12 @@
       }
       .connection-label.suspended {
         color: #ffd89b;
+      }
+      .connection-label.expired {
+        color: #ffc0ad;
+      }
+      .connection-label.checking {
+        color: #cfe7ff;
       }
       .status-meta {
         flex: none;
@@ -95,6 +113,17 @@
       .suspended-hint {
         color: #d9c7a4;
         font-size: 12px;
+      }
+      .expired-card {
+        background: #332c24;
+        border: 1px solid #6b5635;
+        border-radius: 6px;
+        box-sizing: border-box;
+        padding: 12px;
+      }
+      .expired-desc {
+        color: #f0d6a8;
+        font-size: 11px;
       }
       .install-card {
         display: flex;
@@ -302,7 +331,17 @@
       </div>
     </div>
 
-    <div id="disconnectedView">
+    <div id="loadingView">
+      <div class="disconnected-stack">
+        <div class="card status-card checking">
+          <p id="checkingTitle" class="connection-label checking">
+            Checking VS Code connection...
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div id="disconnectedView" class="hidden">
       <div class="disconnected-stack">
         <div id="disconnectedStatusCard" class="card status-card disconnected">
           <p id="disconnectedTitle" class="connection-label disconnected">
@@ -313,6 +352,16 @@
         <p id="suspendedHint" class="card suspended-hint hidden">
           The VS Code connection is paused on this page. Return to the connected site to resume automatically.
         </p>
+
+        <div id="expiredCard" class="expired-card hidden">
+          <p class="section-title">
+            <span id="expiredActionTitle">Reconnect from VS Code</span>
+          </p>
+          <p id="expiredActionDesc" class="expired-desc">
+            The VS Code gateway may have stopped after inactivity. In VS Code, click webcode in the status bar,
+            start the service, then launch the site again.
+          </p>
+        </div>
 
         <div id="installCard" class="install-card">
           <div class="install-section installed-action-card">

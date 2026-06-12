@@ -1,6 +1,7 @@
 import { BRANDING } from '@webcode/shared';
 
 import { updateBadge } from './badge';
+import { clearSessionExpiryCheck } from './session_health';
 import { getCurrentProtocolSession, removeSession, suspendSession } from './sessions';
 import { checkUrlSafety, isBridgePageUrl } from './url_safety';
 
@@ -57,7 +58,10 @@ export async function handleTabUpdated(
 }
 
 export function handleTabRemoved(tabId: number) {
-  void removeSession(tabId);
+  void Promise.all([
+    removeSession(tabId),
+    clearSessionExpiryCheck(tabId),
+  ]);
 }
 
 function ignoreRuntimeError(_error: unknown): void {

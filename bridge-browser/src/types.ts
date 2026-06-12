@@ -39,6 +39,7 @@ export interface HandshakeResponse {
 export interface StatusResponse {
   connected: boolean;
   suspended?: boolean;
+  disconnectReason?: SessionDisconnectReason;
   error?: string;
   port?: number;
   showLog?: boolean;
@@ -67,11 +68,17 @@ export interface StoredSession {
   autoSend?: boolean;
   autoApproveTools?: boolean;
   workspaceId?: string;
+  lastGatewayActivityAt?: number;
   siteId?: string;
   targetOrigin?: string;
   targetUrl?: string;
   allowedOrigins?: string[];
 }
+
+export type SessionDisconnectReason =
+  | "gateway_unavailable"
+  | "invalid_token"
+  | "invalid_session";
 
 export interface InitGatewayData {
   syncedAiSites?: SyncedAiSite[];
@@ -111,6 +118,7 @@ export function isStoredSession(value: unknown): value is StoredSession {
     isOptionalBoolean(value.autoSend) &&
     isOptionalBoolean(value.autoApproveTools) &&
     isOptionalString(value.workspaceId) &&
+    isOptionalNumber(value.lastGatewayActivityAt) &&
     isOptionalString(value.siteId) &&
     isOptionalString(value.targetOrigin) &&
     isOptionalString(value.targetUrl) &&
@@ -127,6 +135,7 @@ export function normalizeSession(value: unknown): Session | null {
     autoSend: value.autoSend ?? true,
     autoApproveTools: value.autoApproveTools ?? false,
     workspaceId: value.workspaceId ?? "global",
+    lastGatewayActivityAt: value.lastGatewayActivityAt,
     siteId: value.siteId,
     targetOrigin: value.targetOrigin ?? value.allowedOrigins?.[0],
     targetUrl: value.targetUrl,
@@ -170,6 +179,10 @@ function isOptionalBoolean(value: unknown): boolean {
 
 function isOptionalString(value: unknown): boolean {
   return value === undefined || typeof value === "string";
+}
+
+function isOptionalNumber(value: unknown): boolean {
+  return value === undefined || typeof value === "number";
 }
 
 function isOptionalStringArray(value: unknown): boolean {

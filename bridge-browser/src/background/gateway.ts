@@ -2,6 +2,7 @@ import { PROTOCOL } from '@webcode/shared';
 
 import { isRecord, type MessageRequest, type ToolExecutionPayload } from '../types';
 import { getErrorMessage } from './errors';
+import { expireGatewaySession, recordGatewayActivity } from './session_health';
 import { getActiveProtocolSessionResult, type ActiveProtocolSessionResult } from './sessions';
 
 type InactiveProtocolSessionStatus = Exclude<ActiveProtocolSessionResult["status"], "active">;
@@ -36,10 +37,12 @@ export async function executeTool(
         arguments: payload.arguments ?? {},
       }),
     });
+    await recordGatewayActivity(tabId);
     if (response.ok) {
       return parseSuccessfulGatewayResponse(await response.json());
     }
     if (response.status === 403) {
+      await expireGatewaySession(tabId, "invalid_token");
       return { success: false, error: "Session Expired/Invalid Token." };
     }
     const errorText = await readGatewayError(response);
@@ -48,6 +51,7 @@ export async function executeTool(
       error: errorText || `${response.status} - ${response.statusText}`,
     };
   } catch (err: unknown) {
+    await expireGatewaySession(tabId, "gateway_unavailable");
     return { success: false, error: `Connection Failed: ${getErrorMessage(err)}` };
   }
 }
