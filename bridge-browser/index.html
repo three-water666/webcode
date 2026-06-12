@@ -96,11 +96,10 @@
         color: #d9c7a4;
         font-size: 12px;
       }
-      .install-section {
-        padding: 12px;
-      }
-      .install-section + .install-section {
-        border-top: 1px solid #333;
+      .install-card {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
       }
       .section-title {
         color: #fff;
@@ -110,13 +109,15 @@
       }
       .installed-action-card,
       .marketplace-card {
-        border-radius: 4px;
-        margin-top: 6px;
-        padding: 8px;
+        border-radius: 6px;
+        box-sizing: border-box;
+        padding: 12px;
       }
       .installed-action-card {
         background: #263342;
         border: 1px solid #365778;
+      }
+      .install-desc {
         color: #cfe7ff;
         font-size: 11px;
       }
@@ -313,28 +314,26 @@
           The VS Code connection is paused on this page. Return to the connected site to resume automatically.
         </p>
 
-        <div id="installCard" class="card install-card">
-          <div class="install-section">
+        <div id="installCard" class="install-card">
+          <div class="install-section installed-action-card">
             <p class="section-title">
               <span id="installedTitle">VS Code extension installed?</span>
             </p>
-            <p id="installedDesc" class="installed-action-card">
+            <p id="installedDesc" class="install-desc">
               Click
               <span style="color: #3498db; font-weight: bold">webcode</span> in VS
               Code Status Bar (bottom right) and follow the steps to launch.
             </p>
           </div>
 
-          <div class="install-section">
+          <div class="install-section marketplace-card">
             <p class="section-title">
               <span id="notInstalledTitle">VS Code extension not installed?</span>
             </p>
-            <div class="marketplace-card">
-              <p id="marketplaceHint" class="marketplace-hint">
-                Search in VS Code Marketplace:
-              </p>
-              <p class="marketplace-query">webcode gateway</p>
-            </div>
+            <p id="marketplaceHint" class="marketplace-hint">
+              Search in VS Code Marketplace:
+            </p>
+            <p class="marketplace-query">webcode gateway</p>
           </div>
         </div>
       </div>
