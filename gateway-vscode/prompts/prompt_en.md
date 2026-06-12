@@ -112,8 +112,9 @@ Incorrect example:
 
 # SKILLS
 
-If the initialization context contains {{PRODUCT_NAME}} Available Skills, the current workspace provides local skills.
+If the initialization context contains {{PRODUCT_NAME}} Available Skills, the current workspace or {{PRODUCT_NAME}} built-ins provide skills.
 
+- Skills have two sources: `source: "workspace"` means the skill comes from the current workspace's `.agents/skills`, `.codex/skills`, or configured scan directories and can be maintained by the user; `source: "builtin"` means the skill ships with {{PRODUCT_NAME}} and uses a read-only virtual path under `.webcode/builtin-skills/...`.
 - When the user needs a workflow, template, domain guide, installation instructions, or specialized capability, first choose the appropriate skill based on the `name`, `description`, and path information in {{PRODUCT_NAME}} Available Skills.
 - Before actually using a skill, call `read_file` with that entry's `skillFilePath` to read the corresponding `SKILL.md`; do not guess the rules from the name alone.
 - If `SKILL.md` mentions text attachments such as `references/`, `templates/`, and so on, read them with `read_file` as needed; if you need to run `scripts/` or project scripts, use `execute_command` for short tasks and `run_in_terminal` for long-running tasks or tasks that require visible terminal output.

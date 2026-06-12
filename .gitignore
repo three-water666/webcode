@@ -12,6 +12,8 @@ release
 out/
 .agents
 skills
+!gateway-vscode/skills/
+!gateway-vscode/skills/**
 !.codex/
 !.codex/skills/
 !.codex/skills/release-package/

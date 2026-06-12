@@ -1,5 +1,6 @@
 import * as fs from 'fs/promises';
-import type { LocalTool } from './types';
+import { BUILTIN_SKILL_VIRTUAL_ROOT, isBuiltinSkillVirtualPathCandidate } from '../builtinSkills';
+import type { LocalTool, ToolExecutionContext, ToolResult } from './types';
 import { normalizeLineEndings } from './filesystemUtils';
 import { readFilePrefix } from './readFilePrefix';
 import { readSelectedFileLines, type LineSelectionOptions, type SelectedFileLines } from './readFileLineStream';
@@ -14,15 +15,19 @@ import {
 
 export { readFilePrefix } from './readFilePrefix';
 
+const READ_FILE_PATH_DESCRIPTION = `${WORKSPACE_FILE_PATH_DESCRIPTION} Read-only built-in skill virtual paths under ` +
+    `${BUILTIN_SKILL_VIRTUAL_ROOT}/ are also supported.`;
+
 export const readFileTool: LocalTool = {
     serverId: 'internal',
     definition: {
         name: 'read_file',
-        description: 'Read a UTF-8 text file inside the current VS Code workspace. Supports head, tail, start_line/end_line, and show_line_numbers to inspect code without shell commands.',
+        description: 'Read a UTF-8 text file inside the current VS Code workspace, or a read-only built-in skill virtual path. ' +
+            'Supports head, tail, start_line/end_line, and show_line_numbers to inspect code without shell commands.',
         inputSchema: {
             type: 'object',
             properties: {
-                path: { type: 'string', description: WORKSPACE_FILE_PATH_DESCRIPTION },
+                path: { type: 'string', description: READ_FILE_PATH_DESCRIPTION },
                 head: { type: 'integer', minimum: 1, description: 'Optional number of lines to read from the start of the file.' },
                 tail: { type: 'integer', minimum: 1, description: 'Optional number of lines to read from the end of the file.' },
                 start_line: { type: 'integer', minimum: 1, description: 'Optional 1-based first line to read. Must be used with end_line and without head or tail.' },
@@ -34,13 +39,15 @@ export const readFileTool: LocalTool = {
         annotations: { readOnlyHint: true }
     },
     async execute(args, context) {
+        const builtinResult = await readBuiltinSkillVirtualContent(args, context);
+        if (builtinResult) {
+            return formatReadFileToolResult(builtinResult);
+        }
+
         const filePath = (await resolveWorkspaceRelativePath(context.workspaceRoot, args.path)).absolutePath;
         const fileStats = await fs.stat(filePath);
         const result = await readFileContent(filePath, fileStats.size, args);
-        return {
-            content: [{ type: 'text', text: result.text }],
-            ...(result.metadata === undefined ? {} : { structuredContent: result.metadata })
-        };
+        return formatReadFileToolResult(result);
     }
 };
 
@@ -94,6 +101,32 @@ type ReadFileResultOptions = {
     byteLimitApplied?: boolean;
     totalLineCountKnown?: boolean;
 };
+
+async function readBuiltinSkillVirtualContent(
+    args: Record<string, unknown>,
+    context: ToolExecutionContext
+): Promise<ReadFileResult | null> {
+    if (!isBuiltinSkillVirtualPathCandidate(args.path)) {
+        return null;
+    }
+
+    const virtualFile = await context.skillManager.resolveBuiltinSkillVirtualFile(args.path);
+    if (virtualFile.status === 'missing') {
+        throw new Error(`Built-in skill virtual path not found: ${virtualFile.path}`);
+    }
+    if (virtualFile.status === 'not_builtin') {
+        return null;
+    }
+
+    return readFileContent(virtualFile.absolutePath, virtualFile.bytes, args);
+}
+
+function formatReadFileToolResult(result: ReadFileResult): ToolResult {
+    return {
+        content: [{ type: 'text', text: result.text }],
+        ...(result.metadata === undefined ? {} : { structuredContent: result.metadata })
+    };
+}
 
 export async function readFileContent(
     filePath: string,

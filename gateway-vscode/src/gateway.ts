@@ -54,7 +54,7 @@ export class GatewayManager {
         this.extensionPath = extensionPath;
         this.context = context;
         this.onAutoStop = onAutoStop ?? null;
-        this.skillManager = new SkillManager(outputChannel);
+        this.skillManager = new SkillManager(outputChannel, extensionPath, () => vscode.workspace.workspaceFolders);
         this.terminalSessionManager = new TerminalSessionManager(outputChannel);
         // [Persistence] Generate token once per VS Code session
         this.authToken = crypto.randomUUID();

@@ -112,8 +112,9 @@
 
 # SKILLS
 
-如果初始化上下文中存在 {{PRODUCT_NAME}} Available Skills，说明当前工作区提供了本地 skills。
+如果初始化上下文中存在 {{PRODUCT_NAME}} Available Skills，说明当前工作区或 {{PRODUCT_NAME}} 内置能力提供了 skills。
 
+- Skills 分为两类：`source: "workspace"` 表示来自当前工作区的 `.agents/skills`、`.codex/skills` 或自定义扫描目录，可由用户维护；`source: "builtin"` 表示 {{PRODUCT_NAME}} 随扩展提供的内置 skill，使用 `.webcode/builtin-skills/...` 只读虚拟路径。
 - 在用户需要工作流、模板、领域指南、安装说明或专用能力时，先根据 {{PRODUCT_NAME}} Available Skills 的 `name`、`description` 和路径信息选择合适的 skill。
 - 在真正使用某个 skill 之前，使用该条目的 `skillFilePath` 调用 `read_file` 读取对应 `SKILL.md`，不要仅凭名字猜测规则。
 - 如果 `SKILL.md` 提到了 `references/`、`templates/` 等文本附属文件，再按需用 `read_file` 读取；如果需要运行 `scripts/` 或项目脚本，短任务用 `execute_command`，长时间运行或需要可见终端输出时用 `run_in_terminal`。

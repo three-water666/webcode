@@ -2,8 +2,10 @@ import * as fs from 'fs/promises';
 import * as assert from 'assert';
 import * as os from 'os';
 import * as path from 'path';
-import { readFileContent, readFilePrefix, selectReadFileContent, selectReadFileResult } from '../tools/readFileTool';
+import { BUILTIN_CREATE_SKILLS_SKILL_FILE_PATH, resolveBuiltinSkillVirtualFile } from '../builtinSkills';
+import { readFileContent, readFilePrefix, readFileTool, selectReadFileContent, selectReadFileResult } from '../tools/readFileTool';
 import { READ_FILE_OUTPUT_MAX_BYTES, READ_FILE_OUTPUT_MAX_LINES } from '../tools/readFileOutputLimit';
+import type { ToolExecutionContext } from '../tools';
 import { resolveWorkspaceRelativeDirectory, resolveWorkspaceRelativePath } from '../tools/workspacePath';
 
 suite('Read File Tool', () => {
@@ -259,6 +261,36 @@ suite('Read File Tool', () => {
         }
     });
 
+    test('reads built-in skill virtual paths without a workspace root', async () => {
+        const result = await readFileTool.execute({
+            path: BUILTIN_CREATE_SKILLS_SKILL_FILE_PATH,
+            head: 4
+        }, createReadFileToolContext(null));
+        const text = result.content[0]?.text;
+
+        assert.strictEqual(result.isError, undefined);
+        assert.ok(text?.includes('name: create-skills'));
+    });
+
+    test('does not resolve built-in skills for workspace paths', async () => {
+        const tempDir = await createTempDir();
+        try {
+            await fs.writeFile(path.join(tempDir, 'sample.txt'), 'workspace file\n', 'utf8');
+
+            const result = await readFileTool.execute({
+                path: 'sample.txt'
+            }, createReadFileToolContext(tempDir, {
+                resolveBuiltinSkillVirtualFile() {
+                    throw new Error('Unexpected built-in skill resolution.');
+                }
+            }));
+
+            assert.strictEqual(result.content[0]?.text, 'workspace file\n');
+        } finally {
+            await removeTempDir(tempDir);
+        }
+    });
+
     test('resolves workspace-relative command directories', async () => {
         const tempDir = await createTempDir();
         try {
@@ -357,4 +389,32 @@ type TestReadFileMetadata = {
 function requireReadFileMetadata(result: { metadata?: TestReadFileMetadata }): TestReadFileMetadata {
     assert.ok(result.metadata);
     return result.metadata;
+}
+
+function createReadFileToolContext(
+    workspaceRoot: string | null,
+    skillManager: Partial<ToolExecutionContext['skillManager']> = {}
+): ToolExecutionContext {
+    return {
+        workspaceRoot,
+        outputChannel: {
+            appendLine(value: string) {
+                void value;
+            }
+        } as unknown as ToolExecutionContext['outputChannel'],
+        skillManager: {
+            resolveBuiltinSkillVirtualFile(requestedPath: unknown) {
+                return resolveBuiltinSkillVirtualFile(getExtensionPath(), requestedPath);
+            },
+            ...skillManager
+        } as unknown as ToolExecutionContext['skillManager'],
+        terminalSessionManager: {} as ToolExecutionContext['terminalSessionManager'],
+        skillDirectories: [],
+        listTools: () => [],
+        getToolDefinition: () => null
+    };
+}
+
+function getExtensionPath(): string {
+    return path.resolve(__dirname, '..', '..');
 }
