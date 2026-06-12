@@ -1,6 +1,12 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import {
+  BUILTIN_SKILL_VIRTUAL_ROOT,
+  getBuiltinSkillsRoot,
+  resolveBuiltinSkillVirtualFile,
+  type BuiltinSkillVirtualFileResult
+} from './builtinSkills';
 
 const DEFAULT_SKILL_DIRECTORIES = [
   '.agents/skills',
@@ -16,6 +22,7 @@ export interface SkillSummary {
   relativePath: string;
   sourceDir: string;
   skillFilePath: string;
+  source: 'workspace' | 'builtin';
 }
 
 interface SkillEntry extends SkillSummary {
@@ -35,7 +42,10 @@ interface SkillCacheRecord {
 export class SkillManager {
   private readonly caches = new Map<string, SkillCacheRecord>();
 
-  constructor(private readonly outputChannel: vscode.OutputChannel) {}
+  constructor(
+    private readonly outputChannel: vscode.OutputChannel,
+    private readonly extensionPath: string
+  ) {}
 
   invalidateCache(reason = 'manual refresh') {
     for (const cache of this.caches.values()) {
@@ -101,10 +111,19 @@ export class SkillManager {
       }
     }
 
-    cache.entries = Array.from(found.values()).sort((a, b) => a.id.localeCompare(b.id));
+    const workspaceEntries = Array.from(found.values());
+    const workspaceSkillNames = new Set(workspaceEntries.map(entry => this.normalizeSkillName(entry.name)));
+    const builtinEntries = (await this.buildBuiltinSkillEntries())
+      .filter(entry => !workspaceSkillNames.has(this.normalizeSkillName(entry.name)));
+
+    cache.entries = [...workspaceEntries, ...builtinEntries].sort((a, b) => a.id.localeCompare(b.id));
     cache.lastScanAt = now;
-    this.log(`Indexed ${cache.entries.length} workspace skills.`);
+    this.log(`Indexed ${cache.entries.length} skills.`);
     return cache.entries;
+  }
+
+  async resolveBuiltinSkillVirtualFile(requestedPath: unknown): Promise<BuiltinSkillVirtualFileResult> {
+    return resolveBuiltinSkillVirtualFile(this.extensionPath, requestedPath);
   }
 
   private getCache(cacheKey: string): SkillCacheRecord {
@@ -202,7 +221,71 @@ export class SkillManager {
       description: parsed.description,
       relativePath,
       sourceDir: sourceDirNormalized,
-      skillFilePath: relativeSkillFilePath
+      skillFilePath: relativeSkillFilePath,
+      source: 'workspace'
+    };
+  }
+
+  private async buildBuiltinSkillEntries(): Promise<SkillEntry[]> {
+    const rootDir = getBuiltinSkillsRoot(this.extensionPath);
+    const rootStat = await fs.stat(rootDir).catch(() => null);
+    if (!rootStat?.isDirectory()) {
+      return [];
+    }
+
+    const entries: SkillEntry[] = [];
+    const stack: Array<{ dir: string; virtualDir: string; depth: number }> = [{
+      dir: rootDir,
+      virtualDir: BUILTIN_SKILL_VIRTUAL_ROOT,
+      depth: 0
+    }];
+
+    while (stack.length > 0) {
+      const current = stack.pop();
+      if (!current) {continue;}
+
+      const skillFile = path.join(current.dir, 'SKILL.md');
+      const skillStat = await fs.stat(skillFile).catch(() => null);
+      if (skillStat?.isFile()) {
+        entries.push(await this.buildBuiltinSkillEntry(current.virtualDir, skillFile));
+        continue;
+      }
+
+      if (current.depth >= MAX_SCAN_DEPTH) {
+        continue;
+      }
+
+      const children = await fs.readdir(current.dir, { withFileTypes: true }).catch(() => []);
+      for (const child of children) {
+        if (!child.isDirectory()) {
+          continue;
+        }
+        if (child.name === '.git' || child.name === 'node_modules') {
+          continue;
+        }
+        stack.push({
+          dir: path.join(current.dir, child.name),
+          virtualDir: `${current.virtualDir}/${child.name}`,
+          depth: current.depth + 1
+        });
+      }
+    }
+
+    return entries;
+  }
+
+  private async buildBuiltinSkillEntry(virtualRootPath: string, skillFilePath: string): Promise<SkillEntry> {
+    const raw = await fs.readFile(skillFilePath, 'utf8');
+    const parsed = this.parseSkillFile(raw, virtualRootPath);
+
+    return {
+      id: `builtin:${virtualRootPath}`,
+      name: parsed.name ?? path.posix.basename(virtualRootPath),
+      description: parsed.description,
+      relativePath: virtualRootPath,
+      sourceDir: BUILTIN_SKILL_VIRTUAL_ROOT,
+      skillFilePath: `${virtualRootPath}/SKILL.md`,
+      source: 'builtin'
     };
   }
 
@@ -310,7 +393,8 @@ export class SkillManager {
       description: entry.description,
       relativePath: entry.relativePath,
       sourceDir: entry.sourceDir,
-      skillFilePath: entry.skillFilePath
+      skillFilePath: entry.skillFilePath,
+      source: entry.source
     };
   }
 
@@ -330,6 +414,10 @@ export class SkillManager {
   private isSubPath(parentPath: string, childPath: string): boolean {
     const relative = path.relative(parentPath, childPath);
     return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+  }
+
+  private normalizeSkillName(name: string): string {
+    return name.trim().toLowerCase();
   }
 
   private log(message: string) {

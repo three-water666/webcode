@@ -43,3 +43,16 @@ Example:
 
 Paths are resolved relative to the primary workspace root.
 If you still need to scan the workspace-level `skills` directory, add `"skills"` explicitly to this list.
+
+## Built-in Skills
+
+webcode can also ship built-in Skills with the extension. Built-in Skills appear together with workspace Skills in
+`webcode Available Skills` and include `source: "builtin"`.
+
+A built-in Skill's `skillFilePath` is a read-only virtual path, for example:
+
+```text
+.webcode/builtin-skills/create-skills/SKILL.md
+```
+
+This path is not written into the workspace. It can only be read with `read_file`; `write_file`, `edit_file`, command execution, and search tools do not treat it as a writable or executable file.
