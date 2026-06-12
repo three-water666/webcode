@@ -47,7 +47,7 @@ If you still need to scan the workspace-level `skills` directory, add `"skills"`
 ## Built-in Skills
 
 webcode can also ship built-in Skills with the extension. Built-in Skills appear together with workspace Skills in
-`webcode Available Skills` and include `source: "builtin"`.
+`webcode Available Skills`. Workspace Skills use `source: "workspace"`; built-in Skills use `source: "builtin"`.
 
 A built-in Skill's `skillFilePath` is a read-only virtual path, for example:
 

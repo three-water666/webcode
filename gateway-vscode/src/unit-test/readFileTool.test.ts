@@ -272,6 +272,25 @@ suite('Read File Tool', () => {
         assert.ok(text?.includes('name: create-skills'));
     });
 
+    test('does not resolve built-in skills for workspace paths', async () => {
+        const tempDir = await createTempDir();
+        try {
+            await fs.writeFile(path.join(tempDir, 'sample.txt'), 'workspace file\n', 'utf8');
+
+            const result = await readFileTool.execute({
+                path: 'sample.txt'
+            }, createReadFileToolContext(tempDir, {
+                resolveBuiltinSkillVirtualFile() {
+                    throw new Error('Unexpected built-in skill resolution.');
+                }
+            }));
+
+            assert.strictEqual(result.content[0]?.text, 'workspace file\n');
+        } finally {
+            await removeTempDir(tempDir);
+        }
+    });
+
     test('resolves workspace-relative command directories', async () => {
         const tempDir = await createTempDir();
         try {
@@ -372,7 +391,10 @@ function requireReadFileMetadata(result: { metadata?: TestReadFileMetadata }): T
     return result.metadata;
 }
 
-function createReadFileToolContext(workspaceRoot: string | null): ToolExecutionContext {
+function createReadFileToolContext(
+    workspaceRoot: string | null,
+    skillManager: Partial<ToolExecutionContext['skillManager']> = {}
+): ToolExecutionContext {
     return {
         workspaceRoot,
         outputChannel: {
@@ -383,7 +405,8 @@ function createReadFileToolContext(workspaceRoot: string | null): ToolExecutionC
         skillManager: {
             resolveBuiltinSkillVirtualFile(requestedPath: unknown) {
                 return resolveBuiltinSkillVirtualFile(getExtensionPath(), requestedPath);
-            }
+            },
+            ...skillManager
         } as unknown as ToolExecutionContext['skillManager'],
         terminalSessionManager: {} as ToolExecutionContext['terminalSessionManager'],
         skillDirectories: [],

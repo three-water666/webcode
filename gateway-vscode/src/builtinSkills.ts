@@ -30,6 +30,10 @@ export async function resolveBuiltinSkillVirtualFile(
 ): Promise<BuiltinSkillVirtualFileResult> {
     const virtualPath = normalizeBuiltinSkillVirtualPath(requestedPath);
     if (!virtualPath) {
+        const candidatePath = getBuiltinSkillVirtualPathCandidate(requestedPath);
+        if (candidatePath) {
+            return { status: 'missing', path: candidatePath };
+        }
         return { status: 'not_builtin' };
     }
 
@@ -65,6 +69,24 @@ export async function resolveBuiltinSkillVirtualFile(
 }
 
 export function normalizeBuiltinSkillVirtualPath(requestedPath: unknown): string | null {
+    const candidatePath = getBuiltinSkillVirtualPathCandidate(requestedPath);
+    if (!candidatePath) {
+        return null;
+    }
+
+    const normalized = path.posix.normalize(candidatePath);
+    if (normalized !== BUILTIN_SKILL_VIRTUAL_ROOT && !normalized.startsWith(`${BUILTIN_SKILL_VIRTUAL_ROOT}/`)) {
+        return null;
+    }
+
+    return normalized;
+}
+
+export function isBuiltinSkillVirtualPathCandidate(requestedPath: unknown): boolean {
+    return getBuiltinSkillVirtualPathCandidate(requestedPath) !== null;
+}
+
+function getBuiltinSkillVirtualPathCandidate(requestedPath: unknown): string | null {
     if (typeof requestedPath !== 'string') {
         return null;
     }
@@ -74,12 +96,7 @@ export function normalizeBuiltinSkillVirtualPath(requestedPath: unknown): string
         return null;
     }
 
-    const normalized = path.posix.normalize(trimmed);
-    if (normalized !== BUILTIN_SKILL_VIRTUAL_ROOT && !normalized.startsWith(`${BUILTIN_SKILL_VIRTUAL_ROOT}/`)) {
-        return trimmed;
-    }
-
-    return normalized;
+    return trimmed;
 }
 
 function isSubPath(parentPath: string, childPath: string): boolean {

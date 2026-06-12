@@ -1,5 +1,5 @@
 import * as fs from 'fs/promises';
-import { BUILTIN_SKILL_VIRTUAL_ROOT } from '../builtinSkills';
+import { BUILTIN_SKILL_VIRTUAL_ROOT, isBuiltinSkillVirtualPathCandidate } from '../builtinSkills';
 import type { LocalTool, ToolExecutionContext, ToolResult } from './types';
 import { normalizeLineEndings } from './filesystemUtils';
 import { readFilePrefix } from './readFilePrefix';
@@ -106,12 +106,16 @@ async function readBuiltinSkillVirtualContent(
     args: Record<string, unknown>,
     context: ToolExecutionContext
 ): Promise<ReadFileResult | null> {
-    const virtualFile = await context.skillManager.resolveBuiltinSkillVirtualFile(args.path);
-    if (virtualFile.status === 'not_builtin') {
+    if (!isBuiltinSkillVirtualPathCandidate(args.path)) {
         return null;
     }
+
+    const virtualFile = await context.skillManager.resolveBuiltinSkillVirtualFile(args.path);
     if (virtualFile.status === 'missing') {
         throw new Error(`Built-in skill virtual path not found: ${virtualFile.path}`);
+    }
+    if (virtualFile.status === 'not_builtin') {
+        return null;
     }
 
     return readFileContent(virtualFile.absolutePath, virtualFile.bytes, args);

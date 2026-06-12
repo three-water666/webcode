@@ -40,7 +40,7 @@
 | `get_project_rules` | 读取 workspace 根目录中的 `USER_RULES.md`、`AGENTS.md` 或 `CLAUDE.md`，用于组装初始化提示词。 |
 | `get_project_context` | 汇总当前 workspace 文件夹名、是否为 Git 仓库、当前 Git 分支、两层项目结构和最近 5 条提交，用于组装初始化提示词；项目结构最多展示 100 项，生成目录和 VCS 目录会展示但不展开。 |
 | `list_tools` | 返回模型可用工具列表，按 server 分组，每个工具都包含完整 schema，用于组装初始化提示词。 |
-| `list_skills` | 列出当前 workspace 中发现的本地 skills 和 webcode 内置 skills，用于组装初始化提示词中的 Available Skills；每项包含可直接交给 `read_file` 的 `skillFilePath`。本地 skill 使用 workspace-relative、`/` 分隔路径；内置 skill 使用 `.webcode/builtin-skills/...` 只读虚拟路径。 |
+| `list_skills` | 列出当前 workspace 中发现的本地 skills 和 webcode 内置 skills，用于组装初始化提示词中的 Available Skills；每项包含 `source` 和可直接交给 `read_file` 的 `skillFilePath`。本地 skill 使用 `source: "workspace"` 和 workspace-relative、`/` 分隔路径；内置 skill 使用 `source: "builtin"` 和 `.webcode/builtin-skills/...` 只读虚拟路径。 |
 
 ## 3. Browser client virtual tools
 

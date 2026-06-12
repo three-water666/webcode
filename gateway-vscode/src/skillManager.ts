@@ -1,6 +1,6 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 import {
   BUILTIN_SKILL_VIRTUAL_ROOT,
   getBuiltinSkillsRoot,
@@ -39,12 +39,15 @@ interface SkillCacheRecord {
   lastScanAt: number;
 }
 
+export type WorkspaceFoldersProvider = () => readonly vscode.WorkspaceFolder[] | undefined;
+
 export class SkillManager {
   private readonly caches = new Map<string, SkillCacheRecord>();
 
   constructor(
     private readonly outputChannel: vscode.OutputChannel,
-    private readonly extensionPath: string
+    private readonly extensionPath: string,
+    private readonly workspaceFoldersProvider: WorkspaceFoldersProvider = () => undefined
   ) {}
 
   invalidateCache(reason = 'manual refresh') {
@@ -80,7 +83,7 @@ export class SkillManager {
 
   private async scanSkills(customDirectories: string[]): Promise<SkillEntry[]> {
     const now = Date.now();
-    const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
+    const workspaceFolders = this.workspaceFoldersProvider() ?? [];
     if (workspaceFolders.length === 0) {
       const clearedCount = this.clearCaches();
       if (clearedCount > 0) {
