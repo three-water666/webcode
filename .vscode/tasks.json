@@ -2,6 +2,35 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
+			"label": "gateway-vscode: prepare-browser-extension",
+			"type": "shell",
+			"command": "pnpm",
+			"args": [
+				"--filter",
+				"gateway-vscode",
+				"run",
+				"prepare-browser-extension"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "never",
+				"group": "watchers"
+			},
+			"group": "build"
+		},
+		{
+			"label": "gateway-vscode: debug-prelaunch",
+			"dependsOrder": "sequence",
+			"dependsOn": [
+				"gateway-vscode: prepare-browser-extension",
+				"gateway-vscode: watch"
+			],
+			"problemMatcher": []
+		},
+		{
 			"label": "gateway-vscode: watch",
 			"type": "shell",
 			"command": "pnpm",

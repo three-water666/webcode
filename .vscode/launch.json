@@ -12,7 +12,7 @@
 			"outFiles": [
 				"${workspaceFolder}/gateway-vscode/dist/**/*.js"
 			],
-			"preLaunchTask": "gateway-vscode: watch"
+			"preLaunchTask": "gateway-vscode: debug-prelaunch"
 		}
 	]
 }
