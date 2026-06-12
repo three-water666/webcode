@@ -383,7 +383,7 @@ function runMainLoop() {
 
       // 流式输出中 JSON 可能暂时不完整。tracker 会先等待文本稳定，确认失败后才回填协议错误。
       const requestIdentity = toolCallTracker.handleProtocolErrorBlock(codeElement, textContent, messageIndex, codeBlockIndex, error);
-      currentTurn.add(requestIdentity?.requestKey ?? null);
+      currentTurn.add(requestIdentity.requestKey);
     }
   }
 

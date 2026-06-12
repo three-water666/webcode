@@ -366,7 +366,7 @@ export class ToolRequestTurn {
   /**
    * 记录本轮扫描看到的一个 requestKey。
    *
-   * null 表示当前代码块暂时没有可用 ID，例如还在等待流式 JSON 稳定；这种情况直接忽略。
+   * null 表示调用方明确没有要纳入本轮批处理的 requestKey；这种情况直接忽略。
    */
   public add(requestKey: string | null): void {
     if (!requestKey || this.requestKeySet.has(requestKey)) {return;}
