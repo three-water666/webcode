@@ -76,7 +76,7 @@ export class ToolCallTracker {
     messageIndex: number,
     codeBlockIndex: number,
     error: unknown
-  ): ToolRequestIdentity | null {
+  ): ToolRequestIdentity {
     const now = Date.now();
     const state = this.blockStates.get(codeEl);
     const identity = getProtocolErrorIdentity(textContent, codeEl, messageIndex, codeBlockIndex);
@@ -91,12 +91,12 @@ export class ToolCallTracker {
         UI.clearVisualState(codeEl);
       }
       this.scheduleStabilizationCheck();
-      return null;
+      return identity;
     }
 
     if (!state.errorNotified && now - state.time <= STABILIZATION_TIMEOUT_MS) {
       this.scheduleStabilizationCheck();
-      return null;
+      return identity;
     }
 
     if (!state.errorNotified) {
@@ -130,8 +130,9 @@ export class ToolCallTracker {
    * 为解析失败的代码块安排一次稳定性复查。
    *
    * AI 流式输出 JSON 时，代码块经常会短暂处于不完整状态；如果立刻回填协议错误，会把仍在生成
-   * 的工具调用误判为失败。这里通过主循环调度入口延迟到稳定窗口之后再扫描一次，届时文本如果
-   * 没再变化，handleProtocolErrorBlock 才会真正写入协议错误反馈。
+   * 的工具调用误判为失败。handleProtocolErrorBlock 会立即返回稳定身份，让批处理知道该块
+   * 仍在等待；这里通过主循环调度入口延迟到稳定窗口之后再扫描一次，届时文本如果没再变化，
+   * handleProtocolErrorBlock 才会真正写入协议错误反馈。
    */
   private scheduleStabilizationCheck(): void {
     this.options.scheduleMainLoop(STABILIZATION_TIMEOUT_MS + 50);
