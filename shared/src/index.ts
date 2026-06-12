@@ -105,6 +105,7 @@ export interface Session {
   autoSend: boolean;
   autoApproveTools: boolean;
   workspaceId: string;
+  lastGatewayActivityAt?: number;
   siteId?: string;
   targetOrigin?: string;
   targetUrl?: string;

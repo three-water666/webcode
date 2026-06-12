@@ -10,7 +10,7 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "permissions": ["storage", "notifications", "offscreen"],
+  "permissions": ["storage", "notifications", "offscreen", "alarms"],
   "host_permissions": [
     "http://127.0.0.1/*",
     "http://localhost/*",

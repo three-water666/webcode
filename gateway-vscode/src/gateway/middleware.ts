@@ -27,10 +27,15 @@ export function createCorsMiddleware(config: GatewayConfig, log: GatewayLogger):
 
 export function createRequestLoggerMiddleware(
     resetWatchdog: () => void,
-    log: GatewayLogger
+    log: GatewayLogger,
+    options: { skipWatchdogPaths?: readonly string[] } = {}
 ): express.RequestHandler {
+    const skipWatchdogPaths = new Set(options.skipWatchdogPaths ?? []);
+
     return (req, res, next) => {
-        resetWatchdog();
+        if (!skipWatchdogPaths.has(req.path)) {
+            resetWatchdog();
+        }
         const start = Date.now();
         if (req.method !== 'OPTIONS') {
             log(`🔔 [${req.method}] ${req.url}`);

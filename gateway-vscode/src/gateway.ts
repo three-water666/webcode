@@ -141,7 +141,11 @@ export class GatewayManager {
         if (!this.app) {return;}
 
         this.app.use(createCorsMiddleware(config, this.log.bind(this)));
-        this.app.use(createRequestLoggerMiddleware(() => this.resetWatchdog(), this.log.bind(this)));
+        this.app.use(createRequestLoggerMiddleware(
+            () => this.resetWatchdog(),
+            this.log.bind(this),
+            { skipWatchdogPaths: ['/v1/status'] }
+        ));
         this.app.use(createAuthMiddleware(() => this.authToken, this.log.bind(this)));
 
         registerConfigRoutes(this.app, config, this.log.bind(this));

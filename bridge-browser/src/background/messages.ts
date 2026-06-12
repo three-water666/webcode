@@ -1,12 +1,14 @@
-import { isMessageRequest, type MessageRequest } from '../types';
+import { isMessageRequest, type MessageRequest, type SessionDisconnectReason } from '../types';
 import { playAttentionSound } from './attention_sound';
 import { handleHandshake } from './connection';
 import { getErrorMessage } from './errors';
 import { executeTool } from './gateway';
 import { showNotification, updateWindowAttention } from './notifications';
-import { getSessionPresetSettings, updateDefaultAutoApproveTools } from './presets';
+import { getSessionPresetSettings, updateDefaultAutoApproveTools, type SessionPresetSettings } from './presets';
+import { checkGatewayHealth, expireGatewaySession, type GatewayHealthStatus } from './session_health';
 import {
   getActiveProtocolSessionResult,
+  getSessionDisconnectReason,
   updateSessionAutoApproveTools,
   updateSessionAutoSend,
   updateSessionLog,
@@ -107,31 +109,26 @@ async function getStatusResponse(targetTabId: number) {
     getSessionPresetSettings(),
   ]);
   if (sessionResult.status === "missing") {
-    return {
-      connected: false,
-      suspended: false,
-      showLog: false,
-      autoSend: true,
-      autoApproveTools: false,
-      defaultAutoApproveTools: presetSettings.defaultAutoApproveTools,
-      workspaceId: 'global',
-    };
+    const disconnectReason = await getSessionDisconnectReason(targetTabId);
+    return createDisconnectedStatusResponse(presetSettings, disconnectReason);
   }
 
   if (sessionResult.status === "invalid") {
-    return {
-      connected: false,
-      suspended: false,
-      showLog: false,
-      autoSend: true,
-      autoApproveTools: false,
-      defaultAutoApproveTools: presetSettings.defaultAutoApproveTools,
-      workspaceId: 'global',
-      error: "Session data is incomplete. Reconnect from VS Code to continue.",
-    };
+    return createDisconnectedStatusResponse(
+      presetSettings,
+      "invalid_session",
+      "Session data is incomplete. Reconnect from VS Code to continue."
+    );
   }
 
   const session = sessionResult.session;
+  const healthStatus = await checkGatewayHealth(session);
+  if (healthStatus !== "online") {
+    const disconnectReason = getDisconnectReasonForHealthStatus(healthStatus);
+    await expireGatewaySession(targetTabId, disconnectReason);
+    return createDisconnectedStatusResponse(presetSettings, disconnectReason);
+  }
+
   const isActive = sessionResult.status === "active";
   return {
     connected: isActive,
@@ -144,6 +141,28 @@ async function getStatusResponse(targetTabId: number) {
     workspaceId: session.workspaceId ?? 'global',
     siteId: session.siteId,
   };
+}
+
+function createDisconnectedStatusResponse(
+  presetSettings: SessionPresetSettings,
+  disconnectReason?: SessionDisconnectReason,
+  error?: string
+) {
+  return {
+    connected: false,
+    suspended: false,
+    disconnectReason,
+    showLog: false,
+    autoSend: true,
+    autoApproveTools: false,
+    defaultAutoApproveTools: presetSettings.defaultAutoApproveTools,
+    workspaceId: 'global',
+    error,
+  };
+}
+
+function getDisconnectReasonForHealthStatus(status: GatewayHealthStatus): SessionDisconnectReason {
+  return status === "unauthorized" ? "invalid_token" : "gateway_unavailable";
 }
 
 function handleSetLogVisible(
