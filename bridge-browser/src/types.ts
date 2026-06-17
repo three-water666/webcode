@@ -23,6 +23,8 @@ export interface MessageRequest {
   message?: string;
   onlyWhenWindowInBackground?: boolean;
   playSound?: boolean;
+  soundEnabled?: boolean;
+  logType?: string;
   connected?: boolean;
   autoSend?: boolean;
   autoApproveTools?: boolean;
@@ -43,6 +45,7 @@ export interface StatusResponse {
   error?: string;
   port?: number;
   showLog?: boolean;
+  soundEnabled?: boolean;
   autoSend?: boolean;
   autoApproveTools?: boolean;
   defaultAutoApproveTools?: boolean;
