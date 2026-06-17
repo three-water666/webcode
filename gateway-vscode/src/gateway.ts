@@ -4,7 +4,6 @@ import type { Server as HttpServer } from 'http';
 import * as vscode from 'vscode';
 
 import { getErrorMessage } from './gateway/errorUtils';
-import { getDefaultSelectors } from './platforms';
 import { SkillManager } from './skillManager';
 import { TerminalSessionManager } from './terminalSessionManager';
 import {
@@ -32,8 +31,6 @@ import type {
     StartResult
 } from './gateway/types';
 
-const BUILTIN_SELECTORS = getDefaultSelectors();
-
 export class GatewayManager {
     private app: express.Express | null = null;
     private server: HttpServer | null = null;
@@ -57,7 +54,7 @@ export class GatewayManager {
         this.extensionPath = extensionPath;
         this.context = context;
         this.onAutoStop = onAutoStop ?? null;
-        this.skillManager = new SkillManager(outputChannel);
+        this.skillManager = new SkillManager(outputChannel, extensionPath, () => vscode.workspace.workspaceFolders);
         this.terminalSessionManager = new TerminalSessionManager(outputChannel);
         // [Persistence] Generate token once per VS Code session
         this.authToken = crypto.randomUUID();
@@ -144,13 +141,19 @@ export class GatewayManager {
         if (!this.app) {return;}
 
         this.app.use(createCorsMiddleware(config, this.log.bind(this)));
-        this.app.use(createRequestLoggerMiddleware(() => this.resetWatchdog(), this.log.bind(this)));
+        this.app.use(createRequestLoggerMiddleware(
+            () => this.resetWatchdog(),
+            this.log.bind(this),
+            { skipWatchdogPaths: ['/v1/status'] }
+        ));
         this.app.use(createAuthMiddleware(() => this.authToken, this.log.bind(this)));
 
-        registerConfigRoutes(this.app, config, BUILTIN_SELECTORS, this.log.bind(this));
+        registerConfigRoutes(this.app, config, this.log.bind(this));
         registerBridgeRoute(this.app, {
             getPort: () => this.getServerPort(),
-            getAllowedOrigins: () => config.allowedOrigins,
+            getAiSites: () => config.aiSites ?? [],
+            getAuthToken: () => this.authToken,
+            getExtensionVersion: () => this.getExtensionVersion(),
             getWorkspaceRoot: () => this.getPrimaryWorkspaceRoot(),
             log: this.log.bind(this)
         });
@@ -172,6 +175,11 @@ export class GatewayManager {
             throw new Error('Gateway server is not listening on a TCP port.');
         }
         return address.port;
+    }
+
+    private getExtensionVersion(): string {
+        const version = (this.context.extension.packageJSON as { version?: unknown }).version;
+        return typeof version === 'string' && version.trim() ? version : 'unknown';
     }
 
     async start(config: GatewayConfig): Promise<StartResult> {

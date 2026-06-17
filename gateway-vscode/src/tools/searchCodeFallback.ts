@@ -1,7 +1,6 @@
 import * as fsPromises from 'fs/promises';
 import * as path from 'path';
 import {
-    matchesAnyPattern,
     matchesPattern,
     normalizeLineEndings,
     toPosixPath,
@@ -9,8 +8,8 @@ import {
 } from './filesystemUtils';
 import { listGitSearchFiles, sortSearchCandidatesByRelativePath, type SearchCandidateFile } from './searchCodeGitFiles';
 import {
-    createRipgrepExcludeGlobs,
     formatSearchCodeMatch,
+    isGitMetadataPath,
     type SearchMatchRange
 } from './searchCodeUtils';
 import type { SearchCodeOptions } from './searchCodeTypes';
@@ -43,9 +42,8 @@ export async function searchCodeInProcess(options: SearchCodeOptions): Promise<S
     const gitFiles = await listGitSearchFiles(options.searchRoot);
 
     if (gitFiles) {
-        const excludePatterns = createRipgrepExcludeGlobs(options.excludePatterns);
         for (const candidate of sortSearchCandidatesByRelativePath(gitFiles)) {
-            if (shouldSkipFallbackCandidate(candidate, options, excludePatterns)) {
+            if (shouldSkipFallbackCandidate(candidate, options)) {
                 continue;
             }
 
@@ -70,7 +68,6 @@ export async function searchCodeInProcess(options: SearchCodeOptions): Promise<S
         candidates.push({ filePath, relativeToSearchRoot });
         return Promise.resolve(false);
     }, {
-        excludePatterns: options.excludePatterns,
         includePattern: options.includePattern
     });
 
@@ -98,11 +95,11 @@ async function appendInProcessFileMatches(
     matcher: FallbackMatcher,
     matches: string[]
 ): Promise<boolean> {
-    if (
-        options.includePattern &&
-        !matchesPattern(relativeToSearchRoot, options.includePattern) &&
-        !matchesPattern(path.basename(filePath), options.includePattern)
-    ) {
+    const relativePath = toPosixPath(path.relative(options.workspaceRoot, filePath));
+    if (isGitMetadataPath(relativePath)) {
+        return false;
+    }
+    if (!matchesFallbackInclude(filePath, relativeToSearchRoot, options.includePattern)) {
         return false;
     }
 
@@ -123,7 +120,6 @@ async function appendInProcessFileMatches(
             continue;
         }
 
-        const relativePath = toPosixPath(path.relative(options.workspaceRoot, filePath));
         const lineText = lines[index];
         matches.push(formatSearchCodeMatch(relativePath, index + 1, lineText, options, matchRange));
         if (matches.length >= options.maxResults) {
@@ -134,12 +130,21 @@ async function appendInProcessFileMatches(
     return false;
 }
 
+function matchesFallbackInclude(
+    filePath: string,
+    relativeToSearchRoot: string,
+    includePattern: string | undefined
+): boolean {
+    return !includePattern ||
+        matchesPattern(relativeToSearchRoot, includePattern) ||
+        matchesPattern(path.basename(filePath), includePattern);
+}
+
 function shouldSkipFallbackCandidate(
     candidate: SearchCandidateFile,
-    options: SearchCodeOptions,
-    excludePatterns: string[]
+    options: SearchCodeOptions
 ): boolean {
-    if (matchesAnyPattern(candidate.relativeToSearchRoot, excludePatterns)) {
+    if (isGitMetadataPath(candidate.relativeToSearchRoot)) {
         return true;
     }
 

@@ -11,7 +11,11 @@ export interface MessageRequest {
   tabId?: number;
   port?: number;
   token?: string;
+  siteId?: string;
   targetOrigin?: string;
+  targetUrl?: string;
+  vscodeExtensionVersion?: string;
+  browserExtensionVersion?: string;
   workspaceId?: string;
   force?: boolean;
   show?: boolean;
@@ -22,6 +26,9 @@ export interface MessageRequest {
   soundEnabled?: boolean;
   logType?: string;
   connected?: boolean;
+  autoSend?: boolean;
+  autoApproveTools?: boolean;
+  defaultAutoApproveTools?: boolean;
   payload?: ToolExecutionPayload;
 }
 
@@ -33,11 +40,17 @@ export interface HandshakeResponse {
 
 export interface StatusResponse {
   connected: boolean;
+  suspended?: boolean;
+  disconnectReason?: SessionDisconnectReason;
   error?: string;
   port?: number;
   showLog?: boolean;
   soundEnabled?: boolean;
+  autoSend?: boolean;
+  autoApproveTools?: boolean;
+  defaultAutoApproveTools?: boolean;
   workspaceId?: string;
+  siteId?: string;
 }
 
 export interface SuccessResponse {
@@ -46,8 +59,8 @@ export interface SuccessResponse {
 }
 
 export interface SyncedAiSite {
+  id: string;
   name?: string;
-  address: string;
   selectors?: unknown;
 }
 
@@ -55,9 +68,20 @@ export interface StoredSession {
   port: number;
   token: string;
   showLog?: boolean;
+  autoSend?: boolean;
+  autoApproveTools?: boolean;
   workspaceId?: string;
+  lastGatewayActivityAt?: number;
+  siteId?: string;
+  targetOrigin?: string;
+  targetUrl?: string;
   allowedOrigins?: string[];
 }
+
+export type SessionDisconnectReason =
+  | "gateway_unavailable"
+  | "invalid_token"
+  | "invalid_session";
 
 export interface InitGatewayData {
   syncedAiSites?: SyncedAiSite[];
@@ -83,27 +107,25 @@ export function isStatusResponse(value: unknown): value is StatusResponse {
 export function isSession(value: unknown): value is Session {
   return isStoredSession(value) &&
     typeof value.showLog === "boolean" &&
+    typeof value.autoSend === "boolean" &&
+    typeof value.autoApproveTools === "boolean" &&
     typeof value.workspaceId === "string";
 }
 
 export function isStoredSession(value: unknown): value is StoredSession {
   if (!isRecord(value)) {return false;}
 
-  const allowedOrigins = value.allowedOrigins;
   return typeof value.port === "number" &&
     typeof value.token === "string" &&
-    (
-      value.showLog === undefined ||
-      typeof value.showLog === "boolean"
-    ) &&
-    (
-      value.workspaceId === undefined ||
-      typeof value.workspaceId === "string"
-    ) &&
-    (
-      allowedOrigins === undefined ||
-      (Array.isArray(allowedOrigins) && allowedOrigins.every((origin) => typeof origin === "string"))
-    );
+    isOptionalBoolean(value.showLog) &&
+    isOptionalBoolean(value.autoSend) &&
+    isOptionalBoolean(value.autoApproveTools) &&
+    isOptionalString(value.workspaceId) &&
+    isOptionalNumber(value.lastGatewayActivityAt) &&
+    isOptionalString(value.siteId) &&
+    isOptionalString(value.targetOrigin) &&
+    isOptionalString(value.targetUrl) &&
+    isOptionalStringArray(value.allowedOrigins);
 }
 
 export function normalizeSession(value: unknown): Session | null {
@@ -113,7 +135,13 @@ export function normalizeSession(value: unknown): Session | null {
     port: value.port,
     token: value.token,
     showLog: value.showLog ?? false,
+    autoSend: value.autoSend ?? true,
+    autoApproveTools: value.autoApproveTools ?? false,
     workspaceId: value.workspaceId ?? "global",
+    lastGatewayActivityAt: value.lastGatewayActivityAt,
+    siteId: value.siteId,
+    targetOrigin: value.targetOrigin ?? value.allowedOrigins?.[0],
+    targetUrl: value.targetUrl,
     allowedOrigins: value.allowedOrigins,
   };
 }
@@ -128,12 +156,16 @@ export function isSiteSelectors(value: unknown): value is SiteSelectors {
     (
       value.maxInlineChars === undefined ||
       typeof value.maxInlineChars === "number"
+    ) &&
+    (
+      value.virtualizedMessages === undefined ||
+      typeof value.virtualizedMessages === "boolean"
     );
 }
 
 export function isSyncedAiSite(value: unknown): value is SyncedAiSite {
   return isRecord(value) &&
-    typeof value.address === "string" &&
+    typeof value.id === "string" &&
     (
       value.name === undefined ||
       typeof value.name === "string"
@@ -142,4 +174,21 @@ export function isSyncedAiSite(value: unknown): value is SyncedAiSite {
 
 export function getSyncedAiSites(value: unknown): SyncedAiSite[] {
   return Array.isArray(value) ? value.filter(isSyncedAiSite) : [];
+}
+
+function isOptionalBoolean(value: unknown): boolean {
+  return value === undefined || typeof value === "boolean";
+}
+
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || typeof value === "string";
+}
+
+function isOptionalNumber(value: unknown): boolean {
+  return value === undefined || typeof value === "number";
+}
+
+function isOptionalStringArray(value: unknown): boolean {
+  return value === undefined ||
+    (Array.isArray(value) && value.every((item) => typeof item === "string"));
 }

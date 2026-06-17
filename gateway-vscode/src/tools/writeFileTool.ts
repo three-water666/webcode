@@ -1,6 +1,7 @@
 import type { LocalTool } from './types';
 import { textResult } from './result';
-import { atomicWriteFile, resolveWorkspacePath } from './filesystemUtils';
+import { atomicWriteFile } from './filesystemUtils';
+import { WORKSPACE_FILE_PATH_DESCRIPTION, resolveWorkspaceRelativePath } from './workspacePath';
 
 export const writeFileTool: LocalTool = {
     serverId: 'internal',
@@ -12,7 +13,7 @@ export const writeFileTool: LocalTool = {
         inputSchema: {
             type: 'object',
             properties: {
-                path: { type: 'string', description: 'Workspace-relative or absolute path to the file.' },
+                path: { type: 'string', description: WORKSPACE_FILE_PATH_DESCRIPTION },
                 content: {
                     type: 'string',
                     description: 'Complete file content to write. Do not include read_file line number prefixes as file content.'
@@ -23,10 +24,10 @@ export const writeFileTool: LocalTool = {
         annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: true }
     },
     async execute(args, context) {
-        const filePath = await resolveWorkspacePath(context.workspaceRoot, args.path, {
+        const filePath = (await resolveWorkspaceRelativePath(context.workspaceRoot, args.path, {
             forWrite: true,
             createParentDirectories: true
-        });
+        })).absolutePath;
         await atomicWriteFile(filePath, String(args.content));
         return textResult(`Successfully wrote ${String(args.path)}`);
     }

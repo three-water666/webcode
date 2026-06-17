@@ -1,6 +1,7 @@
-import { BRANDING, PROTOCOL } from "@webcode/shared";
+import { BRANDING, joinPromptSections, PROTOCOL } from "@webcode/shared";
 import { i18n } from "../modules/i18n";
 import { Logger } from "../modules/logger";
+import { readPlatformPromptFromStorage } from "./prompt_resources";
 
 interface ToolExecutionResponse {
   success: boolean;
@@ -10,15 +11,16 @@ interface ToolExecutionResponse {
 
 interface WebcodeInitPromptOptions {
   includeInitToolResultHeader?: boolean;
+  siteId?: string | null;
 }
 
 export async function buildWebcodeInitPrompt(options: WebcodeInitPromptOptions = {}): Promise<string> {
   let finalPrompt = options.includeInitToolResultHeader === false
     ? ""
     : buildInitToolResultHeader();
-  finalPrompt += i18n.resources.prompt ?? "";
+  finalPrompt += await buildBasePrompt(options.siteId);
 
-  Logger.log(`Initializing ${BRANDING.productName} with prompt, project rules, tool list, and skill list`, "action");
+  Logger.log(`Initializing ${BRANDING.productName} with prompt, project rules, project context, tool list, and skill list`, "action");
 
   try {
     const projectRules = (await executeInitToolCall("get_project_rules")).trim();
@@ -27,6 +29,15 @@ export async function buildWebcodeInitPrompt(options: WebcodeInitPromptOptions =
     }
   } catch (error) {
     Logger.log(`Project rules fetch failed: ${getErrorMessage(error)}`, "error");
+  }
+
+  try {
+    const projectContext = (await executeInitToolCall("get_project_context")).trim();
+    if (projectContext) {
+      finalPrompt += `\n\n${projectContext}`;
+    }
+  } catch (error) {
+    Logger.log(`Project context fetch failed: ${getErrorMessage(error)}`, "error");
   }
 
   try {
@@ -43,6 +54,12 @@ export async function buildWebcodeInitPrompt(options: WebcodeInitPromptOptions =
   }
 
   return finalPrompt;
+}
+
+async function buildBasePrompt(siteId?: string | null): Promise<string> {
+  const platformPrompt = await readPlatformPromptFromStorage(siteId);
+
+  return joinPromptSections(i18n.resources.prompt, platformPrompt);
 }
 
 function buildInitToolResultHeader(): string {
@@ -85,7 +102,7 @@ function formatToolOutput(data: unknown, fallback: string): string {
 }
 
 function getInitToolFallback(toolName: string): string {
-  return toolName === "get_project_rules" ? "" : "[]";
+  return toolName === "get_project_rules" || toolName === "get_project_context" ? "" : "[]";
 }
 
 function normalizeToolResponse(response: unknown): ToolExecutionResponse {

@@ -70,9 +70,16 @@ suite('Search Files Tool', () => {
     });
 
     test('respects ignore files with ripgrep', () => {
-        const args = createRipgrepFilesArgs([]);
+        const args = createRipgrepFilesArgs();
 
         assert.ok(!args.includes('--no-ignore'));
+    });
+
+    test('excludes git metadata internally with ripgrep', () => {
+        const args = createRipgrepFilesArgs();
+
+        assert.ok(args.includes('!.git/**'));
+        assert.ok(args.includes('!**/.git/**'));
     });
 
     test('filters git fallback candidates to existing files', async () => {
@@ -95,12 +102,12 @@ suite('Search Files Tool', () => {
             'search_files',
             200,
             'file(s)',
-            'Narrow query/path/exclude_patterns or raise max_results.'
+            'Narrow query/path or raise max_results.'
         );
 
         assert.ok(notice.includes('Results limited to 200 file(s)'));
         assert.ok(notice.includes('There may be more results'));
-        assert.ok(notice.includes('Narrow query/path/exclude_patterns'));
+        assert.ok(notice.includes('Narrow query/path'));
     });
 });
 

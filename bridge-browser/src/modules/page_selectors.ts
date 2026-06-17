@@ -6,6 +6,19 @@ export interface LatestResponseCodeBlocks {
   codeElements: Element[];
 }
 
+interface ScrollMetrics {
+  distanceToBottom: number;
+  range: number;
+  thumbRatio: number;
+}
+
+// History detection relies on large scroll range, small scrollbar thumb, and absolute distance from the live bottom.
+// Scroll percentage is intentionally avoided: long virtualized chats can be past 80% while still far from the bottom.
+const HISTORY_SCROLL_MIN_RANGE_PX = 800;
+const HISTORY_SCROLL_MIN_DISTANCE_TO_BOTTOM_PX = 600;
+const HISTORY_SCROLL_MAX_THUMB_RATIO = 0.65;
+const MIN_SCROLL_CONTAINER_HEIGHT_PX = 300;
+
 export function getInputAreaBySelector(
   inputSelector: string
 ): HTMLElement | null {
@@ -74,5 +87,108 @@ export function getLatestResponseCodeBlocks(
   return {
     messageIndex,
     codeElements,
+  };
+}
+
+export function isLikelyViewingVirtualizedHistory(domSelectors: SiteSelectors): boolean {
+  if (domSelectors.virtualizedMessages !== true) {return false;}
+
+  const scrollElement = getPrimaryScrollElement(domSelectors);
+  if (!scrollElement) {return false;}
+
+  const metrics = getScrollMetrics(scrollElement);
+  if (!metrics) {return false;}
+
+  return metrics.range > HISTORY_SCROLL_MIN_RANGE_PX &&
+    metrics.thumbRatio < HISTORY_SCROLL_MAX_THUMB_RATIO &&
+    metrics.distanceToBottom > HISTORY_SCROLL_MIN_DISTANCE_TO_BOTTOM_PX;
+}
+
+function getPrimaryScrollElement(domSelectors: SiteSelectors): HTMLElement | null {
+  const candidates = collectScrollCandidates(domSelectors);
+  let best: HTMLElement | null = null;
+  let bestScore = -1;
+
+  candidates.forEach((candidate) => {
+    const metrics = getScrollMetrics(candidate);
+    if (!metrics || !isUsableScrollContainer(candidate, metrics)) {return;}
+
+    // Prefer containers that both own the main scroll range and occupy a substantial viewport area.
+    const score = metrics.range + candidate.clientHeight;
+    if (score > bestScore) {
+      best = candidate;
+      bestScore = score;
+    }
+  });
+
+  return best;
+}
+
+function collectScrollCandidates(domSelectors: SiteSelectors): Set<HTMLElement> {
+  const candidates = new Set<HTMLElement>();
+  const scrollingElement = document.scrollingElement;
+  if (scrollingElement instanceof HTMLElement) {
+    candidates.add(scrollingElement);
+  }
+
+  const messages = Array.from(document.querySelectorAll<HTMLElement>(domSelectors.messageBlocks));
+  addAncestorScrollCandidates(messages[0], candidates);
+  addAncestorScrollCandidates(messages[messages.length - 1], candidates);
+  addAncestorScrollCandidates(getInputAreaElement(domSelectors), candidates);
+
+  return candidates;
+}
+
+function addAncestorScrollCandidates(
+  element: HTMLElement | undefined | null,
+  candidates: Set<HTMLElement>
+): void {
+  let current = element?.parentElement ?? null;
+  while (current) {
+    if (isScrollStyleCandidate(current)) {
+      candidates.add(current);
+    }
+    current = current.parentElement;
+  }
+}
+
+function isScrollStyleCandidate(element: HTMLElement): boolean {
+  if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+    return false;
+  }
+
+  if (element === document.scrollingElement) {
+    return true;
+  }
+
+  const style = window.getComputedStyle(element);
+  return isScrollableOverflow(style.overflowY) || isScrollableOverflow(style.overflow);
+}
+
+function isScrollableOverflow(value: string): boolean {
+  const normalized = value.toLowerCase();
+  return normalized === "auto" || normalized === "scroll" || normalized === "overlay";
+}
+
+function isUsableScrollContainer(element: HTMLElement, metrics: ScrollMetrics): boolean {
+  if (metrics.range <= 0) {return false;}
+  if (element.clientHeight < MIN_SCROLL_CONTAINER_HEIGHT_PX) {return false;}
+  return element === document.scrollingElement || isElementVisible(element);
+}
+
+function getScrollMetrics(element: HTMLElement): ScrollMetrics | null {
+  const scrollHeight = element.scrollHeight;
+  const clientHeight = element.clientHeight;
+  if (scrollHeight <= 0 || clientHeight <= 0 || scrollHeight <= clientHeight) {
+    return null;
+  }
+
+  const range = scrollHeight - clientHeight;
+  const distanceToBottom = scrollHeight - element.scrollTop - clientHeight;
+
+  return {
+    distanceToBottom,
+    range,
+    thumbRatio: clientHeight / scrollHeight,
   };
 }

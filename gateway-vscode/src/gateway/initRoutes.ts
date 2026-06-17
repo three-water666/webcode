@@ -1,31 +1,23 @@
 import type express from 'express';
 
 import { PROMPTS } from '../defaults';
-import { getPlatformIdByAddress } from '../platforms';
-import type { BuiltinSelectors, GatewayConfig, GatewayLogger } from './types';
+import type { GatewayConfig, GatewayLogger } from './types';
+import { buildSyncedAiSites } from './syncedSites';
 
 export function registerConfigRoutes(
     app: express.Express,
     config: GatewayConfig,
-    builtinSelectors: BuiltinSelectors,
     log: GatewayLogger
 ): void {
+    app.get('/v1/status', (_req, res) => {
+        res.json({ ok: true });
+    });
+
     app.get('/v1/init', (req, res) => {
         log('📥 Init Sync: Browser requested default rules and prompts');
 
-        const selectorsByPlatform = builtinSelectors as Record<string, Record<string, unknown>>;
-        const syncedAiSites = (config.aiSites ?? []).map(site => {
-            const platformId = getPlatformIdByAddress(site.address);
-            const defaultSelectors = platformId ? selectorsByPlatform[platformId] ?? {} : {};
-
-            return {
-                ...site,
-                selectors: { ...defaultSelectors, ...(site.selectors ?? {}) }
-            };
-        });
-
         res.json({
-            syncedAiSites: syncedAiSites,
+            syncedAiSites: buildSyncedAiSites(config.aiSites ?? []),
             prompts: PROMPTS
         });
     });

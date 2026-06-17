@@ -28,6 +28,14 @@
         background: #4caf50;
         box-shadow: 0 0 8px rgba(76, 175, 80, 0.4);
       }
+      .status-dot.suspended {
+        background: #ffb74d;
+        box-shadow: 0 0 8px rgba(255, 183, 77, 0.35);
+      }
+      .status-dot.expired {
+        background: #ef5350;
+        box-shadow: 0 0 8px rgba(239, 83, 80, 0.35);
+      }
 
       .card {
         background: #252526;
@@ -50,10 +58,38 @@
         justify-content: space-between;
         gap: 12px;
       }
+      .status-card.disconnected {
+        border-color: #4a3030;
+        background: #2a2424;
+      }
+      .status-card.suspended {
+        border-color: #5a482a;
+        background: #2e2a20;
+      }
+      .status-card.expired {
+        border-color: #61413a;
+        background: #2b2421;
+      }
+      .status-card.checking {
+        border-color: #3a4654;
+        background: #232a32;
+      }
       .connection-label {
         color: #fff;
         font-weight: 600;
         line-height: 1.35;
+      }
+      .connection-label.disconnected {
+        color: #ffb4aa;
+      }
+      .connection-label.suspended {
+        color: #ffd89b;
+      }
+      .connection-label.expired {
+        color: #ffc0ad;
+      }
+      .connection-label.checking {
+        color: #cfe7ff;
       }
       .status-meta {
         flex: none;
@@ -65,6 +101,68 @@
       }
       .settings-card {
         padding: 4px 12px;
+      }
+      .disconnected-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .disconnected-stack .card {
+        margin-bottom: 0;
+      }
+      .suspended-hint {
+        color: #d9c7a4;
+        font-size: 12px;
+      }
+      .expired-card {
+        background: #332c24;
+        border: 1px solid #6b5635;
+        border-radius: 6px;
+        box-sizing: border-box;
+        padding: 12px;
+      }
+      .expired-desc {
+        color: #f0d6a8;
+        font-size: 11px;
+      }
+      .install-card {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .section-title {
+        color: #fff;
+        font-size: 12px;
+        font-weight: 700;
+        margin-bottom: 6px;
+      }
+      .installed-action-card,
+      .marketplace-card {
+        border-radius: 6px;
+        box-sizing: border-box;
+        padding: 12px;
+      }
+      .installed-action-card {
+        background: #263342;
+        border: 1px solid #365778;
+      }
+      .install-desc {
+        color: #cfe7ff;
+        font-size: 11px;
+      }
+      .marketplace-card {
+        background: #273629;
+        border: 1px solid #3f6344;
+      }
+      .marketplace-hint {
+        color: #aeb8ae;
+        font-size: 10px;
+        margin-bottom: 2px;
+      }
+      .marketplace-query {
+        color: #7bd88f;
+        font-size: 12px;
+        font-weight: 700;
       }
       .btn {
         display: block;
@@ -118,6 +216,57 @@
       .checkbox-row:last-child {
         border-bottom: none;
       }
+      .session-setting-last {
+        border-bottom: none;
+      }
+      .disclosure-button {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        width: 100%;
+        min-height: 34px;
+        padding: 0;
+        border: none;
+        border-top: 1px solid #333;
+        background: transparent;
+        color: #d6d6d6;
+        cursor: pointer;
+        font: inherit;
+        font-size: 12px;
+        text-align: left;
+      }
+      .disclosure-button:hover {
+        color: #fff;
+      }
+      .disclosure-caret {
+        flex: none;
+        width: 6px;
+        height: 6px;
+        margin-right: 3px;
+        border-right: 1.5px solid #aaa;
+        border-bottom: 1.5px solid #aaa;
+        transform: rotate(45deg);
+        transition: transform 0.12s ease;
+      }
+      .disclosure-button[aria-expanded="true"] .disclosure-caret {
+        margin-top: 5px;
+        transform: rotate(225deg);
+      }
+      .preset-panel {
+        border-top: 1px solid #333;
+      }
+      .preset-hint {
+        margin: 8px 0 2px;
+        color: #969696;
+        font-size: 10px;
+        line-height: 1.35;
+      }
+      .preset-row {
+        min-height: 46px;
+        padding: 7px 0;
+        border-bottom: none;
+      }
       input[type="checkbox"] {
         flex: none;
         cursor: pointer;
@@ -152,6 +301,10 @@
             <input type="checkbox" id="autoSend" checked />
           </label>
           <label class="checkbox-row">
+            <span id="autoApproveToolsLabel">Auto-Approve All Tools</span>
+            <input type="checkbox" id="autoApproveTools" />
+          </label>
+          <label class="checkbox-row session-setting-last">
             <span id="showLogLabel">Show Floating Log</span>
             <input type="checkbox" id="showLog" />
           </label>
@@ -159,92 +312,81 @@
             <span id="soundLabel">Notification Sound</span>
             <input type="checkbox" id="logSound" />
           </label>
+          <button
+            type="button"
+            id="sessionPresetToggle"
+            class="disclosure-button"
+            aria-expanded="false"
+            aria-controls="sessionPresetPanel"
+          >
+            <span id="sessionPresetToggleLabel">New Session Preset</span>
+            <span class="disclosure-caret" aria-hidden="true"></span>
+          </button>
+          <div id="sessionPresetPanel" class="preset-panel hidden">
+            <p id="sessionPresetHint" class="preset-hint">
+              Applies only to new sessions. The current session setting stays unchanged.
+            </p>
+            <label class="checkbox-row preset-row">
+              <span id="defaultAutoApproveToolsLabel">Auto-Approve All Tools</span>
+              <input type="checkbox" id="defaultAutoApproveTools" />
+            </label>
+          </div>
         </div>
       </div>
     </div>
 
-    <div id="availableView" class="hidden">
-      <div class="card" style="border: 1px solid #3498db">
-        <h3
-          id="availableGateways"
-          style="
-            color: #3498db;
-            margin: 0 0 10px 0;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-          "
-        >
-          <span>⚡</span> Available Gateways
-        </h3>
-        <div id="gatewayList"></div>
+    <div id="loadingView">
+      <div class="disconnected-stack">
+        <div class="card status-card checking">
+          <p id="checkingTitle" class="connection-label checking">
+            Checking VS Code connection...
+          </p>
+        </div>
       </div>
     </div>
 
-    <div id="disconnectedView">
-      <div class="card" style="padding: 15px 10px; border: 1px solid #555">
-        <h3
-          id="disconnectedTitle"
-          style="
-            color: #e74c3c;
-            margin: 0 0 10px 0;
-            font-size: 14px;
-            text-align: center;
-          "
-        >
-          🔴 Disconnected
-        </h3>
-
-        <div
-          style="
-            margin-bottom: 15px;
-            border-bottom: 1px solid #444;
-            padding-bottom: 10px;
-          "
-        >
-          <p
-            style="
-              font-size: 12px;
-              color: #fff;
-              font-weight: bold;
-              margin-bottom: 5px;
-            "
-          >
-            <span id="installedTitle">👉 Already Installed?</span>
-          </p>
-          <p id="installedDesc" style="font-size: 11px; color: #ccc; line-height: 1.4">
-            Click
-            <span style="color: #3498db; font-weight: bold">webcode</span> in VS
-            Code Status Bar (bottom right) and follow the steps to launch.
+    <div id="disconnectedView" class="hidden">
+      <div class="disconnected-stack">
+        <div id="disconnectedStatusCard" class="card status-card disconnected">
+          <p id="disconnectedTitle" class="connection-label disconnected">
+            🔴 Disconnected from VS Code
           </p>
         </div>
 
-        <div>
-          <p
-            style="
-              font-size: 12px;
-              color: #fff;
-              font-weight: bold;
-              margin-bottom: 5px;
-            "
-          >
-            <span id="notInstalledTitle">👉 Not Installed?</span>
+        <p id="suspendedHint" class="card suspended-hint hidden">
+          The VS Code connection is paused on this page. Return to the connected site to resume automatically.
+        </p>
+
+        <div id="expiredCard" class="expired-card hidden">
+          <p class="section-title">
+            <span id="expiredActionTitle">Reconnect from VS Code</span>
           </p>
-          <div
-            style="
-              background: #333;
-              padding: 8px;
-              border-radius: 4px;
-              margin: 5px 0;
-            "
-          >
-            <p id="marketplaceHint" style="font-size: 10px; color: #888; margin-bottom: 2px">
+          <p id="expiredActionDesc" class="expired-desc">
+            The VS Code gateway may have stopped after inactivity. In VS Code, click webcode in the status bar,
+            start the service, then launch the site again.
+          </p>
+        </div>
+
+        <div id="installCard" class="install-card">
+          <div class="install-section installed-action-card">
+            <p class="section-title">
+              <span id="installedTitle">VS Code extension installed?</span>
+            </p>
+            <p id="installedDesc" class="install-desc">
+              Click
+              <span style="color: #3498db; font-weight: bold">webcode</span> in VS
+              Code Status Bar (bottom right) and follow the steps to launch.
+            </p>
+          </div>
+
+          <div class="install-section marketplace-card">
+            <p class="section-title">
+              <span id="notInstalledTitle">VS Code extension not installed?</span>
+            </p>
+            <p id="marketplaceHint" class="marketplace-hint">
               Search in VS Code Marketplace:
             </p>
-            <p style="font-weight: bold; color: #4caf50; font-size: 12px">
-              webcode gateway
-            </p>
+            <p class="marketplace-query">webcode gateway</p>
           </div>
         </div>
       </div>

@@ -1,5 +1,4 @@
 import {
-    DEFAULT_EXCLUDED_DIRECTORIES,
     getNumberArg,
     toPosixPath
 } from './filesystemUtils';
@@ -86,14 +85,21 @@ export function normalizeIncludeGlob(pattern: string | undefined): string | unde
     return normalized.includes('/') ? normalized : `**/${normalized}`;
 }
 
-export function createRipgrepExcludeGlobs(excludePatterns: string[]): string[] {
+export function createRipgrepGitMetadataExcludeGlobs(): string[] {
     return [
-        ...DEFAULT_EXCLUDED_DIRECTORIES.flatMap(directory => [
-            `${directory}/**`,
-            `**/${directory}/**`
-        ]),
-        ...excludePatterns.flatMap(expandUserExcludePattern)
+        '.git',
+        '**/.git',
+        '.git/**',
+        '**/.git/**'
     ];
+}
+
+export function isGitMetadataPath(value: string): boolean {
+    const normalized = toPosixPath(value);
+    return normalized === '.git' ||
+        normalized.startsWith('.git/') ||
+        normalized.endsWith('/.git') ||
+        normalized.includes('/.git/');
 }
 
 export function formatSearchCodeMatch(
@@ -136,22 +142,6 @@ export function truncateSearchMatchLine(
     const prefix = start > 0 ? `[...${start} chars omitted...] ` : '';
     const suffix = end < lineText.length ? ` [...${lineText.length - end} chars omitted...]` : '';
     return `${prefix}${lineText.slice(start, end)}${suffix}`;
-}
-
-function expandUserExcludePattern(pattern: string): string[] {
-    const normalized = toPosixPath(pattern.trim());
-    if (!normalized) {
-        return [];
-    }
-    if (normalized.includes('/') || hasGlobSyntax(normalized)) {
-        return [normalized];
-    }
-
-    return [normalized, `**/${normalized}`, `**/${normalized}/**`];
-}
-
-function hasGlobSyntax(value: string): boolean {
-    return /[*?[\]{}]/.test(value);
 }
 
 function hasUnescapedRegexOr(value: string): boolean {

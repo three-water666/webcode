@@ -1,6 +1,6 @@
 import type { LocalTool, ToolDefinition } from './types';
 import { errorResult, jsonResult } from './result';
-import { resolveWorkspaceDirectory } from './filesystemUtils';
+import { WORKSPACE_COMMAND_PATH_DESCRIPTION, resolveWorkspaceRelativeDirectory } from './workspacePath';
 import { normalizeShellCommand } from '../servers/commandShell';
 import { assertTerminalCommandRiskAllowed } from '../servers/terminalCommandRisk';
 import {
@@ -19,7 +19,7 @@ export const runInTerminalTool: LocalTool = {
             type: 'object',
             properties: {
                 command: { type: 'string', minLength: 1, description: 'Command to execute using the selected terminal profile syntax.' },
-                cwd: { type: 'string', description: 'Optional working directory inside the workspace. Defaults to the workspace root.' },
+                path: { type: 'string', description: WORKSPACE_COMMAND_PATH_DESCRIPTION },
                 profile: { type: 'string', description: 'Terminal profile id to use. Dynamic tool descriptions list available profiles.' },
                 auto_focus: { type: 'boolean', description: 'Focus the terminal after sending the command. Default: true.', default: true }
             },
@@ -35,22 +35,26 @@ export const runInTerminalTool: LocalTool = {
         }
 
         try {
+            if ('cwd' in args) {
+                return errorResult('Parameter "cwd" has been removed. Use workspace-relative "path" instead.');
+            }
+
             const commandLine = normalizeShellCommand(args.command);
             const profile = resolveTerminalProfile(args.profile, {
                 platform: process.platform,
                 env: process.env,
                 configuredCommandShellPath: context.commandShellPath
             });
-            const cwdArg = typeof args.cwd === 'string' && args.cwd.trim() === '' ? '.' : args.cwd ?? '.';
-            const cwd = await resolveWorkspaceDirectory(context.workspaceRoot, cwdArg);
+            const directory = await resolveWorkspaceRelativeDirectory(context.workspaceRoot, args.path ?? '.');
             assertTerminalCommandRiskAllowed(commandLine, profile.shellKind, {
                 workspaceRoot: context.workspaceRoot,
-                cwd,
+                cwd: directory.absolutePath,
                 platform: process.platform
             });
             const session = context.terminalSessionManager.createSession({
                 commandLine,
-                cwd,
+                cwd: directory.absolutePath,
+                path: directory.relativePath,
                 env: { ...process.env },
                 profile,
                 autoFocus: args.auto_focus !== false
@@ -60,7 +64,7 @@ export const runInTerminalTool: LocalTool = {
                 session_id: session.id,
                 name: session.name,
                 status: session.status,
-                cwd: session.cwd,
+                path: session.path,
                 command: session.command,
                 profile: session.profile,
                 shell: {
@@ -97,7 +101,7 @@ function createRunInTerminalDefinition(commandShellPath?: string): ToolDefinitio
             type: 'object',
             properties: {
                 command: { type: 'string', minLength: 1, description: 'Command to execute using the selected terminal profile syntax.' },
-                cwd: { type: 'string', description: 'Optional working directory inside the workspace. Defaults to the workspace root.' },
+                path: { type: 'string', description: WORKSPACE_COMMAND_PATH_DESCRIPTION },
                 profile: {
                     type: 'string',
                     description: `Terminal profile id to use. Available now: ${profileIds}. Default: ${defaultProfile ?? 'none'}.`

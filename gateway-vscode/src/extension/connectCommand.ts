@@ -3,8 +3,15 @@ import * as vscode from 'vscode';
 import { t } from '../i18n';
 import { getConfiguredAiSites } from '../platforms';
 import { launchBridge, launchIsolatedEdgeProfile } from './browserLauncher';
+import {
+    CLEAN_LEGACY_ISOLATED_BROWSER_PROFILES_COMMAND,
+    hasCurrentIsolatedBrowserProfileData,
+    hasLegacyIsolatedBrowserProfileData,
+    openIsolatedProfileLocation,
+    RESET_ISOLATED_BROWSER_PROFILES_COMMAND
+} from './isolatedProfileCleanupCommand';
 import type { GatewayServiceController } from './serviceController';
-import type { AISiteConfig, CustomActionItem } from './types';
+import type { AISiteConfig, CustomActionItem, ResolvedAiSiteConfig } from './types';
 
 interface RegisterGatewayConnectCommandOptions {
     context: vscode.ExtensionContext;
@@ -19,6 +26,11 @@ interface OnlineMenuContext {
     outputChannel: vscode.OutputChannel;
     serviceController: GatewayServiceController;
 }
+
+const OPEN_PROFILE_FOLDER_BUTTON: vscode.QuickInputButton = {
+    iconPath: new vscode.ThemeIcon('folder-opened'),
+    tooltip: t('isolated_profiles_open_folder_button')
+};
 
 export function registerGatewayConnectCommand(options: RegisterGatewayConnectCommandOptions): void {
     options.context.subscriptions.push(vscode.commands.registerCommand('webcode-gateway.connect', async () => {
@@ -66,14 +78,16 @@ async function showOfflineMenu(
     outputChannel: vscode.OutputChannel,
     serviceController: GatewayServiceController
 ): Promise<void> {
+    const cleanupItems = await buildIsolatedProfileCleanupItems(extensionContext);
     const items: CustomActionItem[] = [
         { label: t('offline_start_label'), description: t('offline_start_desc'), action: 'start' },
         createOpenIsolatedEdgeProfileItem(),
+        ...cleanupItems,
         { label: t('view_logs_label'), description: t('view_logs_desc'), action: 'showLogs' },
         { label: t('configure_label'), description: t('configure_desc'), action: 'settings' }
     ];
 
-    const selection = await vscode.window.showQuickPick(items, {
+    const selection = await showGatewayQuickPick(extensionContext, items, {
         placeHolder: t('offline_placeholder'),
         title: t('manager_title')
     });
@@ -96,6 +110,10 @@ async function showOfflineMenu(
         }
     } else if (selection.action === 'openIsolatedEdgeProfile') {
         launchIsolatedEdgeProfile(extensionContext);
+    } else if (selection.action === 'resetIsolatedProfiles') {
+        await vscode.commands.executeCommand(RESET_ISOLATED_BROWSER_PROFILES_COMMAND);
+    } else if (selection.action === 'cleanLegacyIsolatedProfiles') {
+        await vscode.commands.executeCommand(CLEAN_LEGACY_ISOLATED_BROWSER_PROFILES_COMMAND);
     } else if (selection.action === 'showLogs') {
         outputChannel.show();
     } else if (selection.action === 'settings') {
@@ -107,9 +125,9 @@ async function showOnlineMenu(context: OnlineMenuContext): Promise<void> {
     // 1. 从配置中读取 AI 站点列表
     const config = vscode.workspace.getConfiguration('webcodeGateway');
     const aiSites = getConfiguredAiSites(config.get<AISiteConfig[]>('aiSites'));
-    const items = buildOnlineMenuItems(aiSites);
+    const items = await buildOnlineMenuItems(aiSites, context.extensionContext);
 
-    const selection = await vscode.window.showQuickPick<CustomActionItem>(items, {
+    const selection = await showGatewayQuickPick(context.extensionContext, items, {
         placeHolder: t('online_placeholder'),
         title: t('online_title', { port: context.currentPort })
     });
@@ -121,21 +139,69 @@ async function showOnlineMenu(context: OnlineMenuContext): Promise<void> {
     await handleOnlineSelection(selection, aiSites, context);
 }
 
-function buildOnlineMenuItems(aiSites: AISiteConfig[]): CustomActionItem[] {
+function showGatewayQuickPick(
+    extensionContext: vscode.ExtensionContext,
+    items: CustomActionItem[],
+    options: vscode.QuickPickOptions
+): Promise<CustomActionItem | undefined> {
+    return new Promise(resolve => {
+        const quickPick = vscode.window.createQuickPick<CustomActionItem>();
+        let settled = false;
+
+        quickPick.items = items;
+        quickPick.title = options.title;
+        quickPick.placeholder = options.placeHolder;
+
+        quickPick.onDidAccept(() => {
+            settle(quickPick.selectedItems[0]);
+        });
+        quickPick.onDidHide(() => {
+            settle(undefined);
+        });
+        quickPick.onDidTriggerItemButton(event => {
+            if (!event.item.profileCleanupTarget) {
+                return;
+            }
+
+            void openIsolatedProfileLocation(extensionContext, event.item.profileCleanupTarget);
+        });
+
+        quickPick.show();
+
+        function settle(selection: CustomActionItem | undefined): void {
+            if (settled) {
+                return;
+            }
+
+            settled = true;
+            quickPick.dispose();
+            resolve(selection);
+        }
+    });
+}
+
+async function buildOnlineMenuItems(
+    aiSites: ResolvedAiSiteConfig[],
+    extensionContext: vscode.ExtensionContext
+): Promise<CustomActionItem[]> {
     // 2. 动态生成快速启动项 (仅显示 showQuickLaunch 为 true 的项)
     const quickLaunchItems: CustomActionItem[] = aiSites
         .filter(site => site.showQuickLaunch === true)
         .map(site => ({
             label: t('open_label', { name: site.name }),
             description: site.address.replace(/^https?:\/\//, ''),
+            siteId: site.id,
             target: site.address,
         }));
 
     // 3. 准备完整的 QuickPick 列表
+    const cleanupItems = await buildIsolatedProfileCleanupItems(extensionContext);
+
     return [
         ...quickLaunchItems,
         createOpenIsolatedEdgeProfileItem(),
         { label: t('custom_launch_label'), description: t('custom_launch_desc'), action: 'custom' },
+        ...cleanupItems,
         { label: t('view_logs_label'), description: t('view_gateway_logs_desc'), action: 'showLogs' },
         { label: t('configure_gateway_label'), description: t('configure_gateway_desc'), action: 'settings' },
         { label: t('restart_label'), description: t('restart_desc'), action: 'restart' },
@@ -145,7 +211,7 @@ function buildOnlineMenuItems(aiSites: AISiteConfig[]): CustomActionItem[] {
 
 async function handleOnlineSelection(
     selection: CustomActionItem,
-    aiSites: AISiteConfig[],
+    aiSites: ResolvedAiSiteConfig[],
     context: OnlineMenuContext
 ): Promise<void> {
     // 0. 查看日志
@@ -184,10 +250,21 @@ async function handleOnlineSelection(
         return;
     }
 
+    if (selection.action === 'resetIsolatedProfiles') {
+        await vscode.commands.executeCommand(RESET_ISOLATED_BROWSER_PROFILES_COMMAND);
+        return;
+    }
+
+    if (selection.action === 'cleanLegacyIsolatedProfiles') {
+        await vscode.commands.executeCommand(CLEAN_LEGACY_ISOLATED_BROWSER_PROFILES_COMMAND);
+        return;
+    }
+
     // 4. 默认启动 (智能匹配配置)
     if (selection.target) {
         launchBridge({
             context: context.extensionContext,
+            siteId: selection.siteId ?? '',
             targetUrl: selection.target,
             browserMode: 'auto',
             currentPort: context.currentPort,
@@ -197,7 +274,7 @@ async function handleOnlineSelection(
 }
 
 async function launchCustomBridge(
-    aiSites: AISiteConfig[],
+    aiSites: ResolvedAiSiteConfig[],
     extensionContext: vscode.ExtensionContext,
     currentPort: number,
     currentToken: string
@@ -206,6 +283,7 @@ async function launchCustomBridge(
     const aiOptionsForCustomLaunch: CustomActionItem[] = aiSites.map(site => ({
         label: `$(globe) ${site.name}`,
         description: site.address,
+        siteId: site.id,
         target: site.address,
     }));
 
@@ -242,6 +320,7 @@ async function launchCustomBridge(
 
     launchBridge({
         context: extensionContext,
+        siteId: aiSelection.siteId ?? "",
         targetUrl: aiSelection.target ?? "",
         browserMode: browserSelection.value ?? "",
         currentPort,
@@ -254,5 +333,38 @@ function createOpenIsolatedEdgeProfileItem(): CustomActionItem {
         label: t('open_isolated_edge_profile_label'),
         description: t('open_isolated_edge_profile_desc'),
         action: 'openIsolatedEdgeProfile'
+    };
+}
+
+function createResetIsolatedProfilesItem(): CustomActionItem {
+    return {
+        label: t('reset_isolated_profiles_label'),
+        description: t('reset_isolated_profiles_desc'),
+        action: 'resetIsolatedProfiles',
+        profileCleanupTarget: 'current',
+        buttons: [OPEN_PROFILE_FOLDER_BUTTON]
+    };
+}
+
+async function buildIsolatedProfileCleanupItems(context: vscode.ExtensionContext): Promise<CustomActionItem[]> {
+    const items: CustomActionItem[] = [];
+    if (await hasCurrentIsolatedBrowserProfileData(context)) {
+        items.push(createResetIsolatedProfilesItem());
+    }
+
+    if (await hasLegacyIsolatedBrowserProfileData(context)) {
+        items.push(createCleanLegacyIsolatedProfilesItem());
+    }
+
+    return items;
+}
+
+function createCleanLegacyIsolatedProfilesItem(): CustomActionItem {
+    return {
+        label: t('clean_legacy_isolated_profiles_label'),
+        description: t('clean_legacy_isolated_profiles_desc'),
+        action: 'cleanLegacyIsolatedProfiles',
+        profileCleanupTarget: 'legacy',
+        buttons: [OPEN_PROFILE_FOLDER_BUTTON]
     };
 }

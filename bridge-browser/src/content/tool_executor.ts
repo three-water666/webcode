@@ -16,8 +16,10 @@ import { type ToolRequestIdentity, type ToolRequestRegistry } from "./tool_reque
 
 interface ToolExecutorOptions {
   getSelectors: () => SiteSelectors | null;
+  getSiteId: () => string | null;
   getWorkspaceId: () => string;
   getApprovalState: () => ApprovalState;
+  getAutoApproveTools: () => boolean;
   requestRegistry: ToolRequestRegistry;
   scheduleMainLoop: (delayMs: number) => void;
 }
@@ -171,6 +173,7 @@ export class ToolExecutor {
 
   private needsApproval(payload: ToolExecutionPayload): boolean {
     if (payload.name === PROTOCOL.initToolName || isBootstrapOnlyToolName(payload.name)) {return false;}
+    if (this.options.getAutoApproveTools()) {return false;}
     return !isPayloadApproved(payload, this.options.getApprovalState());
   }
 
@@ -196,7 +199,9 @@ export class ToolExecutor {
    * 状态写完后调用 scheduleMainLoop，让主循环发现该 requestKey 已完成并把初始化内容写回输入框。
    */
   private async initializeWebcode(request: ToolExecutionRequest): Promise<void> {
-    const finalPrompt = await buildWebcodeInitPrompt();
+    const finalPrompt = await buildWebcodeInitPrompt({
+      siteId: this.options.getSiteId(),
+    });
 
     this.options.requestRegistry.saveRawResult(request.identity.requestKey, finalPrompt);
     this.options.requestRegistry.markSettled(request.identity.requestKey);

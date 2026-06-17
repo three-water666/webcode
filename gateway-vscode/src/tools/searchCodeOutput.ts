@@ -21,7 +21,7 @@ export function formatSearchCodeOutput(result: SearchCodeResult, options: Search
             'search_code',
             options.maxResults,
             'match(es)',
-            'Narrow query/path/include/exclude_patterns or raise max_results.'
+            'Narrow query/path/include or raise max_results.'
         ));
     }
 

@@ -26,7 +26,16 @@ Follow this sequence end-to-end unless the user explicitly asks to stop earlier.
    - Do not change the root `package.json` or `shared/package.json` versions unless the user explicitly asks; those are not release artifact versions in this repo.
 
 4. Generate changelog entries.
-   - Summarize `git log --oneline <previous-tag>..HEAD`, plus any current release-version edits if relevant.
+   - Treat commit history as source material, not the changelog structure.
+   - Review `git log --oneline <previous-tag>..HEAD`, plus any current release-version edits if relevant.
+   - Group commits by merged PR first, then by coherent standalone topic for commits not tied to a PR.
+   - Use merge commit and PR wording to identify the intended final outcome when available.
+   - For each PR or topic, describe the final user-visible behavior after all follow-up commits in the range.
+   - Collapse intermediate fixes, hardening, logging, and edge-case commits into the feature or fix they refine.
+   - Prefer one changelog bullet or short paragraph per PR or coherent topic.
+   - Split a PR into multiple entries only when it contains separate user-facing outcomes.
+   - Do not list implementation chronology or transient states that were later changed in the same release range.
+   - Mention implementation details only when they explain a user-visible capability, compatibility change, or operational requirement.
    - Add new version files at `changelogs/en/v<version>.md` and `changelogs/zh/v<version>.md`.
    - Start each file with `# v<version> (YYYY-MM-DD)`, followed by the release notes body.
    - Keep English and Chinese content semantically aligned.

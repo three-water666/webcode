@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extensionName__",
-  "version": "0.9.1",
+  "version": "0.11.0",
   "description": "__MSG_extensionDescription__",
   "default_locale": "en",
   "icons": {
@@ -10,7 +10,7 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "permissions": ["storage", "notifications", "offscreen"],
+  "permissions": ["storage", "notifications", "offscreen", "alarms"],
   "host_permissions": [
     "http://127.0.0.1/*",
     "http://localhost/*",

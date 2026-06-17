@@ -17,12 +17,13 @@
 
 ## 工具定位
 
-`read_file` 用于读取 workspace 内的 UTF-8 文本文件。
+`read_file` 用于读取 workspace 内的 UTF-8 文本文件，也可读取 `.webcode/builtin-skills/...` 下的内置 Skill 只读虚拟文件。
 
 适合：
 
 - 查看源码、配置、文档。
 - 根据 `search_code` 返回的行号读取上下文。
+- 根据 Available Skills 中的 `skillFilePath` 读取内置或工作区 Skill。
 - 读取文件开头或末尾。
 - 在编辑前确认目标文件内容。
 
@@ -39,7 +40,7 @@
 
 | 参数 | 说明 |
 | --- | --- |
-| `path` | 必填。workspace 相对路径或 workspace 内绝对路径。 |
+| `path` | 必填。workspace 相对文件路径，使用 `/` 分隔；不接受绝对路径、`~` home 路径或反斜杠。内置 Skill 可使用 `.webcode/builtin-skills/...` 只读虚拟路径。 |
 | `head` | 可选。读取文件开头 N 行。 |
 | `tail` | 可选。读取文件末尾 N 行。 |
 | `start_line` | 可选。1-based 起始行，必须和 `end_line` 一起使用。 |
@@ -87,7 +88,7 @@
 
 ## 读取模型
 
-`read_file` 执行时先用 `fs.stat` 获取文件大小，然后按参数选择读取路径。
+`read_file` 执行时先检查是否命中内置 Skill 虚拟路径；命中时直接读取内置内容，不访问 workspace 文件系统。其他路径会先用 `fs.stat` 获取文件大小，然后按参数选择读取路径。
 
 ### 无行选择参数
 
@@ -173,6 +174,7 @@
 ## 已知边界
 
 - `read_file` 只按 UTF-8 文本处理文件，不做编码自动探测。
+- `.webcode/builtin-skills/...` 是只读虚拟路径，只由 `read_file` 识别；不能写入、编辑、搜索或作为命令目录执行。
 - `tail` 当前需要扫描完整文件，对超大日志会比正向范围读取更慢。
 - `lineCount` 在前缀读取或提前停止的范围读取中可能未知。
 - 输出限制会尽量保留完整行；如果单行超过字节上限，会截断该行文本。

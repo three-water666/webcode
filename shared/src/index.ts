@@ -36,8 +36,28 @@ export const PROTOCOL = {
   observerStartedFlag: `_${brandConfig.slug}_observer_started`,
 } as const;
 
+export const PLATFORM_PROMPT_KEY_PREFIX = 'platform_prompt_';
+
+export type PromptLanguage = 'zh' | 'en';
+
+export function getPlatformPromptStorageKey(
+  siteId: string | null | undefined,
+  lang: PromptLanguage
+): string | null {
+  const normalizedSiteId = normalizePromptSiteId(siteId);
+  return normalizedSiteId ? `${PLATFORM_PROMPT_KEY_PREFIX}${normalizedSiteId}_${lang}` : null;
+}
+
+export function joinPromptSections(...sections: Array<string | null | undefined>): string {
+  return sections
+    .filter((section): section is string => Boolean(section))
+    .map(section => section.trim())
+    .join('\n\n');
+}
+
 export const BOOTSTRAP_ONLY_TOOL_NAMES = [
   'get_project_rules',
+  'get_project_context',
   'list_tools',
   'list_skills',
 ] as const;
@@ -46,6 +66,10 @@ export type BootstrapOnlyToolName = typeof BOOTSTRAP_ONLY_TOOL_NAMES[number];
 
 export function isBootstrapOnlyToolName(name: string): name is BootstrapOnlyToolName {
   return (BOOTSTRAP_ONLY_TOOL_NAMES as readonly string[]).includes(name);
+}
+
+function normalizePromptSiteId(siteId: string | null | undefined): string {
+  return String(siteId ?? '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
 }
 
 /**
@@ -78,6 +102,12 @@ export interface Session {
   port: number;
   token: string;
   showLog: boolean;
+  autoSend: boolean;
+  autoApproveTools: boolean;
   workspaceId: string;
+  lastGatewayActivityAt?: number;
+  siteId?: string;
+  targetOrigin?: string;
+  targetUrl?: string;
   allowedOrigins?: string[];
 }

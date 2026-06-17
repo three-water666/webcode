@@ -3,6 +3,7 @@ import { toPosixPath } from './filesystemUtils';
 import {
     byteRangeToStringRange,
     formatSearchCodeMatch,
+    isGitMetadataPath,
     type SearchMatchRange
 } from './searchCodeUtils';
 import type { SearchCodeOptions } from './searchCodeTypes';
@@ -50,6 +51,10 @@ export function appendRipgrepMatch(line: string, options: SearchCodeOptions, mat
         ? rawPath
         : path.resolve(options.searchRoot, rawPath);
     const relativePath = toPosixPath(path.relative(options.workspaceRoot, absolutePath));
+    if (isGitMetadataPath(relativePath)) {
+        return;
+    }
+
     const lineText = stripLineEnding(message.data.lines?.text ?? '');
     const matchRange = getRipgrepMatchRange(lineText, message);
     matches.push(formatSearchCodeMatch(relativePath, message.data.line_number, lineText, options, matchRange));

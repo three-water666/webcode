@@ -1,7 +1,7 @@
 import { execFile } from 'child_process';
 import type { LocalTool } from './types';
 import { errorResult, jsonResult } from './result';
-import { resolveWorkspaceDirectory } from './filesystemUtils';
+import { WORKSPACE_COMMAND_PATH_DESCRIPTION, resolveWorkspaceRelativeDirectory } from './workspacePath';
 import {
     describeShellCommandPolicy,
     normalizeShellCommand,
@@ -22,7 +22,7 @@ export const executeCommandTool: LocalTool = {
             type: 'object',
             properties: {
                 command: { type: 'string', minLength: 1, description: 'POSIX/bash command to execute, for example "git status" or "pnpm test". Do not run grep, rg, find, cat, sed, awk, or nl just to inspect workspace files; use the dedicated file/search tools.' },
-                cwd: { type: 'string', description: 'Optional working directory inside the workspace. Defaults to the workspace root.' },
+                path: { type: 'string', description: WORKSPACE_COMMAND_PATH_DESCRIPTION },
                 timeout: { type: 'integer', minimum: 1000, maximum: 120000, description: 'Timeout in milliseconds. Default: 60000.', default: 60000 }
             },
             required: ['command']
@@ -41,11 +41,14 @@ export const executeCommandTool: LocalTool = {
         }
 
         try {
-            const cwdArg = typeof args.cwd === 'string' && args.cwd.trim() === '' ? '.' : args.cwd ?? '.';
-            const cwd = await resolveWorkspaceDirectory(context.workspaceRoot, cwdArg);
+            if ('cwd' in args) {
+                return errorResult('Parameter "cwd" has been removed. Use workspace-relative "path" instead.');
+            }
+
+            const directory = await resolveWorkspaceRelativeDirectory(context.workspaceRoot, args.path ?? '.');
             const risk = assessShellCommandRisk(commandLine, {
                 workspaceRoot: context.workspaceRoot,
-                cwd,
+                cwd: directory.absolutePath,
                 platform: process.platform
             });
             if (risk.level !== 'allowed') {
@@ -58,19 +61,29 @@ export const executeCommandTool: LocalTool = {
                 env: process.env,
                 configuredPath: context.commandShellPath
             });
-            const result = await runCommand(execution.file, execution.args, cwd, timeout);
+            const result = await runCommand(execution.file, execution.args, directory.absolutePath, timeout);
             const isError = result.exitCode !== 0;
+            const stdout = result.stdout.trim();
+            const stderr = result.stderr.trim();
+            const status = isError ? 'error' : (stderr ? 'completed_with_stderr' : 'success');
 
             return jsonResult({
-                stdout: result.stdout.trim(),
-                stderr: result.stderr.trim(),
+                summary: summarizeCommandResult({
+                    stdout,
+                    stderr,
+                    exitCode: result.exitCode,
+                    signal: result.signal,
+                    status
+                }),
+                stdout,
+                stderr,
                 exitCode: result.exitCode,
                 signal: result.signal,
                 shell: {
                     id: execution.shell.id,
                     path: execution.shell.path
                 },
-                status: isError ? 'error' : (result.stderr ? 'completed_with_stderr' : 'success')
+                status
             }, isError);
         } catch (error: unknown) {
             return errorResult(`Execution System Error: ${getErrorMessage(error)}\nPolicy: ${describeShellCommandPolicy(process.platform)}`);
@@ -78,6 +91,31 @@ export const executeCommandTool: LocalTool = {
     }
 };
 
+function summarizeCommandResult(result: {
+    stdout: string;
+    stderr: string;
+    exitCode: number;
+    signal: NodeJS.Signals | null;
+    status: 'success' | 'completed_with_stderr' | 'error';
+}): string {
+    if (result.status === 'success') {
+        return result.stdout
+            ? 'Command completed successfully.'
+            : 'Command completed successfully with no stdout or stderr output.';
+    }
+
+    if (result.status === 'completed_with_stderr') {
+        return 'Command completed successfully with stderr output.';
+    }
+
+    if (result.signal) {
+        return `Command failed with exit code ${result.exitCode} and signal ${result.signal}.`;
+    }
+
+    return result.stdout || result.stderr
+        ? `Command failed with exit code ${result.exitCode}.`
+        : `Command failed with exit code ${result.exitCode} and no stdout or stderr output.`;
+}
 
 async function runCommand(
     file: string,

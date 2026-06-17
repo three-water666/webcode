@@ -4,8 +4,9 @@ import type { GatewayManager } from '../gateway';
 import { t } from '../i18n';
 import { getConfiguredAiSites } from '../platforms';
 import { filterCustomServers, type BuiltinServerConfig } from './customServers';
+import { getErrorMessage } from './errorUtils';
 import { updateGatewayStatusBar } from './statusBar';
-import type { AISiteConfig } from './types';
+import type { AISiteConfig, ResolvedAiSiteConfig } from './types';
 
 export interface GatewayServiceSnapshot {
     currentPort: number | null;
@@ -146,7 +147,7 @@ function hasWorkspaceFolder(): boolean {
     return (vscode.workspace.workspaceFolders?.length ?? 0) > 0;
 }
 
-function buildAllowedOrigins(aiSites: AISiteConfig[]): string[] {
+function buildAllowedOrigins(aiSites: ResolvedAiSiteConfig[]): string[] {
     return aiSites.map(site => {
         try {
             return new URL(site.address).origin;
@@ -156,10 +157,3 @@ function buildAllowedOrigins(aiSites: AISiteConfig[]): string[] {
     }).filter(origin => origin !== '');
 }
 
-function getErrorMessage(error: unknown): string {
-    if (error instanceof Error) {
-        return error.message;
-    }
-
-    return String(error);
-}

@@ -1,6 +1,6 @@
-import { createRipgrepExcludeGlobs } from './searchCodeUtils';
+import { createRipgrepGitMetadataExcludeGlobs } from './searchCodeUtils';
 
-export function createRipgrepFilesArgs(excludePatterns: string[]): string[] {
+export function createRipgrepFilesArgs(): string[] {
     const args = [
         '--files',
         '--hidden',
@@ -9,7 +9,7 @@ export function createRipgrepFilesArgs(excludePatterns: string[]): string[] {
         'path'
     ];
 
-    for (const pattern of createRipgrepExcludeGlobs(excludePatterns)) {
+    for (const pattern of createRipgrepGitMetadataExcludeGlobs()) {
         args.push('--glob', `!${pattern}`);
     }
 

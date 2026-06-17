@@ -2,9 +2,11 @@ import * as fs from 'fs/promises';
 import * as assert from 'assert';
 import * as os from 'os';
 import * as path from 'path';
-import { resolveWorkspacePath } from '../tools/filesystemUtils';
-import { readFileContent, readFilePrefix, selectReadFileContent, selectReadFileResult } from '../tools/readFileTool';
+import { BUILTIN_CREATE_SKILLS_SKILL_FILE_PATH, resolveBuiltinSkillVirtualFile } from '../builtinSkills';
+import { readFileContent, readFilePrefix, readFileTool, selectReadFileContent, selectReadFileResult } from '../tools/readFileTool';
 import { READ_FILE_OUTPUT_MAX_BYTES, READ_FILE_OUTPUT_MAX_LINES } from '../tools/readFileOutputLimit';
+import type { ToolExecutionContext } from '../tools';
+import { resolveWorkspaceRelativeDirectory, resolveWorkspaceRelativePath } from '../tools/workspacePath';
 
 suite('Read File Tool', () => {
     const content = ['alpha', 'bravo', 'charlie', 'delta'].join('\n');
@@ -251,11 +253,101 @@ suite('Read File Tool', () => {
             await fs.writeFile(skillFilePath, '# release-package\n', 'utf8');
 
             assert.strictEqual(
-                await resolveWorkspacePath(tempDir, '.codex/skills/release-package/SKILL.md'),
+                (await resolveWorkspaceRelativePath(tempDir, '.codex/skills/release-package/SKILL.md')).absolutePath,
                 await fs.realpath(skillFilePath)
             );
         } finally {
             await fs.rm(tempDir, { recursive: true, force: true });
+        }
+    });
+
+    test('reads built-in skill virtual paths without a workspace root', async () => {
+        const result = await readFileTool.execute({
+            path: BUILTIN_CREATE_SKILLS_SKILL_FILE_PATH,
+            head: 4
+        }, createReadFileToolContext(null));
+        const text = result.content[0]?.text;
+
+        assert.strictEqual(result.isError, undefined);
+        assert.ok(text?.includes('name: create-skills'));
+    });
+
+    test('does not resolve built-in skills for workspace paths', async () => {
+        const tempDir = await createTempDir();
+        try {
+            await fs.writeFile(path.join(tempDir, 'sample.txt'), 'workspace file\n', 'utf8');
+
+            const result = await readFileTool.execute({
+                path: 'sample.txt'
+            }, createReadFileToolContext(tempDir, {
+                resolveBuiltinSkillVirtualFile() {
+                    throw new Error('Unexpected built-in skill resolution.');
+                }
+            }));
+
+            assert.strictEqual(result.content[0]?.text, 'workspace file\n');
+        } finally {
+            await removeTempDir(tempDir);
+        }
+    });
+
+    test('resolves workspace-relative command directories', async () => {
+        const tempDir = await createTempDir();
+        try {
+            const commandDir = path.join(tempDir, 'packages', 'sample');
+            await fs.mkdir(commandDir, { recursive: true });
+
+            const result = await resolveWorkspaceRelativeDirectory(tempDir, 'packages/sample');
+
+            assert.strictEqual(result.absolutePath, await fs.realpath(commandDir));
+            assert.strictEqual(result.relativePath, 'packages/sample');
+        } finally {
+            await removeTempDir(tempDir);
+        }
+    });
+
+    test('rejects absolute command directories', async () => {
+        const tempDir = await createTempDir();
+        try {
+            const commandDir = path.join(tempDir, 'packages', 'sample');
+            await fs.mkdir(commandDir, { recursive: true });
+            const absoluteCommandDir = commandDir.replace(/\\/g, '/');
+
+            await assert.rejects(
+                resolveWorkspaceRelativeDirectory(tempDir, absoluteCommandDir),
+                /workspace-relative; absolute paths are not allowed/
+            );
+        } finally {
+            await removeTempDir(tempDir);
+        }
+    });
+
+    test('rejects backslashes in command directories', async () => {
+        const tempDir = await createTempDir();
+        try {
+            await assert.rejects(
+                resolveWorkspaceRelativeDirectory(tempDir, 'packages\\sample'),
+                /backslashes are not allowed/
+            );
+        } finally {
+            await removeTempDir(tempDir);
+        }
+    });
+
+    test('rejects command directory traversal without leaking the workspace path', async () => {
+        const tempDir = await createTempDir();
+        try {
+            try {
+                await resolveWorkspaceRelativeDirectory(tempDir, '../outside');
+                assert.fail('Expected path traversal to be rejected.');
+            } catch (error: unknown) {
+                const message = error instanceof Error ? error.message : String(error);
+
+                assert.match(message, /path must stay inside the VS Code workspace/);
+                assert.ok(!message.includes(tempDir));
+            }
+        } finally {
+            await removeTempDir(tempDir);
         }
     });
 });
@@ -275,6 +367,14 @@ async function withTempFileBytes<T>(content: Buffer, callback: (filePath: string
     }
 }
 
+async function createTempDir(): Promise<string> {
+    return fs.mkdtemp(path.join(os.tmpdir(), 'workspace-dir-'));
+}
+
+async function removeTempDir(tempDir: string): Promise<void> {
+    await fs.rm(tempDir, { recursive: true, force: true });
+}
+
 type TestReadFileMetadata = {
     truncated: true;
     reason: string;
@@ -289,4 +389,32 @@ type TestReadFileMetadata = {
 function requireReadFileMetadata(result: { metadata?: TestReadFileMetadata }): TestReadFileMetadata {
     assert.ok(result.metadata);
     return result.metadata;
+}
+
+function createReadFileToolContext(
+    workspaceRoot: string | null,
+    skillManager: Partial<ToolExecutionContext['skillManager']> = {}
+): ToolExecutionContext {
+    return {
+        workspaceRoot,
+        outputChannel: {
+            appendLine(value: string) {
+                void value;
+            }
+        } as unknown as ToolExecutionContext['outputChannel'],
+        skillManager: {
+            resolveBuiltinSkillVirtualFile(requestedPath: unknown) {
+                return resolveBuiltinSkillVirtualFile(getExtensionPath(), requestedPath);
+            },
+            ...skillManager
+        } as unknown as ToolExecutionContext['skillManager'],
+        terminalSessionManager: {} as ToolExecutionContext['terminalSessionManager'],
+        skillDirectories: [],
+        listTools: () => [],
+        getToolDefinition: () => null
+    };
+}
+
+function getExtensionPath(): string {
+    return path.resolve(__dirname, '..', '..');
 }
