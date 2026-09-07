@@ -54,6 +54,7 @@ export default typescriptEslint.config(
             "bridge-browser/public/generated/**",
             "evals/.playwright-cli/**",
             "evals/live-profiles/**",
+            "evals/manual-browser-extensions/**",
             "evals/manual-browser-profiles/**",
             "evals/runs/**",
             "gateway-vscode/browser-extension/**",
