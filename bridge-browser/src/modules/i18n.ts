@@ -90,8 +90,11 @@ const I18N_MESSAGES: Record<string, { en: string; zh: string }> = {
   work_panel_title: { en: "Work panel", zh: "工作面板" },
   work_panel_open: { en: "Open work panel", zh: "展开工作面板" },
   work_panel_drag: { en: "Drag work panel", zh: "拖动工作面板" },
+  work_panel_idle: { en: "No tool activity", zh: "暂无工具活动" },
 
   follow_up_title: { en: "Next-turn follow-up", zh: "下一轮补充" },
+  follow_up_draft: { en: "Draft", zh: "有草稿" },
+  follow_up_count: { en: "Follow-ups: {count}", zh: "补充 {count}" },
   follow_up_description: {
     en: "Only confirmed messages will be sent when this work finishes",
     zh: "仅已确认的内容会在本轮工作结束后发送",

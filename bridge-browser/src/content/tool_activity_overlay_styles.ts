@@ -2,16 +2,22 @@ import { TOOL_ACTIVITY_OVERLAY_Z_INDEX } from "../modules/overlay_layers";
 
 export const TOOL_ACTIVITY_STYLE_TEXT = `
   :host { position: fixed; right: 20px; bottom: 20px; z-index: ${TOOL_ACTIVITY_OVERLAY_Z_INDEX}; width: fit-content;
-    max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); color-scheme: dark; }
+    max-width: calc(100vw - 16px); max-height: calc(100vh - 32px); color-scheme: dark;
+    --history-min-height: min(150px, 25vh); --work-panel-max-height: min(760px, calc(100vh - 32px)); }
   :host(.work-panel-expanded) { width: min(390px, calc(100vw - 32px)); }
+  :host([data-history-visible="true"]) {
+    --work-panel-max-height: min(760px, calc(100vh - 42px - var(--history-min-height))); }
   * { box-sizing: border-box; }
   button, textarea { font: inherit; }
   .overlay-stack { display: none; max-height: inherit; flex-direction: column; gap: 10px; }
   :host(.work-panel-expanded) .overlay-stack { display: flex; }
   :host(.work-panel-expanded) .launcher { display: none; }
-  .launcher { min-height: 42px; max-width: min(320px, calc(100vw - 16px)); display: flex; align-items: center; gap: 8px;
-    padding: 7px 11px 7px 8px; color: #f3f4f6; background: rgba(20, 22, 26, .96); border: 1px solid #3b404a;
-    border-radius: 11px; box-shadow: 0 9px 26px rgba(0, 0, 0, .34); cursor: grab; backdrop-filter: blur(10px); }
+  .launcher { min-height: 42px; max-width: min(320px, calc(100vw - 16px)); display: block; overflow: hidden;
+    padding: 0; color: #f3f4f6; background: rgba(20, 22, 26, .96); border: 1px solid #3b404a;
+    border-radius: 11px; box-shadow: 0 9px 26px rgba(0, 0, 0, .34); cursor: grab; backdrop-filter: blur(10px);
+    transition: width 200ms ease-in-out; }
+  .launcher-content { min-height: 40px; width: max-content; max-width: min(318px, calc(100vw - 18px));
+    display: flex; align-items: center; gap: 8px; padding: 7px 11px 7px 8px; }
   .launcher:hover { background: rgba(31, 35, 42, .98); border-color: #596171; }
   .launcher:active { cursor: grabbing; }
   .launcher:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; }
@@ -22,19 +28,27 @@ export const TOOL_ACTIVITY_STYLE_TEXT = `
   .launcher-mark.success { background: #15803d; }
   .launcher-mark.warn { background: #b45309; }
   .launcher-mark.error { background: #b91c1c; }
-  .launcher-label { min-width: 0; overflow: hidden; font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  .launcher-copy { min-width: 0; text-align: left; }
+  .launcher-title { display: none; overflow: hidden; margin-bottom: 3px; color: #929baa;
+    font: 500 10px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    text-overflow: ellipsis; white-space: nowrap; }
+  .launcher.has-activity .launcher-title { display: block; }
+  .launcher-label { min-width: 0; display: block; overflow: hidden;
+    font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     text-overflow: ellipsis; white-space: nowrap; }
   .launcher-count { min-width: 18px; height: 18px; align-items: center; justify-content: center; flex: 0 0 auto;
     padding: 0 5px; color: #bfdbfe; background: rgba(37, 99, 235, .2); border: 1px solid rgba(96, 165, 250, .28);
-    border-radius: 999px; font: 600 10px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    border-radius: 999px; font: 600 10px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; white-space: nowrap; }
   .panel, .history-panel { width: 100%; display: flex; overflow: hidden; flex-direction: column; color: #f3f4f6;
     background: rgba(20, 22, 26, .96); border: 1px solid #3b404a; border-radius: 12px;
     box-shadow: 0 12px 34px rgba(0, 0, 0, .38); font: 12px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     backdrop-filter: blur(10px); }
-  .panel { max-height: min(540px, 58vh); align-self: flex-end; }
-  .history-panel { height: min(300px, 32vh); min-height: min(150px, 25vh); flex: 0 1 auto; }
+  .panel { min-height: 0; max-height: var(--work-panel-max-height); flex: 0 0 auto; align-self: flex-end; }
+  .history-panel { height: min(300px, 32vh); min-height: var(--history-min-height); flex: 0 1 auto; }
   .header-mount { flex: 0 0 auto; }
-  .activity-mount { min-height: 0; flex: 1 1 auto; flex-direction: column; }
+  .activity-mount { min-height: 0; display: flex; flex: 1 1 auto; flex-direction: column; }
+  .activity-empty { min-height: 48px; height: min(240px, 30vh); flex: 0 1 auto; display: grid; place-items: center;
+    padding: 18px 8px; border-top: 1px solid #343942; color: #858d9a; text-align: center; }
   .header, .history-header { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 10px;
     user-select: none; }
   .header { min-height: 54px; padding: 9px 10px 9px 12px; }
@@ -52,6 +66,7 @@ export const TOOL_ACTIVITY_STYLE_TEXT = `
   .mark.error { background: #b91c1c; }
   .title, .history-title { overflow: hidden; color: #f9fafb; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
   .summary { overflow: hidden; margin-top: 1px; color: #aeb5c2; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+  .summary:empty { display: none; }
   .actions { width: 124px; flex: 0 0 auto; display: flex; gap: 3px; }
   .icon-button, .history-button, .history-clear-button { height: 25px; padding: 0; border: 0; border-radius: 6px; color: #c8ced8;
     background: transparent; cursor: pointer; }
@@ -63,7 +78,7 @@ export const TOOL_ACTIVITY_STYLE_TEXT = `
     color: #fff; background: rgba(255, 255, 255, .1); }
   .icon-button.close:not(:disabled):hover { background: #8f1d1d; }
   .icon-button:disabled, .history-clear-button:disabled { opacity: .35; cursor: default; }
-  .list { min-height: 0; flex: 1 1 auto; overflow-y: auto; border-top: 1px solid #343942; }
+  .list { min-height: 0; max-height: min(420px, 50vh); flex: 1 1 auto; overflow-y: auto; border-top: 1px solid #343942; }
   .row { display: flex; gap: 10px; padding: 10px 12px; border-bottom: 1px solid rgba(255, 255, 255, .06); }
   .status-dot { width: 8px; height: 8px; flex: 0 0 auto; margin-top: 5px; border-radius: 50%; background: #718096; }
   .row.awaiting_approval .status-dot { background: #f59e0b; }
@@ -100,5 +115,10 @@ export const TOOL_ACTIVITY_STYLE_TEXT = `
   .turn-meta { overflow: hidden; margin-top: 1px; color: #9ca3af; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
   .history-tool-list .row { padding: 9px 10px; }
   .history-turn .footer { padding: 6px 10px; }
+  @media (max-height: 600px) { :host { --history-min-height: 80px; } }
+  @media (prefers-reduced-motion: reduce) {
+    .launcher { transition: none; }
+    .launcher-mark.active, .mark.active, .row.executing .status-dot { animation: none; }
+  }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
 `;

@@ -55,6 +55,10 @@ class FakeElement {
     fakeDocument.activeElement = this;
   }
 
+  public getAttribute(name: string): string | null {
+    return this.attributes.get(name) ?? null;
+  }
+
   public getText(): string {
     return `${this.textContent}${this.children.map((child) => child.getText()).join("")}`;
   }
@@ -112,6 +116,7 @@ async function main(): Promise<void> {
     const states: Array<{ count: number; sending: boolean }> = [];
     const composer = new FollowUpComposer(queue, (state) => states.push(state));
     const root = composer.element as unknown as FakeElement;
+    getRequired(root, ".follow-up-toggle").click();
     const textarea = getRequired(root, "textarea");
     textarea.value = "unfinished draft";
     assertEqual(queue.beginDelivery().messages.length, 0, "unfinished draft entered delivery");
@@ -132,17 +137,40 @@ async function main(): Promise<void> {
     assert(!getRequired(root, ".follow-up-queue").getText(), "delivered messages remained visible");
     assertEqual(states.at(-1)?.count, 0, "empty queue count was not reported to the parent panel");
   });
-  runTest("composer keeps its input mounted and focuses it on request", () => {
+  runTest("folding the composer preserves drafts and delivers confirmed messages without reopening", () => {
     const queue = new FollowUpQueue();
     const composer = new FollowUpComposer(queue, () => undefined);
     const root = composer.element as unknown as FakeElement;
     const textarea = getRequired(root, "textarea");
+    const toggle = getRequired(root, ".follow-up-toggle");
+    const body = getRequired(root, ".follow-up-body");
+    assertEqual(body.style.display, "none", "composer was not initially collapsed");
+    assertEqual(toggle.getAttribute("aria-expanded"), "false", "collapsed state was not accessible");
+    toggle.click();
+    assertEqual(body.style.display, "flex", "composer did not open on request");
+    assertEqual(fakeDocument.activeElement, textarea, "opening composer did not focus its input");
     textarea.value = "draft stays here";
-    composer.focusInput();
+    textarea.dispatch("input", createEvent());
     queue.confirm("another message");
     assertEqual(getRequired(root, "textarea"), textarea, "queue update replaced the textarea");
     assertEqual(textarea.value, "draft stays here", "queue update cleared the unfinished draft");
     assertEqual(fakeDocument.activeElement, textarea, "queue update moved focus away from the textarea");
+    toggle.click();
+    assertEqual(body.style.display, "none", "composer did not fold");
+    assertIncludes(toggle.getText(), "Draft", "collapsed composer omitted the draft indicator");
+    assertIncludes(toggle.getText(), "Waiting", "collapsed composer omitted the queued state");
+    const delivery = queue.beginDelivery();
+    assertEqual(delivery.messages.join("|"), "another message", "folded delivery included the unfinished draft");
+    assertIncludes(toggle.getText(), "Sending", "collapsed composer omitted the sending state");
+    queue.completeDelivery(delivery.ids);
+    assertEqual(body.style.display, "none", "delivery reopened the composer");
+    assertEqual(fakeDocument.activeElement, toggle, "delivery stole focus from the toggle");
+    assertEqual(textarea.value, "draft stays here", "delivery cleared the unfinished draft");
+    assertEqual(getRequired(root, ".follow-up-count").style.display, "none", "delivered queue count remained visible");
+    assertIncludes(toggle.getText(), "Draft", "delivery hid the remaining draft indicator");
+    toggle.click();
+    assertEqual(getRequired(root, "textarea"), textarea, "reopening replaced the textarea");
+    assertEqual(fakeDocument.activeElement, textarea, "reopening did not focus the preserved draft");
   });
 }
 

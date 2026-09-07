@@ -154,10 +154,22 @@ function testCaptureSourceBadges(Overlay: OverlayConstructor): void {
 function testCompactPanelBehavior(Overlay: OverlayConstructor): void {
   const harness = createHarness(Overlay, false);
   assertEqual(harness.host.style.display, "block", "enabled work panel launcher was hidden");
-  captureTurn(harness.tracker, "turn-1", "read_file");
-  assertEqual(harness.host.className, "", "new tool activity forced the work panel open");
   const launcher = getRequired(harness.host.shadowRoot!, ".launcher");
+  assertIncludes(launcher.getText(), "webcode · Work panel", "idle launcher omitted the work panel name");
+  assertIncludes(getRequired(harness.panel, ".activity-empty").getText(), "No tool activity", "idle activity placeholder was missing");
+  const requestKey = captureTurn(harness.tracker, "turn-1", "read_file");
+  assertEqual(harness.host.className, "", "new tool activity forced the work panel open");
   assertIncludes(launcher.getText(), "Captured", "launcher omitted current tool status");
+  harness.tracker.updateStatus({ requestKey }, "executing");
+  assertIncludes(launcher.getText(), "Running", "launcher omitted running tool status");
+  harness.queue.confirm("next request");
+  assertIncludes(getRequired(launcher, ".launcher-count").getText(), "Follow-ups: 1", "follow-up badge lacked context");
+  assertIncludes(launcher.getText(), "Running", "follow-up queue replaced the tool status");
+  harness.tracker.updateStatus({ requestKey }, "succeeded");
+  harness.tracker.updateDelivery([requestKey], "delivering");
+  assertIncludes(launcher.getText(), "Returning results", "launcher omitted result delivery status");
+  harness.tracker.updateDelivery([requestKey], "failed");
+  assertIncludes(launcher.getText(), "Result delivery failed", "launcher omitted result delivery failure");
   harness.host.setRect({ height: 42, left: 600, top: 638, width: 280 });
   launcher.mouseDown(createFakeEvent(launcher, 620, 650));
   fakeWindow.dispatch("mousemove", createFakeEvent(launcher, 420, 450));
@@ -165,9 +177,12 @@ function testCompactPanelBehavior(Overlay: OverlayConstructor): void {
   launcher.click();
   assertEqual(harness.host.className, "", "dragging the compact launcher opened the panel");
 
+  const chatInput = fakeDocument.createElement("textarea");
+  chatInput.focus();
   launcher.click();
   assertEqual(harness.host.className, "work-panel-expanded", "launcher did not expand the shared panel");
-  assertEqual(fakeDocument.activeElement, getRequired(harness.host.shadowRoot!, "textarea"), "expanded panel did not focus follow-up input");
+  assertEqual(fakeDocument.activeElement, chatInput, "opening the panel stole focus from the chat input");
+  assertEqual(getRequired(harness.panel, ".follow-up-body").style.display, "none", "opening panel expanded the composer");
   assertEqual(fakeDocument.body.children.length, 1, "tool activity and follow-up used separate overlay hosts");
   getRequired(harness.panel, ".collapse").click();
   assertEqual(harness.host.className, "", "shared panel did not collapse to its launcher");
@@ -175,6 +190,8 @@ function testCompactPanelBehavior(Overlay: OverlayConstructor): void {
 
 function testStableFollowUpInput(Overlay: OverlayConstructor): void {
   const harness = createHarness(Overlay);
+  const toggle = getRequired(harness.panel, ".follow-up-toggle");
+  toggle.click();
   const textarea = getRequired(harness.host.shadowRoot!, "textarea");
   textarea.value = "keep this draft";
   textarea.focus();
@@ -186,6 +203,15 @@ function testStableFollowUpInput(Overlay: OverlayConstructor): void {
   assertEqual(textarea.value, "keep this draft", "tool update cleared the unfinished follow-up draft");
   assertEqual(fakeDocument.activeElement, textarea, "tool update moved focus away from follow-up input");
   assertIncludes(harness.panel.getText(), "send after this turn", "confirmed follow-up was not shown in the shared panel");
+  toggle.click();
+  harness.tracker.updateStatus({ requestKey }, "succeeded");
+  getRequired(harness.panel, ".history-button").click();
+  assertEqual(getRequired(harness.panel, ".follow-up-body").style.display, "none", "history or tool updates reopened the composer");
+  getRequired(harness.panel, ".collapse").click();
+  getRequired(harness.host.shadowRoot!, ".launcher").click();
+  assertEqual(getRequired(harness.panel, ".follow-up-body").style.display, "none", "reopening panel expanded the composer");
+  toggle.click();
+  assertEqual(textarea.value, "keep this draft", "folding the panel lost the follow-up draft");
 }
 
 function testIdempotentEnabledState(Overlay: OverlayConstructor): void {

@@ -4,6 +4,7 @@ import { FloatingPanelDragController } from "./floating_panel_drag";
 import { FollowUpComposer, type FollowUpComposerState } from "./follow_up_overlay";
 import { FOLLOW_UP_COMPOSER_STYLE_TEXT } from "./follow_up_overlay_styles";
 import type { FollowUpQueue } from "./follow_up_queue";
+import { createLauncherView, observeLauncherWidth, type ToolActivityLauncherView } from "./tool_activity_launcher";
 import {
   type ToolActivityItem,
   type ToolActivitySnapshot,
@@ -33,7 +34,6 @@ export class ToolActivityOverlay {
   private readonly dragController: FloatingPanelDragController;
   private enabled = false;
   private expanded = false;
-  private readonly followUpComposer: FollowUpComposer;
   private followUpState: FollowUpComposerState = { count: 0, sending: false };
   private readonly headerMount: HTMLDivElement;
   private readonly historyPanel: HTMLDivElement;
@@ -44,7 +44,6 @@ export class ToolActivityOverlay {
   private readonly launcherLabel: HTMLSpanElement;
   private readonly launcherMark: HTMLSpanElement;
   private latestSnapshot: ToolActivitySnapshot = { items: [], turns: [] };
-  private readonly panel: HTMLDivElement;
   private ticker: ReturnType<typeof setInterval> | null = null;
 
   public constructor(private readonly tracker: ToolActivityTracker, followUpQueue: FollowUpQueue) {
@@ -55,15 +54,15 @@ export class ToolActivityOverlay {
     this.launcherLabel = view.launcherLabel;
     this.launcherMark = view.launcherMark;
     this.historyPanel = view.historyPanel;
-    this.panel = view.panel;
     this.headerMount = view.headerMount;
     this.activityMount = view.activityMount;
     this.dragController = new FloatingPanelDragController(this.host);
     this.dragController.bindHandle(this.launcher, true);
+    observeLauncherWidth(this.launcher, this.dragController.scheduleClamp);
     this.bindLauncher();
-    this.followUpComposer = new FollowUpComposer(followUpQueue,
-      (state) => this.handleFollowUpState(state));
-    this.panel.appendChild(this.followUpComposer.element);
+    const followUpComposer = new FollowUpComposer(followUpQueue,
+      (state) => this.handleFollowUpState(state), this.dragController.scheduleClamp);
+    view.panel.appendChild(followUpComposer.element);
     this.tracker.subscribe((snapshot) => this.render(snapshot));
   }
 
@@ -83,7 +82,6 @@ export class ToolActivityOverlay {
   private setExpanded(expanded: boolean): void {
     this.expanded = expanded;
     this.render(this.latestSnapshot);
-    if (expanded) {this.followUpComposer.focusInput();}
   }
 
   private handleFollowUpState(state: FollowUpComposerState): void {
@@ -118,13 +116,14 @@ export class ToolActivityOverlay {
     this.host.className = this.expanded ? "work-panel-expanded" : "";
     this.launcher.setAttribute("aria-expanded", String(this.expanded));
     this.headerMount.replaceChildren(this.createCurrentHeader(entry, historyCount));
-    this.activityMount.replaceChildren(...(entry ? createTurnDetails(entry, "list") : []));
-    this.activityMount.style.display = entry ? "flex" : "none";
+    this.activityMount.replaceChildren(...(entry ? createTurnDetails(entry, "list")
+      : [createTextLine("activity-empty", t("work_panel_idle"))]));
     this.updateLauncher(entry);
   }
 
   private renderHistory(entries: ToolActivityTurnEntry[], currentTurnId?: string): void {
     const shouldShow = this.expanded && this.historyVisible;
+    this.host.setAttribute("data-history-visible", String(shouldShow));
     this.historyPanel.style.display = shouldShow ? "flex" : "none";
     if (!shouldShow) {return;}
 
@@ -169,7 +168,7 @@ export class ToolActivityOverlay {
     title.textContent = `${BRANDING.productName} · ${t("work_panel_title")}`;
     const summary = document.createElement("div");
     summary.className = "summary";
-    summary.textContent = this.getPanelSummary(entry);
+    summary.textContent = entry ? getTurnSummary(entry.turn, entry.items) : "";
     heading.append(title, summary);
     identity.append(entry ? createTurnMark(entry.turn, entry.items) : createIdleMark(), heading);
 
@@ -227,23 +226,21 @@ export class ToolActivityOverlay {
     return button;
   }
 
-  private getPanelSummary(entry: ToolActivityTurnEntry | undefined): string {
-    if (entry) {return getTurnSummary(entry.turn, entry.items);}
-    if (this.followUpState.sending) {return t("follow_up_sending");}
-    if (this.followUpState.count > 0) {return t("follow_up_waiting");}
-    return t("follow_up_description");
-  }
-
   private updateLauncher(entry: ToolActivityTurnEntry | undefined): void {
     this.launcherMark.className = entry
       ? `launcher-mark ${getTurnTone(entry.turn, entry.items)}`
       : "launcher-mark idle";
-    this.launcherMark.textContent = entry ? getTurnIcon(entry.turn, entry.items) : "+";
+    this.launcherMark.textContent = entry ? getTurnIcon(entry.turn, entry.items) : "▤";
+    this.launcher.className = entry ? "launcher has-activity" : "launcher";
     this.launcherLabel.textContent = entry
       ? getTurnSummary(entry.turn, entry.items)
-      : t("follow_up_title");
-    this.launcherCount.textContent = String(this.followUpState.count);
+      : `${BRANDING.productName} · ${t("work_panel_title")}`;
+    this.launcherCount.textContent = t("follow_up_count").replace("{count}", String(this.followUpState.count));
+    this.launcherCount.title = t(this.followUpState.sending ? "follow_up_sending" : "follow_up_waiting");
     this.launcherCount.style.display = this.followUpState.count > 0 ? "inline-flex" : "none";
+    this.launcher.setAttribute("aria-label", [t("work_panel_open"), this.launcherLabel.textContent,
+      this.followUpState.count > 0 ? `${this.launcherCount.textContent} · ${this.launcherCount.title}` : ""
+    ].filter(Boolean).join(" · "));
   }
 
   private startTurn(turnId: string): void {
@@ -316,7 +313,7 @@ function createMark(className: string, text: string): HTMLElement {
 }
 
 function createIdleMark(): HTMLElement {
-  return createMark("mark idle", "+");
+  return createMark("mark idle", "▤");
 }
 
 function createTurnDetails(entry: ToolActivityTurnEntry, listClassName: string): HTMLElement[] {
@@ -379,15 +376,11 @@ function createIconButton(text: string, title: string, className = "icon-button"
   return button;
 }
 
-interface OverlayView {
+interface OverlayView extends ToolActivityLauncherView {
   activityMount: HTMLDivElement;
   headerMount: HTMLDivElement;
   historyPanel: HTMLDivElement;
   host: HTMLDivElement;
-  launcher: HTMLButtonElement;
-  launcherCount: HTMLSpanElement;
-  launcherLabel: HTMLSpanElement;
-  launcherMark: HTMLSpanElement;
   panel: HTMLDivElement;
 }
 
@@ -414,27 +407,4 @@ function createOverlayView(): OverlayView {
   shadow.append(style, launcherView.launcher, stack);
   document.body.appendChild(host);
   return { activityMount, headerMount, historyPanel, host, panel, ...launcherView };
-}
-
-function createLauncherView(): Pick<
-  OverlayView,
-  "launcher" | "launcherCount" | "launcherLabel" | "launcherMark"
-> {
-  const launcher = document.createElement("button");
-  launcher.type = "button";
-  launcher.className = "launcher";
-  launcher.title = t("work_panel_open");
-  launcher.setAttribute("aria-label", launcher.title);
-  launcher.setAttribute("aria-expanded", "false");
-  const launcherMark = document.createElement("span");
-  launcherMark.className = "launcher-mark idle";
-  launcherMark.textContent = "+";
-  const launcherLabel = document.createElement("span");
-  launcherLabel.className = "launcher-label";
-  launcherLabel.textContent = t("follow_up_title");
-  const launcherCount = document.createElement("span");
-  launcherCount.className = "launcher-count";
-  launcherCount.style.display = "none";
-  launcher.append(launcherMark, launcherLabel, launcherCount);
-  return { launcher, launcherCount, launcherLabel, launcherMark };
 }
