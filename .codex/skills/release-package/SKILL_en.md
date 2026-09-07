@@ -13,8 +13,30 @@ Follow this sequence end-to-end unless the user explicitly asks to stop earlier.
 
 1. Resolve the target version.
    - If the user provides a version, use it.
-   - If not, infer the next patch version from the highest local semver tag or current release
-     package version, then state the assumption before editing.
+   - Otherwise, sync remote tags first (`git fetch origin --tags`), then use
+     `git tag --list --sort=-v:refname` to identify the latest stable release as the version baseline.
+     If no stable release tag exists, use the current release package version. Do not treat version
+     edits for the pending release as a new baseline and increment them again.
+   - Before editing versions, review `git log --oneline <previous-tag>..HEAD`, merged PR descriptions,
+     and relevant code diffs. Apply the grouping principles in step 4 to assess the final release
+     content; review existing commit history when there are no tags. If the latest release tag is
+     not in the current branch history, reconcile the release branch and diff range first.
+   - Choose the version based on the actual impact on user capabilities and compatibility:
+     - Major: remove or incompatibly change supported functionality, configuration, interfaces, or
+       integration protocols such that users or external integrations must migrate.
+       For example, `1.2.3` → `2.0.0`.
+     - Minor: add backward-compatible user functionality, configuration options, platform support,
+       or workflow capabilities. For example, `1.2.3` → `1.3.0`.
+     - Patch: include only compatible fixes, security hardening, performance improvements, existing
+       UI refinements, or refactoring, tests, documentation, and build maintenance that add no new
+       capabilities. For example, `1.2.3` → `1.2.4`.
+   - For mixed changes, choose the highest level: major > minor > patch. Commit prefixes such as
+     `feat`, `fix`, and `!`, and `BREAKING CHANGE` are clues to verify against the final code. Do not
+     decide from commit counts, changed line counts, or topic names such as "security hardening".
+     Do not count reverted features or intermediate fixes separately. If there are no actual
+     changes to release, report that instead of automatically creating a new version.
+   - Before editing, state the baseline and target versions, the bump level, and the specific
+     changes that justify it. Then prepare the versions and notes for the review in step 5.
    - Use bare semver tags like `0.6.3`, matching this repository's existing tag convention. Do not
      use `v0.6.3` unless the user explicitly requests it.
 
@@ -22,7 +44,8 @@ Follow this sequence end-to-end unless the user explicitly asks to stop earlier.
    - Check `git status --short`; stop and ask if unrelated changes are present.
    - Check whether the target tag already exists with `git tag --list <version>`; never overwrite
      or move an existing release tag.
-   - Identify the previous release tag with `git tag --list --sort=-v:refname`.
+   - Verify the release baseline and commit range from step 1; also identify the previous release
+     tag when the user specifies the target version.
 
 3. Update release versions.
    - Update `gateway-vscode/package.json`.
