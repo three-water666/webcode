@@ -119,6 +119,10 @@ webcode 内置支持常见网页 AI，也允许通过 VS Code 配置快速接入
 
 欢迎提交 Issue 和 Pull Request。
 
+## 致谢
+
+感谢 [LINUX DO](https://linux.do/) 社区提供技术交流与开源分享的平台。
+
 ## 许可证
 
 [MIT License](LICENSE)

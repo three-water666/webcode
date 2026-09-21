@@ -119,6 +119,10 @@ See the [FAQ guide](doc/FAQ_GUIDE_en.md) for first-launch setup, trigger-word is
 
 Issues and pull requests are welcome.
 
+## Acknowledgments
+
+Thanks to the [LINUX DO](https://linux.do/) community for providing a platform for technical discussions and open-source sharing.
+
 ## License
 
 [MIT License](LICENSE)
