@@ -32,6 +32,22 @@
   <img src="doc/assets/webcode-usage-screenshot.png" width="960" alt="webcode 使用截图">
 </p>
 
+## 使用示例
+
+### DeepSeek 网页版：鹈鹕测试
+
+下面是通过 webcode 连接 DeepSeek 网页版生成的 SVG，任务是绘制一只骑自行车的鹈鹕，也称为“鹈鹕测试”。
+
+提示词：
+
+> Generate an SVG of a pelican riding a bicycle.
+
+<p align="center">
+  <img src="doc/assets/pelican-bicycle-deepseek.svg" width="560" alt="通过 webcode 和 DeepSeek 网页版生成的 SVG：一只骑自行车的鹈鹕">
+</p>
+
+[查看 SVG 源文件](doc/assets/pelican-bicycle-deepseek.svg)
+
 ## 快速开始
 
 ### 1. 安装 VS Code 扩展

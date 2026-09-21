@@ -32,6 +32,22 @@
   <img src="doc/assets/webcode-usage-screenshot.png" width="960" alt="webcode usage screenshot">
 </p>
 
+## Examples
+
+### DeepSeek Web: The Pelican Test
+
+This SVG was generated using the DeepSeek web app connected through webcode. The task is to draw a pelican riding a bicycle, also known as the "pelican test."
+
+Prompt:
+
+> Generate an SVG of a pelican riding a bicycle.
+
+<p align="center">
+  <img src="doc/assets/pelican-bicycle-deepseek.svg" width="560" alt="SVG of a pelican riding a bicycle, generated using webcode and the DeepSeek web app">
+</p>
+
+[View the SVG source file](doc/assets/pelican-bicycle-deepseek.svg)
+
 ## Quick Start
 
 ### 1. Install the VS Code Extension
