@@ -101,9 +101,19 @@ During initialization, webcode reads project rule files from the root of the pri
 
 If both `AGENTS.md` and `CLAUDE.md` exist, only `AGENTS.md` is sent. The browser extension no longer has a separate custom-instructions settings page.
 
-## Additional AI Platform Support
+## Currently Supported AI Platforms and Additional Platform Support
 
-webcode includes built-in support for common web AI products and can also attach new sites through VS Code configuration. Stable platforms can be added as built-in sites; experimental or private sites usually only need `webcodeGateway.aiSites`.
+webcode currently includes built-in support for the following AI platforms:
+
+- ChatGPT
+- Gemini
+- Google AI Studio
+- DeepSeek
+- GLM
+- Claude
+- Qwen
+
+To support other platforms, you can add new sites through VS Code configuration. Stable platforms can be added as built-in sites; experimental or private sites usually only need `webcodeGateway.aiSites`.
 
 See the [site support guide](doc/PLATFORM_GUIDE_en.md).
 

@@ -101,9 +101,19 @@ webcode 可以把当前 VS Code 工作区中的本地 Skills 暴露给网页 AI�
 
 如果 `AGENTS.md` 和 `CLAUDE.md` 同时存在，只发送 `AGENTS.md`。浏览器扩展不再提供单独的个性化指令设置页。
 
-## 其他 AI 平台支持
+## 目前已内置支持的 AI 平台及其他平台支持
 
-webcode 内置支持常见网页 AI，也允许通过 VS Code 配置快速接入新的站点。稳定平台可以加入内置站点列表，实验或私有站点通常只需要配置 `webcodeGateway.aiSites`。
+webcode 目前已内置支持以下 AI 平台：
+
+- ChatGPT
+- Gemini
+- Google AI Studio
+- DeepSeek
+- GLM
+- Claude
+- Qwen
+
+如需支持其他平台，可以通过 VS Code 配置快速接入新的站点。稳定平台可以加入内置站点列表，实验或私有站点通常只需要配置 `webcodeGateway.aiSites`。
 
 具体步骤见 [站点支持扩展指南](doc/PLATFORM_GUIDE.md)。
 
