@@ -43,7 +43,10 @@
 ### 2. 启动 Gateway
 
 1. 在 VS Code 中打开一个具体文件夹或工作区。
-2. 点击右下角状态栏里的 `webcode: 关闭`。
+2. 点击 VS Code 右下角状态栏里的 `webcode: 关闭`。
+
+   ![VS Code 状态栏中的 webcode 关闭按钮](doc/assets/webcode-status-bar-off.png)
+
 3. 在弹出的菜单里点击 `启动 webcode`。
 4. 等待状态栏文字变成 `webcode: <端口>`。
 

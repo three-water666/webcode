@@ -43,7 +43,10 @@
 ### 2. Start the Gateway
 
 1. Open a folder or workspace in VS Code.
-2. Click `webcode: OFF` in the bottom-right status bar.
+2. Click `webcode: OFF` in the bottom-right status bar of VS Code.
+
+   ![webcode OFF button in the VS Code status bar](doc/assets/webcode-status-bar-off.png)
+
 3. In the menu that opens, click `Start webcode`.
 4. Wait for the status bar item to change to `webcode: <port>`.
 
