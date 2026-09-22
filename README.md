@@ -36,11 +36,17 @@
 
 ### DeepSeek 网页版：鹈鹕测试
 
-下面是通过 webcode 连接 DeepSeek 网页版生成的 SVG，任务是绘制一只骑自行车的鹈鹕，也称为“鹈鹕测试”。
+下面是本次录屏演示中通过 webcode 连接 DeepSeek 网页版生成的 SVG，任务是绘制一只骑自行车的鹈鹕，也称为“鹈鹕测试”。
 
 提示词：
 
 > Generate an SVG of a pelican riding a bicycle.
+
+**操作演示（1.5 倍速）**
+
+https://github.com/user-attachments/assets/448873b4-922a-4cac-b421-70a189394576
+
+**生成结果**
 
 <p align="center">
   <img src="doc/assets/pelican-bicycle-deepseek.svg" width="560" alt="通过 webcode 和 DeepSeek 网页版生成的 SVG：一只骑自行车的鹈鹕">

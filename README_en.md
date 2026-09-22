@@ -36,11 +36,17 @@
 
 ### DeepSeek Web: The Pelican Test
 
-This SVG was generated using the DeepSeek web app connected through webcode. The task is to draw a pelican riding a bicycle, also known as the "pelican test."
+This SVG was generated in the recorded demo using the DeepSeek web app connected through webcode. The task is to draw a pelican riding a bicycle, also known as the "pelican test."
 
 Prompt:
 
 > Generate an SVG of a pelican riding a bicycle.
+
+**Demo (1.5× speed)**
+
+https://github.com/user-attachments/assets/448873b4-922a-4cac-b421-70a189394576
+
+**Generated result**
 
 <p align="center">
   <img src="doc/assets/pelican-bicycle-deepseek.svg" width="560" alt="SVG of a pelican riding a bicycle, generated using webcode and the DeepSeek web app">
