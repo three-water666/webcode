@@ -1,4 +1,5 @@
 import { isMessageRequest, isStatusResponse, isSuccessResponse } from '../types';
+import { initializeAutoSendDelayControl } from './auto_send_delay';
 import { createPopupTranslator, renderInstalledDescription, type PopupTranslator } from './i18n';
 
 type PopupElements = {
@@ -54,6 +55,7 @@ document.addEventListener("DOMContentLoaded", () => {
 async function initializePopup(): Promise<void> {
   const context = createPopupContext();
   initializeLabels(context);
+  void initializeAutoSendDelayControl(context.t);
 
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const currentTab = tabs[0];

@@ -51,6 +51,10 @@ const I18N_MESSAGES: Record<string, { en: string; zh: string }> = {
     zh: "发送按钮仍被禁用 (UI未更新)...",
   },
   auto_send_attempt: { en: "Attempting auto-send", zh: "尝试自动发送" },
+  auto_send_waiting: {
+    en: "Waiting {seconds} seconds before auto-send",
+    zh: "等待 {seconds} 秒后自动发送",
+  },
   auto_send_timeout: {
     en: "Auto-send timed out, please click manually",
     zh: "自动发送超时，请手动点击发送",

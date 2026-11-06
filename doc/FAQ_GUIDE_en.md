@@ -26,6 +26,14 @@ If the page still does not trigger, refresh the current page, confirm the browse
 
 Refresh the current page. After the refresh, webcode scans the page again and reruns the tool-result delivery flow for tool calls that still need to be handled.
 
+## What if tool results are sent too quickly and trigger platform rate limits?
+
+Open the browser extension popup and adjust "Send delay (seconds)". The default is 5 seconds, with a range of 0–300 seconds; 0 adds no extra wait. The setting is saved for all tabs, and changes apply to the next automatic send.
+
+Tool results are written to the input first, then sent after the delay. Send retries also respect this delay. Editing the chat input or turning off "Auto Send Message" while waiting cancels the pending send, leaving the results in the input for manual handling.
+
+A delay reduces send frequency but cannot guarantee protection from platform rate limits or account restrictions. If the platform reports too many requests, turn off automatic sending and wait as instructed by the platform instead of retrying repeatedly.
+
 ## What if isolated Edge opens an extra new tab when opening an AI page?
 
 Some Microsoft Edge versions may open an extra new tab based on the isolated profile's New Tab settings. In the isolated Edge window opened by webcode, go to `edge://settings/startHomeNTP`, then turn off "Preload the new tab page for a faster experience" under "Start, home, and new tabs".

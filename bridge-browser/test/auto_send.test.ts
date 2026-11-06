@@ -1,4 +1,7 @@
 import type { SiteSelectors } from "../src/modules/config";
+import {
+  AUTO_SEND_DELAY_STORAGE_KEY, loadAutoSendDelaySeconds, normalizeAutoSendDelaySeconds,
+} from "../src/modules/auto_send_settings";
 
 export {};
 
@@ -9,6 +12,8 @@ interface FakeFocusable {
 
 class FakeInput implements FakeFocusable {
   public innerText = "";
+  public clearOnSend = true;
+  public sendAttempts = 0;
 
   public contains(): boolean {
     return false;
@@ -16,7 +21,8 @@ class FakeInput implements FakeFocusable {
 
   public dispatchEvent(event: Event): boolean {
     if (event.type === "keydown" && (event as KeyboardEvent).key === "Enter") {
-      this.innerText = "";
+      this.sendAttempts++;
+      if (this.clearOnSend) {this.innerText = "";}
     }
     return true;
   }
@@ -41,16 +47,21 @@ class FakeInput implements FakeFocusable {
 }
 
 const input = new FakeInput();
+const inputListeners = new Set<(event: Event) => void>();
 const fakeDocument: {
   activeElement: FakeFocusable | null;
+  addEventListener: (type: string, listener: (event: Event) => void) => void;
+  removeEventListener: (type: string, listener: (event: Event) => void) => void;
   querySelector: () => null;
   querySelectorAll: (selector: string) => FakeInput[];
 } = {
   activeElement: input,
+  addEventListener: (_type, listener) => inputListeners.add(listener),
+  removeEventListener: (_type, listener) => inputListeners.delete(listener),
   querySelector: () => null,
   querySelectorAll: (selector: string) => selector === "#input" ? [input] : [],
 };
-const timers = new Map<number, () => void>();
+const timers = new Map<number, { callback: () => void; delayMs: number }>();
 let nextTimerId = 1;
 
 const SELECTORS: SiteSelectors = {
@@ -64,6 +75,7 @@ const SELECTORS: SiteSelectors = {
 async function main(): Promise<void> {
   installBrowserGlobals();
   const { cancelAutoSend, triggerAutoSend } = await import("../src/modules/auto_send");
+  const config = { autoSend: true, autoSendDelaySeconds: 5, hasFileUpload: false };
 
   const followUpInput = new FakeInput();
   const followUpHost: FakeFocusable = {
@@ -72,23 +84,110 @@ async function main(): Promise<void> {
   };
   fakeDocument.activeElement = followUpHost;
   input.innerText = "message";
-  const successfulSend = triggerAutoSend({ autoSend: true, hasFileUpload: false }, SELECTORS);
-  flushNextTimer();
+  const successfulSend = triggerAutoSend(config, SELECTORS);
+  assertEqual(input.sendAttempts, 0, "auto-send ran before the configured delay");
+  flushNextTimer(5000);
   assertEqual(fakeDocument.activeElement, followUpInput, "auto-send did not restore follow-up input focus");
   flushNextTimer();
   assertEqual(await successfulSend, "sent", "successful send did not resolve as sent");
+  assertEqual(inputListeners.size, 0, "successful send left an input listener");
 
   input.innerText = "message";
-  const cancelledSend = triggerAutoSend({ autoSend: true, hasFileUpload: false }, SELECTORS);
+  const cancelledSend = triggerAutoSend(config, SELECTORS);
   cancelAutoSend();
   assertEqual(await cancelledSend, "cancelled", "cancelled send did not resolve");
   assertEqual(timers.size, 0, "cancelled send left a retry timer");
+  assertEqual(inputListeners.size, 0, "cancelled send left an input listener");
+
+  const replacedSend = triggerAutoSend(config, SELECTORS);
+  const replacementSend = triggerAutoSend(config, SELECTORS);
+  assertEqual(await replacedSend, "cancelled", "superseded send was not cancelled");
+  assertEqual(timers.size, 1, "superseding a send scheduled duplicate timers");
+  assertEqual(inputListeners.size, 1, "superseding a send left duplicate input listeners");
+  cancelAutoSend();
+  await replacementSend;
+
+  const disabledPendingSend = triggerAutoSend(config, SELECTORS);
 
   assertEqual(
-    await triggerAutoSend({ autoSend: false, hasFileUpload: false }, SELECTORS),
+    await triggerAutoSend({ ...config, autoSend: false }, SELECTORS),
     "disabled",
     "disabled auto-send did not resolve"
   );
+  assertEqual(await disabledPendingSend, "cancelled", "disabling left the previous send active");
+  assertEqual(timers.size, 0, "disabled auto-send left a pending timer");
+
+  input.clearOnSend = false;
+  const delayedRetry = triggerAutoSend({ ...config, autoSendDelaySeconds: 30, hasFileUpload: true }, SELECTORS);
+  flushNextTimer(30000);
+  flushNextTimer(1200);
+  flushNextTimer(30000);
+  cancelAutoSend();
+  assertEqual(await delayedRetry, "cancelled", "upload retry could not be cancelled");
+
+  const zeroDelay = triggerAutoSend({ ...config, autoSendDelaySeconds: 0 }, SELECTORS);
+  flushNextTimer(350);
+  flushNextTimer(1200);
+  flushNextTimer(1600);
+  cancelAutoSend();
+  await zeroDelay;
+  input.clearOnSend = true;
+
+  const editableSend = triggerAutoSend(config, SELECTORS);
+  const sendAttemptsBeforeEdit = input.sendAttempts;
+  dispatchInput(input, false);
+  assertEqual(timers.size, 1, "synthetic input cancelled auto-send");
+  dispatchInput(followUpInput, true);
+  assertEqual(timers.size, 1, "editing the follow-up input cancelled the current send");
+  input.innerText = "";
+  dispatchInput(input, true);
+  assertEqual(await editableSend, "cancelled", "clearing the input was mistaken for a successful send");
+  assertEqual(timers.size, 0, "manual editing left a send timer");
+  assertEqual(input.sendAttempts, sendAttemptsBeforeEdit, "manual editing dispatched a send");
+  assertEqual(inputListeners.size, 0, "manual editing left an input listener");
+
+  input.innerText = "message";
+  const maximumDelay = triggerAutoSend({ ...config, autoSendDelaySeconds: 300 }, SELECTORS);
+  flushNextTimer(300000);
+  flushNextTimer();
+  assertEqual(await maximumDelay, "sent", "maximum delay did not send");
+
+  for (const delaySeconds of [-1, NaN, Infinity, 301]) {
+    input.innerText = "message";
+    const invalidDelay = triggerAutoSend({ ...config, autoSendDelaySeconds: delaySeconds }, SELECTORS);
+    flushNextTimer(5000);
+    flushNextTimer();
+    assertEqual(await invalidDelay, "sent", "invalid delay did not fall back to the default");
+  }
+  for (const storedValue of [undefined, null, "30", {}, NaN, Infinity, -1, 301]) {
+    assertEqual(normalizeAutoSendDelaySeconds(storedValue), 5, "invalid stored delay bypassed the default");
+  }
+  await verifySavedDelayChanges();
+}
+
+async function verifySavedDelayChanges(): Promise<void> {
+  const stored: Record<string, unknown> = {};
+  Object.defineProperty(globalThis, "chrome", {
+    configurable: true,
+    value: {
+      storage: {
+        local: {
+          get: (keys: string[]) => Promise.resolve(Object.fromEntries(keys.map((key) => [key, stored[key]]))),
+        },
+      },
+    },
+  });
+
+  assertEqual(await loadAutoSendDelaySeconds(), 5, "missing saved delay did not use the default");
+  for (const delaySeconds of [30, 0, 300, 5]) {
+    stored[AUTO_SEND_DELAY_STORAGE_KEY] = delaySeconds;
+    assertEqual(await loadAutoSendDelaySeconds(), delaySeconds, "the next send did not read the updated saved delay");
+  }
+}
+
+function dispatchInput(target: FakeInput, isTrusted: boolean): void {
+  const event = { isTrusted, composedPath: () => [target] } as unknown as Event;
+  for (const listener of inputListeners) {listener(event);}
 }
 
 function installBrowserGlobals(): void {
@@ -127,9 +226,9 @@ function installBrowserGlobals(): void {
   });
   Object.defineProperty(globalThis, "setTimeout", {
     configurable: true,
-    value: (handler: () => void) => {
+    value: (handler: () => void, delayMs: number) => {
       const id = nextTimerId++;
-      timers.set(id, handler);
+      timers.set(id, { callback: handler, delayMs });
       return id;
     },
   });
@@ -139,11 +238,14 @@ function installBrowserGlobals(): void {
   });
 }
 
-function flushNextTimer(): void {
-  const entry = timers.entries().next().value as [number, () => void] | undefined;
+function flushNextTimer(expectedDelayMs?: number): void {
+  const entry = timers.entries().next().value;
   if (!entry) {throw new Error("missing scheduled auto-send timer");}
+  if (expectedDelayMs !== undefined) {
+    assertEqual(entry[1].delayMs, expectedDelayMs, "incorrect auto-send delay");
+  }
   timers.delete(entry[0]);
-  entry[1]();
+  entry[1].callback();
 }
 
 function assertEqual(actual: unknown, expected: unknown, message: string): void {

@@ -119,6 +119,7 @@ function applyStatusUpdateFields(request: StatusUpdateMessageRequest): void {
   if (typeof request.workspaceId === "string") {currentWorkspaceId = request.workspaceId;}
   if (typeof request.siteId === "string") {currentSiteId = request.siteId;}
   if (typeof request.autoSend === "boolean") {CONFIG.autoSend = request.autoSend;}
+  if (!CONFIG.autoSend) {UI.cancelAutoSend();}
   if (typeof request.autoApproveTools === "boolean") {CONFIG.autoApproveTools = request.autoApproveTools;}
 }
 
@@ -180,6 +181,7 @@ async function loadDOMConfig(): Promise<void> {
 }
 
 function applySyncedSiteConfig(siteId: string, sites: SyncedAiSite[]): void {
+  UI.cancelAutoSend();
   const matchedSite = sites.find((site) => site.id === siteId);
 
   if (matchedSite && isSiteSelectors(matchedSite.selectors)) {
@@ -207,6 +209,7 @@ function applySyncedSiteConfig(siteId: string, sites: SyncedAiSite[]): void {
 }
 
 function resetCurrentSite(): void {
+  UI.cancelAutoSend();
   domToolActivity.reset();
   domToolTurns.reset();
   networkCapture.reset();
@@ -286,7 +289,7 @@ const networkCapture = createNetworkCaptureRuntime({
 
 const resultDelivery = new ResultDeliveryController({
   followUpQueue,
-  getAutoSend: () => CONFIG.autoSend,
+  getAutoSend: () => isClientConnected && CONFIG.autoSend,
   hasPendingTurns: () => networkCapture.hasPendingTurns(),
   onBatchFinalized: (requestKeys) => domToolTurns.finalizeRequests(requestKeys),
   requestRegistry,
@@ -430,8 +433,7 @@ function runMainLoop() {
 
   if (unflushedBatch.hasRequests) {
     // 工具完成的判定由 registry 统一计算：已不在执行中，并且已经有结果可回填。
-    const completedCount = unflushedBatch.completedCount;
-    const totalCount = unflushedBatch.totalCount;
+    const { completedCount, totalCount } = unflushedBatch;
 
     // 只有本轮所有待回填工具都完成后，才合并结果；否则继续等待，避免分批打断 AI 上下文。
     if (unflushedBatch.isComplete) {
@@ -452,13 +454,11 @@ function runMainLoop() {
           "success"
         );
         resultDelivery.deliver(resultBatch, selectors);
-      } else {
+      } else if (resultBatch.hasAnyResult) {
         // 某些路径可能没有文本输出；它们完成后也要标记为已处理。
-        if (resultBatch.hasAnyResult) {
-          requestRegistry.markFlushed(resultBatch.ids);
-          domToolTurns.finalizeRequests(resultBatch.ids);
-          toolActivityTracker.updateDelivery(resultBatch.ids, "delivered");
-        }
+        requestRegistry.markFlushed(resultBatch.ids);
+        domToolTurns.finalizeRequests(resultBatch.ids);
+        toolActivityTracker.updateDelivery(resultBatch.ids, "delivered");
       }
       lastProgressStatus = "";
     } else {

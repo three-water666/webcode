@@ -1,4 +1,5 @@
 import type { SiteSelectors } from "../modules/config";
+import { loadAutoSendDelaySeconds } from "../modules/auto_send_settings";
 import { t } from "../modules/i18n";
 import { Logger } from "../modules/logger";
 import type { ToolResultDeliveryBatch } from "../modules/tool_result";
@@ -109,8 +110,13 @@ export class ResultDeliveryController {
         }
       }
 
+      const autoSendDelaySeconds = await loadAutoSendDelaySeconds();
       const sendResult = await UI.triggerAutoSend(
-        { autoSend: this.options.getAutoSend(), hasFileUpload },
+        {
+          autoSend: this.options.getAutoSend(),
+          autoSendDelaySeconds,
+          hasFileUpload,
+        },
         selectors
       );
       if (sendResult === "sent") {
