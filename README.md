@@ -32,6 +32,9 @@
   <img src="doc/assets/webcode-usage-screenshot.png" width="960" alt="webcode 使用截图">
 </p>
 
+> [!WARNING]
+> 使用 webcode 自动调用工具并向网页 AI 平台发送消息，可能触发平台限流或风控，导致账号受限甚至封禁。设置发送延迟也不能保证避免这些风险，请谨慎使用。
+
 ## 使用示例
 
 ### DeepSeek 网页版：鹈鹕测试
