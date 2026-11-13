@@ -1,7 +1,5 @@
 import type { SiteSelectors } from "../src/modules/config";
-import {
-  AUTO_SEND_DELAY_STORAGE_KEY, loadAutoSendDelaySeconds, normalizeAutoSendDelaySeconds,
-} from "../src/modules/auto_send_settings";
+import { normalizeAutoSendDelaySeconds } from "@webcode/shared";
 import { subscribeAutoSendState, type AutoSendState } from "../src/modules/auto_send_state";
 
 export {};
@@ -170,14 +168,13 @@ async function main(): Promise<void> {
   for (const delaySeconds of [-1, NaN, Infinity, 301]) {
     input.innerText = "message";
     const invalidDelay = triggerAutoSend({ ...config, autoSendDelaySeconds: delaySeconds }, SELECTORS);
-    flushNextTimer(5000);
+    flushNextTimer(350);
     flushNextTimer();
     assertEqual(await invalidDelay, "sent", "invalid delay did not fall back to the default");
   }
-  for (const storedValue of [undefined, null, "30", {}, NaN, Infinity, -1, 301]) {
-    assertEqual(normalizeAutoSendDelaySeconds(storedValue), 5, "invalid stored delay bypassed the default");
+  for (const configuredValue of [undefined, null, "30", {}, NaN, Infinity, -1, 301]) {
+    assertEqual(normalizeAutoSendDelaySeconds(configuredValue), 0, "invalid delay added an unexpected wait");
   }
-  await verifySavedDelayChanges();
   cancelAutoSend();
   assertEqual(states.at(-1), null, "resetting an inactive send retained its previous state");
   unsubscribe();
@@ -187,26 +184,6 @@ function assertWaitingState(state: AutoSendState | null | undefined, waitMs: num
   if (state?.phase !== "waiting") {throw new Error("auto-send did not expose its countdown");}
   assertEqual(state.sendAt, now + waitMs, "countdown deadline did not match the scheduled send");
   assertEqual(state.isRetry, isRetry, "countdown did not distinguish send retries");
-}
-
-async function verifySavedDelayChanges(): Promise<void> {
-  const stored: Record<string, unknown> = {};
-  Object.defineProperty(globalThis, "chrome", {
-    configurable: true,
-    value: {
-      storage: {
-        local: {
-          get: (keys: string[]) => Promise.resolve(Object.fromEntries(keys.map((key) => [key, stored[key]]))),
-        },
-      },
-    },
-  });
-
-  assertEqual(await loadAutoSendDelaySeconds(), 5, "missing saved delay did not use the default");
-  for (const delaySeconds of [30, 0, 300, 5]) {
-    stored[AUTO_SEND_DELAY_STORAGE_KEY] = delaySeconds;
-    assertEqual(await loadAutoSendDelaySeconds(), delaySeconds, "the next send did not read the updated saved delay");
-  }
 }
 
 function dispatchInput(target: FakeInput, isTrusted: boolean): void {

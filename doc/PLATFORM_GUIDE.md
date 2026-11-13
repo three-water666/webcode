@@ -91,6 +91,22 @@ VS Code 端完整站点结构：
 - 自定义站点必须提供完整 `selectors`，不会自动继承其他站点。
 - 当前不支持通用继承字段；要么覆盖内置站点，要么新增完整站点。
 
+## 按站点设置自动发送延迟
+
+站点可配置 `autoSendDelaySeconds`，单位为秒，范围为 0–300。未配置时默认 0；当前仅 DeepSeek 内置条目设置为 10 秒。
+
+在 VS Code 的 `settings.json` 中可以覆盖内置值，例如关闭 DeepSeek 的额外等待：
+
+```json
+{
+  "webcodeGateway.aiSites": [
+    { "id": "deepseek", "autoSendDelaySeconds": 0 }
+  ]
+}
+```
+
+Gateway 会将该字段与站点配置一同同步给浏览器，当前标签页按已连接的 `siteId` 选择延迟；其他站点不受影响。修改后从 VS Code 重新打开目标站点同步配置。工作面板显示实际发送倒计时。
+
 ## 方案 A：在代码里新增内置站点
 
 适用场景：

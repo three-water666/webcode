@@ -1,5 +1,4 @@
 import type { SiteSelectors } from "../modules/config";
-import { loadAutoSendDelaySeconds } from "../modules/auto_send_settings";
 import { setAutoSendState } from "../modules/auto_send_state";
 import { t } from "../modules/i18n";
 import { Logger } from "../modules/logger";
@@ -11,6 +10,7 @@ import type { BufferedResultBatch, ToolRequestRegistry } from "./tool_request_re
 
 interface ResultDeliveryControllerOptions {
   getAutoSend: () => boolean;
+  getAutoSendDelaySeconds: () => number;
   followUpQueue: FollowUpQueue;
   hasPendingTurns: () => boolean;
   onBatchFinalized?: (requestKeys: readonly string[]) => void;
@@ -117,7 +117,7 @@ export class ResultDeliveryController {
         }
       }
 
-      const autoSendDelaySeconds = await loadAutoSendDelaySeconds();
+      const autoSendDelaySeconds = this.options.getAutoSendDelaySeconds();
       const sendResult = await UI.triggerAutoSend(
         {
           autoSend: this.options.getAutoSend(),

@@ -197,6 +197,7 @@ export interface SuccessResponse {
 }
 
 export interface SyncedAiSite {
+  autoSendDelaySeconds?: unknown;
   capture?: unknown;
   id: string;
   name?: string;

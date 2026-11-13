@@ -1,5 +1,6 @@
 import {
     isSiteNetworkCaptureConfig,
+    normalizeAutoSendDelaySeconds,
     type SiteNetworkCaptureConfig
 } from '@webcode/shared';
 
@@ -9,6 +10,7 @@ export interface AISiteConfig {
     address?: string;
     showQuickLaunch?: boolean;
     browser?: string;
+    autoSendDelaySeconds?: number;
     capture?: Partial<SiteNetworkCaptureConfig>;
     selectors?: Partial<SiteSelectors>;
 }
@@ -19,6 +21,7 @@ export interface ResolvedAiSiteConfig {
     address: string;
     showQuickLaunch?: boolean;
     browser?: string;
+    autoSendDelaySeconds?: number;
     capture?: SiteNetworkCaptureConfig;
     selectors: SiteSelectors;
 }
@@ -90,6 +93,7 @@ const BUILTIN_AI_SITES: ResolvedAiSiteConfig[] = [
         name: 'DeepSeek',
         address: 'https://chat.deepseek.com',
         showQuickLaunch: true,
+        autoSendDelaySeconds: 10,
         capture: {
             adapter: 'deepseek-chat-v0',
             channels: ['response'],
@@ -243,6 +247,7 @@ function mergeAiSiteConfig(base: ResolvedAiSiteConfig, override: AISiteConfig): 
         address: readConfiguredString(override.address) ?? base.address,
         showQuickLaunch: override.showQuickLaunch ?? base.showQuickLaunch,
         browser: override.browser ?? base.browser,
+        autoSendDelaySeconds: normalizeAutoSendDelaySeconds(override.autoSendDelaySeconds, base.autoSendDelaySeconds),
         capture: mergeSiteNetworkCaptureConfig(base.capture, override.capture),
         selectors: {
             ...base.selectors,
@@ -267,6 +272,7 @@ function resolveCustomAiSite(site: AISiteConfig): ResolvedAiSiteConfig | null {
         address,
         showQuickLaunch: site.showQuickLaunch,
         browser: site.browser,
+        autoSendDelaySeconds: normalizeAutoSendDelaySeconds(site.autoSendDelaySeconds),
         capture,
         selectors: { ...site.selectors }
     };
@@ -294,6 +300,7 @@ function isCompleteSelectors(selectors: Partial<SiteSelectors> | undefined): sel
 function cloneResolvedAiSite(site: ResolvedAiSiteConfig): ResolvedAiSiteConfig {
     return {
         ...site,
+        autoSendDelaySeconds: normalizeAutoSendDelaySeconds(site.autoSendDelaySeconds),
         capture: cloneSiteNetworkCaptureConfig(site.capture),
         selectors: { ...site.selectors }
     };

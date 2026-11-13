@@ -3,7 +3,7 @@ import { Logger } from "../modules/logger";
 import * as UI from "../modules/ui";
 import { type SiteSelectors } from "../modules/config";
 import { looksLikeToolCall, parseToolCall } from "../modules/toolCallProtocol";
-import { BRANDING, PROTOCOL } from "@webcode/shared";
+import { BRANDING, DEFAULT_AUTO_SEND_DELAY_SECONDS, normalizeAutoSendDelaySeconds, PROTOCOL } from "@webcode/shared";
 import {
   getSiteNetworkCaptureConfig, getSyncedAiSites, isMessageRequest, isSiteSelectors, isStatusResponse,
   type StatusUpdateMessageRequest, type SyncedAiSite,
@@ -26,7 +26,7 @@ import { ToolRequestRegistry } from "./tool_request_registry";
 import { logVirtualizedHistorySkip } from "./virtualized_history_skip";
 
 // === 配置与状态 ===
-const CONFIG = { pollInterval: 1000, autoSend: true, autoApproveTools: false };
+const CONFIG = { pollInterval: 1000, autoSend: true, autoApproveTools: false, autoSendDelaySeconds: DEFAULT_AUTO_SEND_DELAY_SECONDS };
 
 // [State] Connection Guard
 let isClientConnected = false;
@@ -106,7 +106,7 @@ function handleStatusUpdate(request: StatusUpdateMessageRequest): void {
   }
 
   if (isClientConnected && currentSiteId !== wasSiteId) {
-    initDOMConfig();
+    void loadDOMConfig();
   }
 
   if (isClientConnected && (isClientConnected !== wasConnected || currentWorkspaceId !== wasWorkspaceId)) {
@@ -154,10 +154,6 @@ const autoInitPrompt = new AutoInitPromptController({
   loadPromptsFromStorage,
 });
 
-function initDOMConfig(): void {
-  void loadDOMConfig();
-}
-
 async function loadDOMConfig(): Promise<void> {
   const status = await getCurrentStatus();
   CONFIG.autoSend = status?.autoSend !== false;
@@ -176,8 +172,7 @@ async function loadDOMConfig(): Promise<void> {
   }
 
   const localItems = await getStorage(chrome.storage.local, ["syncedAiSites"]);
-  const sites = getSyncedAiSites(localItems.syncedAiSites);
-  applySyncedSiteConfig(status.siteId, sites);
+  applySyncedSiteConfig(status.siteId, getSyncedAiSites(localItems.syncedAiSites));
 }
 
 function applySyncedSiteConfig(siteId: string, sites: SyncedAiSite[]): void {
@@ -185,6 +180,7 @@ function applySyncedSiteConfig(siteId: string, sites: SyncedAiSite[]): void {
   const matchedSite = sites.find((site) => site.id === siteId);
 
   if (matchedSite && isSiteSelectors(matchedSite.selectors)) {
+    CONFIG.autoSendDelaySeconds = normalizeAutoSendDelaySeconds(matchedSite.autoSendDelaySeconds);
     DOM = matchedSite.selectors;
     currentSiteName = matchedSite.name ?? matchedSite.id;
     domToolActivity.reset();
@@ -201,6 +197,7 @@ function applySyncedSiteConfig(siteId: string, sites: SyncedAiSite[]): void {
 
   DOM = null;
   currentSiteName = null;
+  CONFIG.autoSendDelaySeconds = DEFAULT_AUTO_SEND_DELAY_SECONDS;
   domToolActivity.reset();
   domToolTurns.reset();
   networkCapture.reset();
@@ -217,6 +214,7 @@ function resetCurrentSite(): void {
   DOM = null;
   currentSiteName = null;
   currentSiteId = null;
+  CONFIG.autoSendDelaySeconds = DEFAULT_AUTO_SEND_DELAY_SECONDS;
 }
 
 chrome.storage.onChanged.addListener((changes, namespace) => {
@@ -227,7 +225,7 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
       Logger.log(`Allowed tools updated (Workspace: ${currentWorkspaceId})`, "action");
     }
     if (changes.syncedAiSites) {
-      initDOMConfig();
+      void loadDOMConfig();
       Logger.log(t("config_updated"), "action");
     }
     if (hasPromptResourceChange(changes, currentSiteId)) {
@@ -290,6 +288,7 @@ const networkCapture = createNetworkCaptureRuntime({
 const resultDelivery = new ResultDeliveryController({
   followUpQueue,
   getAutoSend: () => isClientConnected && CONFIG.autoSend,
+  getAutoSendDelaySeconds: () => CONFIG.autoSendDelaySeconds,
   hasPendingTurns: () => networkCapture.hasPendingTurns(),
   onBatchFinalized: (requestKeys) => domToolTurns.finalizeRequests(requestKeys),
   requestRegistry,
@@ -545,4 +544,4 @@ function startObserver() {
   });
 }
 
-initDOMConfig();
+void loadDOMConfig();

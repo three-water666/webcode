@@ -28,7 +28,17 @@ Refresh the current page. After the refresh, webcode scans the page again and re
 
 ## What if tool results are sent too quickly and trigger platform rate limits?
 
-Open the browser extension popup and adjust "Send delay (seconds)". The default is 5 seconds, with a range of 0–300 seconds; 0 adds no extra wait. The setting is saved for all tabs, and changes apply to the next automatic send.
+Set `webcodeGateway.aiSites[].autoSendDelaySeconds` per site in VS Code's `settings.json`. For example:
+
+```json
+{
+  "webcodeGateway.aiSites": [
+    { "id": "deepseek", "autoSendDelaySeconds": 10 }
+  ]
+}
+```
+
+Use an integer from 0 to 300 seconds; 0 adds no extra wait. Sites without a configured delay default to 0. Only the built-in DeepSeek entry currently sets a delay of 10 seconds. After changing it, launch the target site again from VS Code so the new session syncs the configuration.
 
 Tool results are written to the input first, then sent after the delay. Send retries also respect this delay. Editing the chat input or turning off "Auto Send Message" while waiting cancels the pending send, leaving the results in the input for manual handling.
 

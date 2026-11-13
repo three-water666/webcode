@@ -11,7 +11,7 @@ import { isElementVisible } from "./dom_helpers";
 import { preserveActiveElement } from "./focus_preservation";
 import { showUserAttentionNotification } from "./user_attention";
 import { getAutoSendAction, getAutoSendAttemptLimit } from "./auto_send_policy";
-import { normalizeAutoSendDelaySeconds } from "./auto_send_settings";
+import { normalizeAutoSendDelaySeconds } from "@webcode/shared";
 import { setAutoSendState, type AutoSendState } from "./auto_send_state";
 
 export type AutoSendResult = "cancelled" | "disabled" | "failed" | "sent";
