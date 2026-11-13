@@ -12,6 +12,7 @@ import { preserveActiveElement } from "./focus_preservation";
 import { showUserAttentionNotification } from "./user_attention";
 import { getAutoSendAction, getAutoSendAttemptLimit } from "./auto_send_policy";
 import { normalizeAutoSendDelaySeconds } from "./auto_send_settings";
+import { setAutoSendState, type AutoSendState } from "./auto_send_state";
 
 export type AutoSendResult = "cancelled" | "disabled" | "failed" | "sent";
 
@@ -30,6 +31,7 @@ export interface AutoSendConfig {
   autoSend: boolean;
   autoSendDelaySeconds: number;
   hasFileUpload: boolean;
+  requestKeys?: readonly string[];
 }
 
 /**
@@ -37,7 +39,8 @@ export interface AutoSendConfig {
  * @description 如果定时器存在，清除它并输出取消日志。主要用于当监听到用户手动输入或页面有新活动时，打断之前的自动发送操作。
  */
 export function cancelAutoSend() {
-  activeAutoSend?.cancel(true);
+  if (activeAutoSend) {activeAutoSend.cancel(true);}
+  else {setAutoSendState(null);}
 }
 
 // === 自动发送逻辑 ===
@@ -58,20 +61,15 @@ export function triggerAutoSend(
   config: AutoSendConfig,
   domSelectors: SiteSelectors
 ): Promise<AutoSendResult> {
+  const reportState = (state: AutoSendState) => setAutoSendState({ ...state, requestKeys: config.requestKeys });
   activeAutoSend?.cancel(false);
-  if (!config.autoSend) {return Promise.resolve("disabled");}
+  if (!config.autoSend) {reportState({ phase: "disabled" }); return Promise.resolve("disabled");}
 
   let retryCount = 0;
   const maxRetries = getAutoSendAttemptLimit(config.hasFileUpload);
   const delayMs = normalizeAutoSendDelaySeconds(config.autoSendDelaySeconds) * 1000;
 
   const getInputEl = () => getInputAreaElement(domSelectors);
-  const getInputValue = (inputEl: HTMLElement): string => {
-    if (inputEl instanceof HTMLInputElement || inputEl instanceof HTMLTextAreaElement) {
-      return inputEl.value;
-    }
-    return inputEl.innerText;
-  };
   const isSendComplete = () => {
     const latestInput = getInputEl();
     if (latestInput && getInputValue(latestInput).trim().length === 0) {
@@ -90,6 +88,7 @@ export function triggerAutoSend(
       if (activeAutoSend?.timer) {clearTimeout(activeAutoSend.timer);}
       activeAutoSend = null;
       removeInputListener();
+      reportState({ phase: result });
       if (shouldLogCancellation && result === "cancelled") {
         Logger.log("🚫 Auto-send cancelled (New activity detected)", "warn");
       }
@@ -105,10 +104,17 @@ export function triggerAutoSend(
       if (activeAutoSend) {activeAutoSend.timer = timer;}
     };
 
+    const scheduleSend = (waitMs: number) => {
+      schedule(trySend, waitMs);
+      reportState(waitMs >= 1000
+        ? { phase: "waiting", sendAt: Date.now() + waitMs, isRetry: retryCount > 0 }
+        : { phase: "sending" });
+    };
+
     const scheduleRetry = () => {
       retryCount++;
       if (retryCount < maxRetries) {
-        schedule(trySend, Math.max(AUTO_SEND_RETRY_MS, delayMs));
+        scheduleSend(Math.max(AUTO_SEND_RETRY_MS, delayMs));
       } else {
         Logger.log(t("auto_send_timeout"), "error");
         void showUserAttentionNotification({
@@ -128,6 +134,7 @@ export function triggerAutoSend(
         return;
       }
 
+      reportState({ phase: "sending" });
       preserveActiveElement(() => dispatchSendAttempt(inputEl, domSelectors, retryCount));
       // 等待页面完成输入框清空、stop 按钮切换等异步渲染；下一轮才尝试另一种发送方式。
       schedule(() => {
@@ -148,8 +155,15 @@ export function triggerAutoSend(
     if (delayMs > 0) {
       Logger.log(t("auto_send_waiting").replace("{seconds}", String(delayMs / 1000)), "info");
     }
-    schedule(trySend, Math.max(AUTO_SEND_INITIAL_DELAY_MS, delayMs));
+    scheduleSend(Math.max(AUTO_SEND_INITIAL_DELAY_MS, delayMs));
   });
+}
+
+function getInputValue(inputEl: HTMLElement): string {
+  if (inputEl instanceof HTMLInputElement || inputEl instanceof HTMLTextAreaElement) {
+    return inputEl.value;
+  }
+  return inputEl.innerText;
 }
 
 function watchUserInput(getInputEl: () => HTMLElement | null, onInput: () => void): () => void {

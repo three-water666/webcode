@@ -2,6 +2,7 @@ import type { SiteSelectors } from "../src/modules/config";
 import {
   AUTO_SEND_DELAY_STORAGE_KEY, loadAutoSendDelaySeconds, normalizeAutoSendDelaySeconds,
 } from "../src/modules/auto_send_settings";
+import { subscribeAutoSendState, type AutoSendState } from "../src/modules/auto_send_state";
 
 export {};
 
@@ -63,6 +64,7 @@ const fakeDocument: {
 };
 const timers = new Map<number, { callback: () => void; delayMs: number }>();
 let nextTimerId = 1;
+let now = 0;
 
 const SELECTORS: SiteSelectors = {
   codeBlocks: "code",
@@ -75,7 +77,10 @@ const SELECTORS: SiteSelectors = {
 async function main(): Promise<void> {
   installBrowserGlobals();
   const { cancelAutoSend, triggerAutoSend } = await import("../src/modules/auto_send");
-  const config = { autoSend: true, autoSendDelaySeconds: 5, hasFileUpload: false };
+  const config = { autoSend: true, autoSendDelaySeconds: 5, hasFileUpload: false, requestKeys: ["request-1"] };
+  const states: Array<AutoSendState | null> = [];
+  const unsubscribe = subscribeAutoSendState((state) => states.push(state));
+  assertEqual(states.at(-1), null, "idle auto-send exposed a pending state");
 
   const followUpInput = new FakeInput();
   const followUpHost: FakeFocusable = {
@@ -85,12 +90,16 @@ async function main(): Promise<void> {
   fakeDocument.activeElement = followUpHost;
   input.innerText = "message";
   const successfulSend = triggerAutoSend(config, SELECTORS);
+  assertWaitingState(states.at(-1), 5000, false);
   assertEqual(input.sendAttempts, 0, "auto-send ran before the configured delay");
   flushNextTimer(5000);
+  assertEqual(states.at(-1)?.phase, "sending", "elapsed countdown did not enter sending state");
   assertEqual(fakeDocument.activeElement, followUpInput, "auto-send did not restore follow-up input focus");
   flushNextTimer();
   assertEqual(await successfulSend, "sent", "successful send did not resolve as sent");
   assertEqual(inputListeners.size, 0, "successful send left an input listener");
+  assertEqual(states.at(-1)?.phase, "sent", "successful send did not retain its final state");
+  assertEqual(states.at(-1)?.requestKeys?.[0], "request-1", "send state lost its tool batch identity");
 
   input.innerText = "message";
   const cancelledSend = triggerAutoSend(config, SELECTORS);
@@ -98,12 +107,14 @@ async function main(): Promise<void> {
   assertEqual(await cancelledSend, "cancelled", "cancelled send did not resolve");
   assertEqual(timers.size, 0, "cancelled send left a retry timer");
   assertEqual(inputListeners.size, 0, "cancelled send left an input listener");
+  assertEqual(states.at(-1)?.phase, "cancelled", "cancelled send did not retain its final state");
 
   const replacedSend = triggerAutoSend(config, SELECTORS);
   const replacementSend = triggerAutoSend(config, SELECTORS);
   assertEqual(await replacedSend, "cancelled", "superseded send was not cancelled");
   assertEqual(timers.size, 1, "superseding a send scheduled duplicate timers");
   assertEqual(inputListeners.size, 1, "superseding a send left duplicate input listeners");
+  assertWaitingState(states.at(-1), 5000, false);
   cancelAutoSend();
   await replacementSend;
 
@@ -116,16 +127,19 @@ async function main(): Promise<void> {
   );
   assertEqual(await disabledPendingSend, "cancelled", "disabling left the previous send active");
   assertEqual(timers.size, 0, "disabled auto-send left a pending timer");
+  assertEqual(states.at(-1)?.phase, "disabled", "disabled send did not retain its final state");
 
   input.clearOnSend = false;
   const delayedRetry = triggerAutoSend({ ...config, autoSendDelaySeconds: 30, hasFileUpload: true }, SELECTORS);
   flushNextTimer(30000);
   flushNextTimer(1200);
+  assertWaitingState(states.at(-1), 30000, true);
   flushNextTimer(30000);
   cancelAutoSend();
   assertEqual(await delayedRetry, "cancelled", "upload retry could not be cancelled");
 
   const zeroDelay = triggerAutoSend({ ...config, autoSendDelaySeconds: 0 }, SELECTORS);
+  assertEqual(states.at(-1)?.phase, "sending", "zero delay displayed an extra countdown");
   flushNextTimer(350);
   flushNextTimer(1200);
   flushNextTimer(1600);
@@ -145,6 +159,7 @@ async function main(): Promise<void> {
   assertEqual(timers.size, 0, "manual editing left a send timer");
   assertEqual(input.sendAttempts, sendAttemptsBeforeEdit, "manual editing dispatched a send");
   assertEqual(inputListeners.size, 0, "manual editing left an input listener");
+  assertEqual(states.at(-1)?.phase, "cancelled", "manual editing did not retain the cancelled state");
 
   input.innerText = "message";
   const maximumDelay = triggerAutoSend({ ...config, autoSendDelaySeconds: 300 }, SELECTORS);
@@ -163,6 +178,15 @@ async function main(): Promise<void> {
     assertEqual(normalizeAutoSendDelaySeconds(storedValue), 5, "invalid stored delay bypassed the default");
   }
   await verifySavedDelayChanges();
+  cancelAutoSend();
+  assertEqual(states.at(-1), null, "resetting an inactive send retained its previous state");
+  unsubscribe();
+}
+
+function assertWaitingState(state: AutoSendState | null | undefined, waitMs: number, isRetry: boolean): void {
+  if (state?.phase !== "waiting") {throw new Error("auto-send did not expose its countdown");}
+  assertEqual(state.sendAt, now + waitMs, "countdown deadline did not match the scheduled send");
+  assertEqual(state.isRetry, isRetry, "countdown did not distinguish send retries");
 }
 
 async function verifySavedDelayChanges(): Promise<void> {
@@ -191,6 +215,7 @@ function dispatchInput(target: FakeInput, isTrusted: boolean): void {
 }
 
 function installBrowserGlobals(): void {
+  Date.now = () => now;
   class FakeKeyboardEvent extends Event {
     public readonly key: string;
 
@@ -245,6 +270,7 @@ function flushNextTimer(expectedDelayMs?: number): void {
     assertEqual(entry[1].delayMs, expectedDelayMs, "incorrect auto-send delay");
   }
   timers.delete(entry[0]);
+  now += entry[1].delayMs;
   entry[1].callback();
 }
 

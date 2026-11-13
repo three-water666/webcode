@@ -34,7 +34,7 @@ export const TOOL_ACTIVITY_STYLE_TEXT = `
     text-overflow: ellipsis; white-space: nowrap; }
   .launcher.has-activity .launcher-title { display: block; }
   .launcher-label { min-width: 0; display: block; overflow: hidden;
-    font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-variant-numeric: tabular-nums;
     text-overflow: ellipsis; white-space: nowrap; }
   .launcher-count { min-width: 18px; height: 18px; align-items: center; justify-content: center; flex: 0 0 auto;
     padding: 0 5px; color: #bfdbfe; background: rgba(37, 99, 235, .2); border: 1px solid rgba(96, 165, 250, .28);
@@ -103,6 +103,9 @@ export const TOOL_ACTIVITY_STYLE_TEXT = `
   .footer.success { color: #86efac; background: rgba(21, 128, 61, .13); }
   .footer.warn { color: #fcd34d; background: rgba(180, 83, 9, .13); }
   .footer.error { color: #fca5a5; background: rgba(185, 28, 28, .13); }
+  .work-status { min-height: 54px; border-top: 1px solid #343942; }
+  .work-status-label { font-weight: 650; font-variant-numeric: tabular-nums; }
+  .work-status-hint { min-height: 16px; margin-top: 3px; color: #aeb5c2; font-size: 11px; }
   .history-list { min-height: 0; flex: 1 1 auto; overflow-y: auto; padding: 8px; }
   .history-empty { padding: 18px 8px; color: #858d9a; text-align: center; }
   .history-turn { overflow: hidden; border: 1px solid #343942; border-radius: 8px; background: rgba(255, 255, 255, .025); }

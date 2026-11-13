@@ -91,6 +91,7 @@ export class ToolActivityTracker {
     if (this.items.has(identity.requestKey)) {return;}
 
     const turn = this.ensureTurn(turnId);
+    turn.deliveryStatus = "pending";
     turn.requestKeys.push(identity.requestKey);
     this.items.set(identity.requestKey, {
       detail: getPayloadDetail(payload),
@@ -109,6 +110,7 @@ export class ToolActivityTracker {
     if (this.items.has(identity.requestKey)) {return;}
 
     const turn = this.ensureTurn(turnId);
+    turn.deliveryStatus = "pending";
     turn.requestKeys.push(identity.requestKey);
     this.items.set(identity.requestKey, {
       completedAt: Date.now(),
