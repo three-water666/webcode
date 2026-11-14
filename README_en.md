@@ -37,6 +37,18 @@
 > rate limits or abuse-prevention systems, potentially leading to account restrictions or bans.
 > Adding a send delay does not guarantee protection from these risks. Use with caution.
 
+## How It Works and Limitations
+
+webcode uses initialization prompts to have web AI output tool calls in an agreed format. The browser extension detects these calls and forwards them to local VS Code for execution, then writes the results back into the web conversation so the AI can continue the task.
+
+The platform determines limits such as the context window, maximum input length, and maximum output length. Platform-provided prompts and product rules may also affect the AI's behavior. webcode cannot bypass these limits, so even when the model name is the same, it cannot guarantee the same capabilities and performance as the official API.
+
+webcode currently does not support context compaction. As the conversation and tool results accumulate, some platforms may report that the conversation is too long to continue, or may stop retaining the full conversation history, causing the AI to forget earlier requirements, constraints, or execution results. Handling varies by platform, and continuity and reliability for long tasks cannot be guaranteed.
+
+This project is best suited to clearly scoped tasks that can typically be completed within a few dozen conversational turns, such as reading code, code review, small changes, and preparing and committing code. For complex tasks that require extensive context or prolonged execution, consider coding tools built on official APIs that provide context management.
+
+Keep usage frequency and volume reasonable, and avoid abuse. Adding a send delay does not eliminate the risk of platform abuse-prevention measures or account bans.
+
 ## Examples
 
 ### DeepSeek Web: The Pelican Test
