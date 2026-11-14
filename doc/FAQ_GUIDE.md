@@ -26,6 +26,24 @@
 
 可以刷新当前网页。刷新后，webcode 会重新扫描页面里的工具调用，并重新执行需要处理的工具结果回填流程。
 
+## 工具结果自动发送太快，容易触发平台限流怎么办？
+
+在 VS Code 的 `settings.json` 中，按站点设置 `webcodeGateway.aiSites[].autoSendDelaySeconds`。例如：
+
+```json
+{
+  "webcodeGateway.aiSites": [
+    { "id": "deepseek", "autoSendDelaySeconds": 10 }
+  ]
+}
+```
+
+可设置为 0–300 秒的整数；0 表示不增加额外等待。未配置延迟的站点默认 0 秒，目前仅内置 DeepSeek 配置了 10 秒。修改后从 VS Code 重新打开目标站点，让新会话同步配置。
+
+工具结果先回填到输入框，等待结束后再自动发送；后续发送重试也会遵守该等待时间。等待期间编辑聊天输入框或关闭“自动发送消息”会取消本次自动发送，结果保留在输入框中供手动处理。
+
+延迟可以降低发送频率，但不能保证不会触发平台限流或账号限制。如果平台已提示请求过于频繁，请关闭自动发送并按平台提示等待，避免连续重试。
+
 ## 使用 isolated Edge 打开 AI 页面时多出一个新标签页怎么办？
 
 部分 Microsoft Edge 版本会根据 isolated profile 的新标签页设置额外打开一个新标签页。可以在 webcode 打开的 isolated Edge 窗口中访问 `edge://settings/startHomeNTP`，在“启动、主页和新建选项卡页”里关闭“预加载新选项卡页”。

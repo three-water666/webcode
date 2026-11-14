@@ -159,7 +159,7 @@ function testCompactPanelBehavior(Overlay: OverlayConstructor): void {
   assertIncludes(getRequired(harness.panel, ".activity-empty").getText(), "No tool activity", "idle activity placeholder was missing");
   const requestKey = captureTurn(harness.tracker, "turn-1", "read_file");
   assertEqual(harness.host.className, "", "new tool activity forced the work panel open");
-  assertIncludes(launcher.getText(), "Captured", "launcher omitted current tool status");
+  assertIncludes(launcher.getText(), "Running tools", "launcher omitted the stable tool-processing stage");
   harness.tracker.updateStatus({ requestKey }, "executing");
   assertIncludes(launcher.getText(), "Running", "launcher omitted running tool status");
   harness.queue.confirm("next request");

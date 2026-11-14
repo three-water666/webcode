@@ -17,7 +17,7 @@ export interface FollowUpQueueSnapshot {
 
 type FollowUpQueueListener = (snapshot: FollowUpQueueSnapshot) => void;
 
-/** Keeps explicitly confirmed user follow-ups separate from unfinished input. */
+/** Queues explicitly confirmed follow-ups until they are written into the chat input. */
 export class FollowUpQueue {
   private idSequence = 0;
   private readonly items: FollowUpItem[] = [];

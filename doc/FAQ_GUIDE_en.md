@@ -26,6 +26,24 @@ If the page still does not trigger, refresh the current page, confirm the browse
 
 Refresh the current page. After the refresh, webcode scans the page again and reruns the tool-result delivery flow for tool calls that still need to be handled.
 
+## What if tool results are sent too quickly and trigger platform rate limits?
+
+Set `webcodeGateway.aiSites[].autoSendDelaySeconds` per site in VS Code's `settings.json`. For example:
+
+```json
+{
+  "webcodeGateway.aiSites": [
+    { "id": "deepseek", "autoSendDelaySeconds": 10 }
+  ]
+}
+```
+
+Use an integer from 0 to 300 seconds; 0 adds no extra wait. Sites without a configured delay default to 0. Only the built-in DeepSeek entry currently sets a delay of 10 seconds. After changing it, launch the target site again from VS Code so the new session syncs the configuration.
+
+Tool results are written to the input first, then sent after the delay. Send retries also respect this delay. Editing the chat input or turning off "Auto Send Message" while waiting cancels the pending send, leaving the results in the input for manual handling.
+
+A delay reduces send frequency but cannot guarantee protection from platform rate limits or account restrictions. If the platform reports too many requests, turn off automatic sending and wait as instructed by the platform instead of retrying repeatedly.
+
 ## What if isolated Edge opens an extra new tab when opening an AI page?
 
 Some Microsoft Edge versions may open an extra new tab based on the isolated profile's New Tab settings. In the isolated Edge window opened by webcode, go to `edge://settings/startHomeNTP`, then turn off "Preload the new tab page for a faster experience" under "Start, home, and new tabs".

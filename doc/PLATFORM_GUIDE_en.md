@@ -88,6 +88,22 @@ Rules:
 - Custom sites must provide complete `selectors`.
 - There is no general inheritance model. A config entry either overrides a built-in site or defines a complete new site.
 
+## Configure the Auto-Send Delay per Site
+
+Sites can set `autoSendDelaySeconds`, from 0 to 300 seconds. An omitted delay defaults to 0; only the built-in DeepSeek entry currently sets 10 seconds.
+
+Override a built-in value in VS Code's `settings.json`, for example to remove DeepSeek's extra wait:
+
+```json
+{
+  "webcodeGateway.aiSites": [
+    { "id": "deepseek", "autoSendDelaySeconds": 0 }
+  ]
+}
+```
+
+Gateway syncs the field with the site configuration. Each connected tab selects its delay by `siteId`, without affecting other sites. Launch the target site again from VS Code after changing the setting. The work panel shows the actual send countdown.
+
 ## Option A: Add a Built-In Site
 
 Use this when the site should be available to all users by default or needs maintained built-in selectors.

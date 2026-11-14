@@ -1,6 +1,8 @@
 import type { ResolvedAiSiteConfig } from '../platforms';
+import { normalizeAutoSendDelaySeconds } from '@webcode/shared';
 
 export interface SyncedAiSiteConfig {
+    autoSendDelaySeconds: number;
     capture?: ResolvedAiSiteConfig['capture'];
     id: string;
     name: string;
@@ -14,6 +16,7 @@ export function buildSyncedAiSites(aiSites: readonly ResolvedAiSiteConfig[]): Sy
         } : {}),
         id: site.id,
         name: site.name,
+        autoSendDelaySeconds: normalizeAutoSendDelaySeconds(site.autoSendDelaySeconds),
         selectors: site.selectors
     }));
 }

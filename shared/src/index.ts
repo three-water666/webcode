@@ -3,6 +3,7 @@
 import brandConfig from './branding.json';
 import bridgeProtocolConfig from './bridgeProtocol.json';
 
+export * from './autoSendDelay';
 export * from './chatgptStream';
 export * from './deepseekStream';
 export * from './networkCapture';

@@ -51,6 +51,19 @@ const I18N_MESSAGES: Record<string, { en: string; zh: string }> = {
     zh: "发送按钮仍被禁用 (UI未更新)...",
   },
   auto_send_attempt: { en: "Attempting auto-send", zh: "尝试自动发送" },
+  auto_send_waiting: {
+    en: "Waiting {seconds} seconds before auto-send",
+    zh: "等待 {seconds} 秒后自动发送",
+  },
+  auto_send_countdown: { en: "Sending in {seconds}s", zh: "{seconds} 秒后自动发送" },
+  auto_send_retry_countdown: { en: "Retrying send in {seconds}s", zh: "{seconds} 秒后重试发送" },
+  auto_send_sending: { en: "Sending...", zh: "正在发送..." },
+  auto_send_sent: { en: "Sent", zh: "已发送" },
+  auto_send_cancelled: { en: "Auto-send cancelled", zh: "已取消自动发送" },
+  auto_send_manual: { en: "Waiting for manual send", zh: "等待手动发送" },
+  auto_send_failed: { en: "Send failed", zh: "发送失败" },
+  auto_send_manual_hint: { en: "Results remain in the chat input for manual sending", zh: "结果保留在聊天输入框，可手动发送" },
+  auto_send_cancel_hint: { en: "Edit the chat input to cancel", zh: "编辑聊天输入框可取消本次自动发送" },
   auto_send_timeout: {
     en: "Auto-send timed out, please click manually",
     zh: "自动发送超时，请手动点击发送",
@@ -91,6 +104,8 @@ const I18N_MESSAGES: Record<string, { en: string; zh: string }> = {
   work_panel_open: { en: "Open work panel", zh: "展开工作面板" },
   work_panel_drag: { en: "Drag work panel", zh: "拖动工作面板" },
   work_panel_idle: { en: "No tool activity", zh: "暂无工具活动" },
+  work_panel_tool_progress: { en: "Tools: {completed}/{total}", zh: "工具：{completed}/{total}" },
+  work_panel_processing: { en: "Running tools", zh: "正在处理工具" },
 
   follow_up_title: { en: "Next-turn follow-up", zh: "下一轮补充" },
   follow_up_draft: { en: "Draft", zh: "有草稿" },

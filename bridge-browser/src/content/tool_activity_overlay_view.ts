@@ -1,4 +1,5 @@
 import { t } from "../modules/i18n";
+import type { AutoSendState } from "../modules/auto_send_state";
 import {
   type ToolActivityItem,
   type ToolActivitySnapshot,
@@ -28,6 +29,20 @@ const STATUS_LABEL_KEYS: Record<ToolActivityStatus, string> = {
   rejected: "activity_rejected",
   succeeded: "activity_succeeded",
 };
+
+export function getAutoSendStatusText(state: AutoSendState): string {
+  if (state.phase !== "waiting") {
+    const keys = {
+      preparing: "activity_delivering", sending: "auto_send_sending", sent: "auto_send_sent",
+      cancelled: "auto_send_cancelled", disabled: "auto_send_manual", failed: "auto_send_failed",
+    };
+    return t(keys[state.phase]);
+  }
+  const seconds = Math.max(0, Math.ceil((state.sendAt - Date.now()) / 1000));
+  if (seconds === 0) {return t("auto_send_sending");}
+  return t(state.isRetry ? "auto_send_retry_countdown" : "auto_send_countdown")
+    .replace("{seconds}", String(seconds));
+}
 
 export function getActivityTurnEntries(snapshot: ToolActivitySnapshot): ToolActivityTurnEntry[] {
   const items = new Map(snapshot.items.map((item) => [item.requestKey, item]));

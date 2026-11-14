@@ -32,6 +32,11 @@
   <img src="doc/assets/webcode-usage-screenshot.png" width="960" alt="webcode usage screenshot">
 </p>
 
+> [!WARNING]
+> Using webcode to automate tool calls and send messages through web AI platforms may trigger
+> rate limits or abuse-prevention systems, potentially leading to account restrictions or bans.
+> Adding a send delay does not guarantee protection from these risks. Use with caution.
+
 ## Examples
 
 ### DeepSeek Web: The Pelican Test

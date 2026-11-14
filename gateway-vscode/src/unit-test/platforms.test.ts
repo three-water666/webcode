@@ -27,6 +27,43 @@ suite('platform registry', () => {
         assert.strictEqual(deepseek.capture?.url, 'https://chat.deepseek.com/api/v0/chat/completion');
     });
 
+    test('adds a default send delay only for DeepSeek', () => {
+        const sites = getConfiguredAiSites(undefined);
+        for (const site of sites) {
+            assert.strictEqual(site.autoSendDelaySeconds, site.id === 'deepseek' ? 10 : 0);
+        }
+    });
+
+    test('overrides each site delay independently and accepts zero', () => {
+        const sites = getConfiguredAiSites([
+            { id: 'deepseek', autoSendDelaySeconds: 0 },
+            { id: 'chatgpt', autoSendDelaySeconds: 30 },
+        ]);
+        assert.strictEqual(findAiSiteById(sites, 'deepseek')?.autoSendDelaySeconds, 0);
+        assert.strictEqual(findAiSiteById(sites, 'chatgpt')?.autoSendDelaySeconds, 30);
+        assert.strictEqual(findAiSiteById(sites, 'claude')?.autoSendDelaySeconds, 0);
+    });
+
+    test('keeps inherited delays for absent or invalid site overrides', () => {
+        for (const value of [undefined, -1, NaN, Infinity, 301]) {
+            const sites = getConfiguredAiSites([
+                { id: 'deepseek', autoSendDelaySeconds: value },
+                { id: 'chatgpt', autoSendDelaySeconds: value },
+            ]);
+            assert.strictEqual(findAiSiteById(sites, 'deepseek')?.autoSendDelaySeconds, 10);
+            assert.strictEqual(findAiSiteById(sites, 'chatgpt')?.autoSendDelaySeconds, 0);
+        }
+    });
+
+    test('supports delays for custom sites with a zero default', () => {
+        const sites = getConfiguredAiSites([
+            { id: 'custom-ai', address: 'https://ai.example.test', selectors: createSelectors(), autoSendDelaySeconds: 300 },
+            { id: 'another-ai', address: 'https://another.example.test', selectors: createSelectors() },
+        ]);
+        assert.strictEqual(findAiSiteById(sites, 'custom-ai')?.autoSendDelaySeconds, 300);
+        assert.strictEqual(findAiSiteById(sites, 'another-ai')?.autoSendDelaySeconds, 0);
+    });
+
     test('uses Qwen selectors that prefer the first comparison response', () => {
         const sites = getConfiguredAiSites(undefined);
         const qwen = findAiSiteById(sites, 'qwen');

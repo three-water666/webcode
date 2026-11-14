@@ -1,4 +1,5 @@
 import type { SiteSelectors } from "../modules/config";
+import { setAutoSendState } from "../modules/auto_send_state";
 import { t } from "../modules/i18n";
 import { Logger } from "../modules/logger";
 import type { ToolResultDeliveryBatch } from "../modules/tool_result";
@@ -9,6 +10,7 @@ import type { BufferedResultBatch, ToolRequestRegistry } from "./tool_request_re
 
 interface ResultDeliveryControllerOptions {
   getAutoSend: () => boolean;
+  getAutoSendDelaySeconds: () => number;
   followUpQueue: FollowUpQueue;
   hasPendingTurns: () => boolean;
   onBatchFinalized?: (requestKeys: readonly string[]) => void;
@@ -30,6 +32,7 @@ export class ResultDeliveryController {
     }
 
     this.isDeliveryRunning = true;
+    setAutoSendState({ phase: "preparing", requestKeys: resultBatch.ids });
     this.options.toolActivityTracker.updateDelivery(resultBatch.ids, "delivering");
     void this.deliverResultBatch(resultBatch, selectors);
   }
@@ -42,6 +45,7 @@ export class ResultDeliveryController {
     if (followUps.ids.length === 0) {return;}
 
     this.isDeliveryRunning = true;
+    setAutoSendState({ phase: "preparing", requestKeys: [] });
     void this.writeFollowUpsAndSend(followUps, selectors)
       .catch((error: unknown) => {
         this.options.followUpQueue.releaseDelivery(followUps.ids);
@@ -56,6 +60,7 @@ export class ResultDeliveryController {
   }
 
   private handleDeliveryFailure(resultBatch: BufferedResultBatch): void {
+    setAutoSendState({ phase: "failed", requestKeys: resultBatch.ids });
     this.options.toolActivityTracker.updateDelivery(resultBatch.ids, "failed");
     Logger.log(
       "Result delivery could not be verified. Marked batch flushed to avoid duplicate delivery; auto-send skipped.",
@@ -81,8 +86,9 @@ export class ResultDeliveryController {
       const followUps = this.options.getAutoSend()
         ? this.options.followUpQueue.beginDelivery()
         : { ids: [], messages: [] };
-      await this.writeFollowUpsAndSend(followUps, selectors, delivery.uploaded);
+      await this.writeFollowUpsAndSend(followUps, selectors, delivery.uploaded, resultBatch.ids);
     } catch (error: unknown) {
+      setAutoSendState({ phase: "failed", requestKeys: resultBatch.ids });
       if (!batchFinalized) {
         batchFinalized = true;
         this.finalizeBatch(resultBatch.ids);
@@ -97,28 +103,34 @@ export class ResultDeliveryController {
   private async writeFollowUpsAndSend(
     followUps: FollowUpDelivery,
     selectors: SiteSelectors,
-    hasFileUpload = false
+    hasFileUpload = false,
+    requestKeys: readonly string[] = []
   ): Promise<void> {
     try {
       if (followUps.ids.length > 0) {
         const delivery = await UI.deliverResult(createFollowUpBatch(followUps.messages), selectors);
         if (!delivery.delivered) {
+          setAutoSendState({ phase: "failed", requestKeys });
           this.options.followUpQueue.releaseDelivery(followUps.ids);
           Logger.log("Confirmed follow-ups could not be written. Auto-send skipped.", "error");
           return;
         }
+        // The chat input owns written follow-ups, including when auto-send is cancelled or fails.
+        this.options.followUpQueue.completeDelivery(followUps.ids);
       }
 
-      const sendResult = await UI.triggerAutoSend(
-        { autoSend: this.options.getAutoSend(), hasFileUpload },
+      const autoSendDelaySeconds = this.options.getAutoSendDelaySeconds();
+      await UI.triggerAutoSend(
+        {
+          autoSend: this.options.getAutoSend(),
+          autoSendDelaySeconds,
+          hasFileUpload,
+          requestKeys,
+        },
         selectors
       );
-      if (sendResult === "sent") {
-        this.options.followUpQueue.completeDelivery(followUps.ids);
-      } else {
-        this.options.followUpQueue.releaseDelivery(followUps.ids);
-      }
     } catch (error) {
+      setAutoSendState({ phase: "failed", requestKeys });
       this.options.followUpQueue.releaseDelivery(followUps.ids);
       throw error;
     }
