@@ -115,10 +115,12 @@ export class ResultDeliveryController {
           Logger.log("Confirmed follow-ups could not be written. Auto-send skipped.", "error");
           return;
         }
+        // The chat input owns written follow-ups, including when auto-send is cancelled or fails.
+        this.options.followUpQueue.completeDelivery(followUps.ids);
       }
 
       const autoSendDelaySeconds = this.options.getAutoSendDelaySeconds();
-      const sendResult = await UI.triggerAutoSend(
+      await UI.triggerAutoSend(
         {
           autoSend: this.options.getAutoSend(),
           autoSendDelaySeconds,
@@ -127,11 +129,6 @@ export class ResultDeliveryController {
         },
         selectors
       );
-      if (sendResult === "sent") {
-        this.options.followUpQueue.completeDelivery(followUps.ids);
-      } else {
-        this.options.followUpQueue.releaseDelivery(followUps.ids);
-      }
     } catch (error) {
       setAutoSendState({ phase: "failed", requestKeys });
       this.options.followUpQueue.releaseDelivery(followUps.ids);

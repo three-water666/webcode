@@ -1,4 +1,5 @@
 import type { SiteSelectors } from "../src/modules/config";
+import type { FollowUpQueueSnapshot } from "../src/content/follow_up_queue";
 import { normalizeAutoSendDelaySeconds } from "@webcode/shared";
 import { subscribeAutoSendState, type AutoSendState } from "../src/modules/auto_send_state";
 
@@ -47,18 +48,21 @@ class FakeInput implements FakeFocusable {
 
 const input = new FakeInput();
 const inputListeners = new Set<(event: Event) => void>();
+let inputAvailable = true;
 const fakeDocument: {
   activeElement: FakeFocusable | null;
   addEventListener: (type: string, listener: (event: Event) => void) => void;
   removeEventListener: (type: string, listener: (event: Event) => void) => void;
+  execCommand: () => boolean;
   querySelector: () => null;
   querySelectorAll: (selector: string) => FakeInput[];
 } = {
   activeElement: input,
   addEventListener: (_type, listener) => inputListeners.add(listener),
   removeEventListener: (_type, listener) => inputListeners.delete(listener),
+  execCommand: () => false,
   querySelector: () => null,
-  querySelectorAll: (selector: string) => selector === "#input" ? [input] : [],
+  querySelectorAll: (selector: string) => selector === "#input" && inputAvailable ? [input] : [],
 };
 const timers = new Map<number, { callback: () => void; delayMs: number }>();
 let nextTimerId = 1;
@@ -175,9 +179,102 @@ async function main(): Promise<void> {
   for (const configuredValue of [undefined, null, "30", {}, NaN, Infinity, -1, 301]) {
     assertEqual(normalizeAutoSendDelaySeconds(configuredValue), 0, "invalid delay added an unexpected wait");
   }
+  await testFollowUpQueueHandoff();
   cancelAutoSend();
   assertEqual(states.at(-1), null, "resetting an inactive send retained its previous state");
   unsubscribe();
+}
+
+async function testFollowUpQueueHandoff(): Promise<void> {
+  const { ResultDeliveryController } = await import("../src/content/result_delivery_controller");
+  const { FollowUpQueue } = await import("../src/content/follow_up_queue");
+  const { ToolRequestRegistry } = await import("../src/content/tool_request_registry");
+  const { ToolActivityTracker } = await import("../src/content/tool_activity");
+  const queue = new FollowUpQueue();
+  const registry = new ToolRequestRegistry();
+  let snapshot: FollowUpQueueSnapshot = { items: [] };
+  queue.subscribe((state) => {snapshot = state;});
+  const controller = new ResultDeliveryController({
+    getAutoSend: () => true,
+    getAutoSendDelaySeconds: () => 5,
+    followUpQueue: queue,
+    hasPendingTurns: () => false,
+    requestRegistry: registry,
+    scheduleMainLoop: () => undefined,
+    toolActivityTracker: new ToolActivityTracker(),
+  });
+
+  input.innerText = "";
+  queue.confirm("first follow-up");
+  controller.deliverFollowUps(SELECTORS);
+  flushNextTimer(120);
+  await settleDelivery();
+  assertEqual(snapshot.items.length, 0, "written follow-up remained queued during the countdown");
+  assertEqual(input.innerText.includes("first follow-up"), true, "follow-up was not written to the chat input");
+
+  queue.confirm("later follow-up");
+  input.innerText += "\nuser edit";
+  dispatchInput(input, true);
+  await settleDelivery();
+  assertEqual(snapshot.items.length, 1, "editing requeued the written follow-up or removed a later follow-up");
+  assertEqual(input.innerText.includes("user edit"), true, "cancelling auto-send discarded the user's edit");
+  input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+  assertEqual(input.innerText, "", "manual send did not clear the input");
+
+  controller.deliverFollowUps(SELECTORS);
+  flushNextTimer(120);
+  await settleDelivery();
+  assertEqual(input.innerText.includes("first follow-up"), false, "next response repeated a manually sent follow-up");
+  assertEqual(input.innerText.includes("later follow-up"), true, "next response lost the later follow-up");
+  flushNextTimer(5000);
+  flushNextTimer(1200);
+  await settleDelivery();
+
+  queue.confirm("tool follow-up");
+  registry.saveRawResult("tool-1", "first tool result");
+  controller.deliver(registry.buildBufferedResultBatch(["tool-1"]), SELECTORS);
+  flushNextTimer(120);
+  await settleDelivery();
+  flushNextTimer(120);
+  await settleDelivery();
+  assertEqual(snapshot.items.length, 0, "follow-up appended to tool results remained queued");
+  assertEqual(input.innerText.includes("first tool result"), true, "tool result was lost during follow-up delivery");
+  assertEqual(input.innerText.includes("tool follow-up"), true, "tool delivery did not append the follow-up");
+  input.innerText += "\nuser edit";
+  dispatchInput(input, true);
+  await settleDelivery();
+  input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+
+  registry.saveRawResult("tool-2", "second tool result");
+  controller.deliver(registry.buildBufferedResultBatch(["tool-2"]), SELECTORS);
+  flushNextTimer(120);
+  await settleDelivery();
+  assertEqual(input.innerText.includes("tool follow-up"), false, "next tool result repeated a manually sent follow-up");
+  flushNextTimer(5000);
+  flushNextTimer(1200);
+  await settleDelivery();
+
+  queue.confirm("retry follow-up");
+  inputAvailable = false;
+  controller.deliverFollowUps(SELECTORS);
+  await settleDelivery();
+  assertEqual(snapshot.items.length, 1, "failed input write discarded the follow-up");
+  assertEqual(snapshot.items[0]?.status, "confirmed", "failed input write did not restore the waiting state");
+  assertEqual(timers.size, 0, "failed input write still scheduled auto-send");
+
+  inputAvailable = true;
+  controller.deliverFollowUps(SELECTORS);
+  flushNextTimer(120);
+  await settleDelivery();
+  assertEqual(snapshot.items.length, 0, "successful retry did not remove the written follow-up");
+  assertEqual(input.innerText.includes("retry follow-up"), true, "failed follow-up could not be retried");
+  dispatchInput(input, true);
+  await settleDelivery();
+  assertEqual(snapshot.items.length, 0, "editing after a successful retry requeued the follow-up");
+}
+
+function settleDelivery(): Promise<void> {
+  return new Promise((resolve) => {setImmediate(resolve);});
 }
 
 function assertWaitingState(state: AutoSendState | null | undefined, waitMs: number, isRetry: boolean): void {
